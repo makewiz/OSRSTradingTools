@@ -1,0 +1,17 @@
+{
+  "name": "osrstradingtools",
+  "version": "1.0.0",
+  "description": "",
+  "private": true,
+  "scripts": {
+    "dev:backend": "npm run dev --workspace backend",
+    "dev:frontend": "npm run dev --workspace frontend",
+    "dev:bot": "npm run dev --workspace discord-bot",
+    "build": "npm run build --workspace backend && npm run build --workspace frontend && npm run build --workspace discord-bot"
+  },
+  "workspaces": [
+    "packages/backend",
+    "packages/frontend",
+    "packages/discord-bot"
+  ]
+}
