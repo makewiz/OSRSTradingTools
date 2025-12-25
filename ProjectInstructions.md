@@ -27,8 +27,11 @@ The application will have the following features:
 - 1 day data should be accurate. After that accuracy can degrade so that the database wont grow too large.
 - Application should calculate day change for items.
 - Discord bot shuld send private messages to users.
+- Discord users should be able to receive day change notifications with selected limits
 - Backend should fetch new price data once in a minute.
 - Web UI should have item page which is opened from the list and it shows item buy and sell price data on a graph and everything else more detailed data.
+- Discord users should be able to unsubscribe from notifications with commands from discord
+- The logic should keep the amount of notifications reasonable for the users.
 
 
 Price api documentation:
