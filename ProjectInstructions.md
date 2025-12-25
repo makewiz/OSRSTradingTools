@@ -28,6 +28,7 @@ The application will have the following features:
 - Application should calculate day change for items.
 - Discord bot shuld send private messages to users.
 - Backend should fetch new price data once in a minute.
+- Web UI should have item page which is opened from the list and it shows item buy and sell price data on a graph and everything else more detailed data.
 
 
 Price api documentation:
