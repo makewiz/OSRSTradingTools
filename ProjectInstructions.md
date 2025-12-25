@@ -23,6 +23,12 @@ The application will have the following features:
 - the website should be scalable and easy to maintain.
 - Do not expose API keys or secrets in repository.
 - Include readme file with instructions on how to run the project.
+- Application should store item data to a database.
+- 1 day data should be accurate. After that accuracy can degrade so that the database wont grow too large.
+- Application should calculate day change for items.
+- Discord bot shuld send private messages to users.
+- Backend should fetch new price data once in a minute.
+
 
 Price api documentation:
 [API documentation](https://oldschool.runescape.wiki/w/RuneScape:Real-time_Prices)
