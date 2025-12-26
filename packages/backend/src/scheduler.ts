@@ -67,3 +67,4 @@ export function startPriceScheduler(): void {
   console.log("[Scheduler] Price fetcher started (runs every minute)");
 }
 
+

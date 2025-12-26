@@ -323,3 +323,4 @@ OPENAI_API_KEY=your_key_here  # Or other AI service
 - **Error Handling**: Add comprehensive error handling and logging throughout.
 - **Security**: Always hash passwords, validate inputs, use HTTPS in production, sanitize database queries.
 
+
