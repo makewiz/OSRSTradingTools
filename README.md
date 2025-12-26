@@ -6,6 +6,7 @@ Hobby web app to help Old School RuneScape traders browse items, inspect GE marg
 
 - **Frontend**: React + Vite + TypeScript (`packages/frontend`)
 - **Backend**: Node + Express + TypeScript (`packages/backend`)
+- **Database**: SQLite (`better-sqlite3`) for price history and user data
 - **Discord bot**: `discord.js` + TypeScript (`packages/discord-bot`)
 
 ### Prerequisites
@@ -24,6 +25,15 @@ This will install dependencies for all workspaces.
 
 ### Running the backend (OSRS price API)
 
+**Optional**: Create a `.env` file in `packages/backend` to customize settings:
+
+```bash
+PORT=4000
+DATABASE_PATH=./data/osrs_trading.db
+```
+
+Then start the backend:
+
 ```bash
 npm run dev:backend
 ```
@@ -36,7 +46,14 @@ The backend starts on `http://localhost:4000` and exposes:
   - wiki URL, icon URL
   - buy price, sell price, margin, daily volume
 
-Data is cached in memory for ~1 minute to stay friendly to the OSRS Wiki APIs.
+**Database & Scheduled Fetching**:
+- SQLite database automatically created at `packages/backend/data/osrs_trading.db`
+- Price data is fetched from OSRS Wiki APIs **every minute** and stored in the database
+- Data retention strategy:
+  - **Last 24 hours**: Minute-level accuracy
+  - **Last 7 days**: Hourly aggregates
+  - **Older data**: Daily aggregates
+- Aggregation runs automatically (hourly aggregation daily at 2 AM, daily aggregation weekly)
 
 ### Running the frontend
 

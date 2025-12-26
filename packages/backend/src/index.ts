@@ -1,6 +1,14 @@
 import express from "express";
 import cors from "cors";
 import { getCombinedItems } from "./osrsClient";
+import { initializeDatabase, closeDatabase } from "./database";
+import { startPriceScheduler } from "./scheduler";
+import { startAggregationScheduler } from "./aggregator";
+
+// Initialize database
+initializeDatabase();
+// eslint-disable-next-line no-console
+console.log("[Database] Initialized");
 
 const app = express();
 const port = process.env.PORT || 4000;
@@ -23,9 +31,36 @@ app.get("/api/items", async (_req, res) => {
   }
 });
 
-app.listen(port, () => {
+// Start schedulers
+startPriceScheduler();
+startAggregationScheduler();
+
+const server = app.listen(port, () => {
   // eslint-disable-next-line no-console
   console.log(`Backend listening on http://localhost:${port}`);
+});
+
+// Graceful shutdown
+process.on("SIGINT", () => {
+  // eslint-disable-next-line no-console
+  console.log("\n[SIGINT] Shutting down gracefully...");
+  server.close(() => {
+    closeDatabase();
+    // eslint-disable-next-line no-console
+    console.log("[Shutdown] Database closed");
+    process.exit(0);
+  });
+});
+
+process.on("SIGTERM", () => {
+  // eslint-disable-next-line no-console
+  console.log("\n[SIGTERM] Shutting down gracefully...");
+  server.close(() => {
+    closeDatabase();
+    // eslint-disable-next-line no-console
+    console.log("[Shutdown] Database closed");
+    process.exit(0);
+  });
 });
 
 

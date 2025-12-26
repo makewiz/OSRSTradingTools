@@ -36,4 +36,11 @@ Thumbs.db
 # Coverage
 coverage
 
+# Database files
+*.db
+*.db-shm
+*.db-wal
+packages/backend/data/
+packages/*/data/
+
 # Generated lockfiles for workspaces are fine; keep them
