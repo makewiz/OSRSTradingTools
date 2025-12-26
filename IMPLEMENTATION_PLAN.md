@@ -12,10 +12,17 @@ This document outlines the plan to complete all remaining features from `Project
 - Basic backend API fetching OSRS prices
 - Basic Discord bot skeleton
 - README with setup instructions
+- **Phase 1**: Database & Historical Data (SQLite, Scheduler, Aggregator)
+- **Phase 2**: Enhanced Data (Day Change, Margin*Volume)
+- **Phase 3**: Item Detail Page (Charts, History, Routing)
 
 ### ❌ Remaining Features
+- **Phase 4**: Authentication System (Register/Login, User Favorites DB sync)
+- **Phase 5**: Discord Bot Features (Commands, Notifications, Linking)
+- **Phase 6**: AI Highlights & Trading Tools
+- **Phase 7**: Integration & Polish
 
-## Phase 1: Database & Historical Data (Foundation)
+## Phase 1: Database & Historical Data (Foundation) - ✅ COMPLETED
 
 ### 1.1 Database Setup
 **Tech Choice**: SQLite (free, simple, file-based, perfect for hobby project)
@@ -87,7 +94,7 @@ notification_settings (
 - `packages/backend/src/scheduler.ts` - Cron job for price fetching
 - `packages/backend/src/aggregator.ts` - Data compression logic
 
-## Phase 2: Enhanced Data & Calculations
+## Phase 2: Enhanced Data & Calculations - ✅ COMPLETED
 
 ### 2.1 Day Change Calculation
 **Implementation**:
@@ -109,7 +116,7 @@ notification_settings (
 **Files to modify**:
 - `packages/frontend/src/App.tsx` - Add columns and sorting logic
 
-## Phase 3: Item Detail Page
+## Phase 3: Item Detail Page - ✅ COMPLETED
 
 ### 3.1 Item Detail Route & Page
 **Implementation**:
@@ -127,7 +134,7 @@ notification_settings (
 - `packages/frontend/src/PriceChart.tsx`
 - `packages/backend/src/routes/items.ts` - Item-specific routes
 
-## Phase 4: Authentication System
+## Phase 4: Authentication System (Current Focus)
 
 ### 4.1 Backend Authentication
 **Implementation**:
@@ -268,10 +275,10 @@ notification_settings (
 
 ## Implementation Order Recommendation
 
-1. **Phase 1** (Database & Scheduled Fetching) - Foundation for everything else
-2. **Phase 2** (Day Change & Enhanced Columns) - Quick wins, improves existing features
-3. **Phase 4** (Authentication) - Needed before user-specific features
-4. **Phase 3** (Item Detail Page) - Enhances user experience
+1. **Phase 1** (Database & Scheduled Fetching) - ✅ COMPLETED
+2. **Phase 2** (Day Change & Enhanced Columns) - ✅ COMPLETED
+3. **Phase 3** (Item Detail Page) - ✅ COMPLETED
+4. **Phase 4** (Authentication) - Needed before user-specific features
 5. **Phase 5** (Discord Bot Features) - Core Discord functionality
 6. **Phase 6** (AI & Trading Tools) - Advanced features
 7. **Phase 7** (Integration & Polish) - Final touches
@@ -322,6 +329,3 @@ OPENAI_API_KEY=your_key_here  # Or other AI service
 - **Rate Limiting**: Discord API has rate limits. Implement queuing/backoff for PM sending.
 - **Error Handling**: Add comprehensive error handling and logging throughout.
 - **Security**: Always hash passwords, validate inputs, use HTTPS in production, sanitize database queries.
-
-
-
