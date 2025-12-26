@@ -11,9 +11,18 @@ interface Item {
   sellPrice: number | null;
   margin: number | null;
   volume: number | null;
+  dayChange: number | null;
+  marginVolume: number | null;
 }
 
-type SortKey = "name" | "buyPrice" | "sellPrice" | "margin" | "volume";
+type SortKey =
+  | "name"
+  | "buyPrice"
+  | "sellPrice"
+  | "margin"
+  | "volume"
+  | "dayChange"
+  | "marginVolume";
 
 const FAVORITES_KEY = "osrs_trading_favorites";
 
@@ -22,7 +31,7 @@ export const App: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
-  const [sortKey, setSortKey] = useState<SortKey>("margin");
+  const [sortKey, setSortKey] = useState<SortKey>("marginVolume");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [favorites, setFavorites] = useState<number[]>([]);
   const [onlyFavorites, setOnlyFavorites] = useState(false);
@@ -107,6 +116,10 @@ export const App: React.FC = () => {
             return item.margin ?? -Infinity;
           case "volume":
             return item.volume ?? -Infinity;
+          case "dayChange":
+            return item.dayChange ?? -Infinity;
+          case "marginVolume":
+            return item.marginVolume ?? -Infinity;
         }
       };
 
@@ -224,6 +237,12 @@ export const App: React.FC = () => {
                   <th onClick={() => handleSortChange("volume")}>
                     Volume {sortKey === "volume" ? (sortDir === "asc" ? "▲" : "▼") : ""}
                   </th>
+                  <th onClick={() => handleSortChange("dayChange")}>
+                    24h Change {sortKey === "dayChange" ? (sortDir === "asc" ? "▲" : "▼") : ""}
+                  </th>
+                  <th onClick={() => handleSortChange("marginVolume")}>
+                    Margin×Vol {sortKey === "marginVolume" ? (sortDir === "asc" ? "▲" : "▼") : ""}
+                  </th>
                   <th>Wiki</th>
                   <th>Watch</th>
                 </tr>
@@ -258,6 +277,26 @@ export const App: React.FC = () => {
                       <td>{item.sellPrice?.toLocaleString() ?? "-"}</td>
                       <td>{item.margin?.toLocaleString() ?? "-"}</td>
                       <td>{item.volume?.toLocaleString() ?? "-"}</td>
+                      <td
+                        className={
+                          item.dayChange !== null
+                            ? item.dayChange > 0
+                              ? "day-change positive"
+                              : item.dayChange < 0
+                              ? "day-change negative"
+                              : "day-change"
+                            : ""
+                        }
+                      >
+                        {item.dayChange !== null
+                          ? `${item.dayChange > 0 ? "+" : ""}${item.dayChange.toFixed(2)}%`
+                          : "-"}
+                      </td>
+                      <td>
+                        {item.marginVolume !== null
+                          ? item.marginVolume.toLocaleString()
+                          : "-"}
+                      </td>
                       <td>
                         <a href={item.wikiUrl} target="_blank" rel="noreferrer">
                           Wiki

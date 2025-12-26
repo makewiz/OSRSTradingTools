@@ -205,6 +205,81 @@ export function getPriceHistory(
   return stmt.all(itemId, startTime, endTime, granularity) as ItemPriceHistory[];
 }
 
+/**
+ * Calculate day change percentage for an item
+ * Compares current price to price 24 hours ago
+ * Returns null if historical data is not available
+ */
+export function calculateDayChange(
+  itemId: number,
+  currentBuyPrice: number | null,
+  currentSellPrice: number | null
+): {
+  buyDayChange: number | null;
+  sellDayChange: number | null;
+  dayChange: number | null; // Average of buy and sell, or whichever is available
+} {
+  const now = Math.floor(Date.now() / 1000);
+  const oneDayAgo = now - 24 * 60 * 60; // 24 hours ago in seconds
+
+  // Get price from 24 hours ago (allow some tolerance - get closest record within 25 hours)
+  const tolerance = 60 * 60; // 1 hour tolerance
+  const stmt = db.prepare(`
+    SELECT buy_price, sell_price
+    FROM item_price_history
+    WHERE item_id = ?
+      AND timestamp >= ?
+      AND timestamp <= ?
+    ORDER BY ABS(timestamp - ?) ASC
+    LIMIT 1
+  `);
+
+  const oldPrice = stmt.get(
+    itemId,
+    oneDayAgo - tolerance,
+    oneDayAgo + tolerance,
+    oneDayAgo
+  ) as { buy_price: number | null; sell_price: number | null } | undefined;
+
+  if (!oldPrice) {
+    return { buyDayChange: null, sellDayChange: null, dayChange: null };
+  }
+
+  // Calculate percentage change for buy price
+  let buyDayChange: number | null = null;
+  if (
+    currentBuyPrice !== null &&
+    oldPrice.buy_price !== null &&
+    oldPrice.buy_price > 0
+  ) {
+    buyDayChange =
+      ((currentBuyPrice - oldPrice.buy_price) / oldPrice.buy_price) * 100;
+  }
+
+  // Calculate percentage change for sell price
+  let sellDayChange: number | null = null;
+  if (
+    currentSellPrice !== null &&
+    oldPrice.sell_price !== null &&
+    oldPrice.sell_price > 0
+  ) {
+    sellDayChange =
+      ((currentSellPrice - oldPrice.sell_price) / oldPrice.sell_price) * 100;
+  }
+
+  // Use average if both available, otherwise use whichever is available
+  let dayChange: number | null = null;
+  if (buyDayChange !== null && sellDayChange !== null) {
+    dayChange = (buyDayChange + sellDayChange) / 2;
+  } else if (buyDayChange !== null) {
+    dayChange = buyDayChange;
+  } else if (sellDayChange !== null) {
+    dayChange = sellDayChange;
+  }
+
+  return { buyDayChange, sellDayChange, dayChange };
+}
+
 // Close database connection gracefully
 export function closeDatabase(): void {
   db.close();

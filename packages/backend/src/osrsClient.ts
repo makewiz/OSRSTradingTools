@@ -1,3 +1,5 @@
+import { calculateDayChange } from "./database";
+
 const MAPPING_URL = "https://prices.runescape.wiki/api/v1/osrs/mapping";
 const LATEST_URL = "https://prices.runescape.wiki/api/v1/osrs/latest";
 const VOLUMES_URL =
@@ -36,6 +38,8 @@ export interface CombinedItem {
   sellPrice: number | null;
   margin: number | null;
   volume: number | null;
+  dayChange: number | null; // 24h price change percentage
+  marginVolume: number | null; // margin * volume
 }
 
 interface CacheEntry {
@@ -81,6 +85,15 @@ export async function getCombinedItems(): Promise<CombinedItem[]> {
     const margin =
       buyPrice !== null && sellPrice !== null ? sellPrice - buyPrice : null;
 
+    // Calculate day change from database
+    const { dayChange } = calculateDayChange(m.id, buyPrice, sellPrice);
+
+    // Calculate margin * volume
+    const marginVolume =
+      margin !== null && typeof volume === "number" && volume > 0
+        ? margin * volume
+        : null;
+
     return {
       id: m.id,
       name: m.name,
@@ -91,7 +104,9 @@ export async function getCombinedItems(): Promise<CombinedItem[]> {
       buyPrice,
       sellPrice,
       margin,
-      volume: typeof volume === "number" ? volume : null
+      volume: typeof volume === "number" ? volume : null,
+      dayChange,
+      marginVolume
     };
   });
 
