@@ -1,4 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { Routes, Route, Link } from "react-router-dom";
+import { ItemDetail } from "./pages/ItemDetail";
 
 interface Item {
   id: number;
@@ -154,7 +156,7 @@ export const App: React.FC = () => {
     }
   };
 
-  return (
+  const ItemsList = () => (
     <div className="app">
       <header className="app-header">
         <h1>OSRS Trading Tools</h1>
@@ -269,7 +271,9 @@ export const App: React.FC = () => {
                           loading="lazy"
                         />
                         <div>
-                          <div>{item.name}</div>
+                          <Link to={`/item/${item.id}`} className="item-name-link">
+                            {item.name}
+                          </Link>
                         </div>
                       </td>
                       <td className="members-cell">{item.members ? "★" : ""}</td>
@@ -323,6 +327,13 @@ export const App: React.FC = () => {
         )}
       </main>
     </div>
+  );
+
+  return (
+    <Routes>
+      <Route path="/" element={<ItemsList />} />
+      <Route path="/item/:id" element={<ItemDetail />} />
+    </Routes>
   );
 };
 

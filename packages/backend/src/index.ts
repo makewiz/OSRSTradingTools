@@ -4,6 +4,7 @@ import { getCombinedItems } from "./osrsClient";
 import { initializeDatabase, closeDatabase } from "./database";
 import { startPriceScheduler } from "./scheduler";
 import { startAggregationScheduler } from "./aggregator";
+import itemsRouter from "./routes/items";
 
 // Initialize database
 initializeDatabase();
@@ -30,6 +31,9 @@ app.get("/api/items", async (_req, res) => {
     res.status(502).json({ error: "Failed to fetch OSRS prices" });
   }
 });
+
+// Item detail routes
+app.use("/api/items", itemsRouter);
 
 // Start schedulers
 startPriceScheduler();
