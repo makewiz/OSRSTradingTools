@@ -324,3 +324,4 @@ OPENAI_API_KEY=your_key_here  # Or other AI service
 - **Security**: Always hash passwords, validate inputs, use HTTPS in production, sanitize database queries.
 
 
+
