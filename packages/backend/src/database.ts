@@ -176,7 +176,6 @@ export function getPriceAtTime(
   itemId: number,
   targetTimestamp: number
 ): ItemPriceHistory | null {
-  // Find the closest price record before or at the target time
   const stmt = db.prepare(`
     SELECT * FROM item_price_history
     WHERE item_id = ? AND timestamp <= ?
@@ -205,11 +204,6 @@ export function getPriceHistory(
   return stmt.all(itemId, startTime, endTime, granularity) as ItemPriceHistory[];
 }
 
-/**
- * Calculate day change percentage for an item
- * Compares current price to price 24 hours ago
- * Returns null if historical data is not available
- */
 export function calculateDayChange(
   itemId: number,
   currentBuyPrice: number | null,
@@ -217,13 +211,12 @@ export function calculateDayChange(
 ): {
   buyDayChange: number | null;
   sellDayChange: number | null;
-  dayChange: number | null; // Average of buy and sell, or whichever is available
+  dayChange: number | null;
 } {
   const now = Math.floor(Date.now() / 1000);
-  const oneDayAgo = now - 24 * 60 * 60; // 24 hours ago in seconds
+  const oneDayAgo = now - 24 * 60 * 60;
 
-  // Get price from 24 hours ago (allow some tolerance - get closest record within 25 hours)
-  const tolerance = 60 * 60; // 1 hour tolerance
+  const tolerance = 60 * 60;
   const stmt = db.prepare(`
     SELECT buy_price, sell_price
     FROM item_price_history
@@ -245,7 +238,6 @@ export function calculateDayChange(
     return { buyDayChange: null, sellDayChange: null, dayChange: null };
   }
 
-  // Calculate percentage change for buy price
   let buyDayChange: number | null = null;
   if (
     currentBuyPrice !== null &&
@@ -256,7 +248,6 @@ export function calculateDayChange(
       ((currentBuyPrice - oldPrice.buy_price) / oldPrice.buy_price) * 100;
   }
 
-  // Calculate percentage change for sell price
   let sellDayChange: number | null = null;
   if (
     currentSellPrice !== null &&
@@ -267,7 +258,6 @@ export function calculateDayChange(
       ((currentSellPrice - oldPrice.sell_price) / oldPrice.sell_price) * 100;
   }
 
-  // Use average if both available, otherwise use whichever is available
   let dayChange: number | null = null;
   if (buyDayChange !== null && sellDayChange !== null) {
     dayChange = (buyDayChange + sellDayChange) / 2;
@@ -351,6 +341,72 @@ export function removeFavorite(userId: number, itemId: number): void {
   stmt.run(userId, itemId);
 }
 
+/**
+ * Discord Management Functions
+ */
+
+// Link Discord ID to User ID
+export function linkDiscordUser(userId: number, discordId: string): void {
+  const stmt = db.prepare(`
+    INSERT INTO discord_users (discord_id, user_id, notifications_enabled)
+    VALUES (?, ?, 1)
+    ON CONFLICT(discord_id) DO UPDATE SET
+      user_id = excluded.user_id
+  `);
+  stmt.run(discordId, userId);
+}
+
+// Get Discord User for a given App User ID
+export function getDiscordUserByUserId(userId: number): DiscordUser | null {
+  const stmt = db.prepare(`
+    SELECT * FROM discord_users WHERE user_id = ?
+  `);
+  return stmt.get(userId) as DiscordUser | null;
+}
+
+// Get App User for a given Discord ID (for login)
+export function getUserByDiscordId(discordId: string): User | null {
+  const stmt = db.prepare(`
+    SELECT u.* FROM users u
+    JOIN discord_users du ON u.id = du.user_id
+    WHERE du.discord_id = ?
+  `);
+  return stmt.get(discordId) as User | null;
+}
+
+// Update settings
+export function updateDiscordSettings(discordId: string, enabled: boolean): void {
+  const stmt = db.prepare(`
+    UPDATE discord_users SET notifications_enabled = ? WHERE discord_id = ?
+  `);
+  stmt.run(enabled ? 1 : 0, discordId);
+}
+
+// Add Watch via backend (similar to Favorites logic but for notification_settings)
+export function addBackendWatch(discordId: string, itemId: number, threshold: number): void {
+  const stmt = db.prepare(`
+    INSERT INTO notification_settings (discord_id, item_id, day_change_threshold, enabled)
+    VALUES (?, ?, ?, 1)
+    ON CONFLICT(discord_id, item_id) DO UPDATE SET
+      day_change_threshold = excluded.day_change_threshold,
+      enabled = 1
+  `);
+  stmt.run(discordId, itemId, threshold);
+}
+
+export function removeBackendWatch(discordId: string, itemId: number): void {
+  const stmt = db.prepare(`
+    DELETE FROM notification_settings WHERE discord_id = ? AND item_id = ?
+  `);
+  stmt.run(discordId, itemId);
+}
+
+export function getBackendWatches(discordId: string): NotificationSetting[] {
+  const stmt = db.prepare(`
+    SELECT * FROM notification_settings WHERE discord_id = ? AND enabled = 1
+  `);
+  return stmt.all(discordId) as NotificationSetting[];
+}
 
 // Close database connection gracefully
 export function closeDatabase(): void {

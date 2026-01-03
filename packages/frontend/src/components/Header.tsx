@@ -16,7 +16,7 @@ export const Header: React.FC = () => {
             <div className="user-nav">
                 {user ? (
                     <>
-                        <span>{user.username}</span>
+                        <Link to="/profile">Profile ({user.username})</Link>
                         <button className="logout-button" onClick={handleLogout}>
                             Logout
                         </button>

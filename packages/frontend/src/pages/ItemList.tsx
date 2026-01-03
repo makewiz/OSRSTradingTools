@@ -37,9 +37,11 @@ export const ItemList: React.FC = () => {
     const [sortKey, setSortKey] = useState<SortKey>("marginVolume");
     const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
     const [favorites, setFavorites] = useState<number[]>([]);
+    const [watches, setWatches] = useState<number[]>([]);
     const [onlyFavorites, setOnlyFavorites] = useState(false);
     const [pageSize, setPageSize] = useState(100);
     const [page, setPage] = useState(1);
+    const [discordLinked, setDiscordLinked] = useState(false);
 
     // Load favorites logic
     useEffect(() => {
@@ -55,7 +57,6 @@ export const ItemList: React.FC = () => {
                         setFavorites(data.favorites);
                     }
                 } catch (err) {
-                    // eslint-disable-next-line no-console
                     console.error("Failed to fetch favorites", err);
                 }
             } else {
@@ -73,6 +74,35 @@ export const ItemList: React.FC = () => {
 
         loadFavorites();
     }, [user, token]);
+
+    // Load watches logic
+    useEffect(() => {
+        const loadWatches = async () => {
+            if (user && token) {
+                try {
+                    const res = await fetch("/api/discord/settings", {
+                        headers: { Authorization: `Bearer ${token}` }
+                    });
+                    if (res.ok) {
+                        const data = await res.json();
+                        if (data.linked) {
+                            setDiscordLinked(true);
+                            setWatches(data.watches ? data.watches.map((w: any) => w.item_id) : []);
+                        } else {
+                            setDiscordLinked(false);
+                        }
+                    }
+                } catch (err) {
+                    console.error("Failed to fetch watches", err);
+                }
+            } else {
+                setWatches([]);
+                setDiscordLinked(false);
+            }
+        };
+        loadWatches();
+    }, [user, token]);
+
 
     // Sync favorites to localStorage only if NOT logged in
     useEffect(() => {
@@ -94,7 +124,6 @@ export const ItemList: React.FC = () => {
                 setItems(data.items ?? []);
             } catch (err) {
                 setError("Failed to load items. Try again in a moment.");
-                // eslint-disable-next-line no-console
                 console.error(err);
             } finally {
                 setLoading(false);
@@ -128,14 +157,42 @@ export const ItemList: React.FC = () => {
                     body
                 });
             } catch (err) {
-                // Revert on error? For now just log
-                // eslint-disable-next-line no-console
                 console.error("Failed to sync favorite", err);
             }
         }
     };
 
-    // Reset page when filters change so we don't end up on an empty page.
+    const toggleWatch = async (id: number) => {
+        if (!user || !discordLinked) {
+            alert("Please login and link your Discord account in Profile to use watches.");
+            return;
+        }
+
+        const isWatched = watches.includes(id);
+        const newWatches = isWatched
+            ? watches.filter(x => x !== id)
+            : [...watches, id];
+        setWatches(newWatches);
+
+        try {
+            const method = isWatched ? "DELETE" : "POST";
+            const url = isWatched ? `/api/discord/watch/${id}` : "/api/discord/watch";
+            const body = isWatched ? undefined : JSON.stringify({ itemId: id, threshold: 5.0 });
+
+            await fetch(url, {
+                method,
+                headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Bearer ${token}`
+                },
+                body
+            });
+        } catch (err) {
+            console.error("Failed to sync watch", err);
+        }
+    };
+
+    // Reset page when filters change
     useEffect(() => {
         setPage(1);
     }, [search, sortKey, sortDir, onlyFavorites, pageSize]);
@@ -298,6 +355,7 @@ export const ItemList: React.FC = () => {
                         <tbody>
                             {pageItems.map((item) => {
                                 const isFav = favorites.includes(item.id);
+                                const isWatched = watches.includes(item.id);
                                 return (
                                     <tr key={item.id} className={isFav ? "fav-row" : undefined}>
                                         <td>
@@ -353,16 +411,32 @@ export const ItemList: React.FC = () => {
                                             </a>
                                         </td>
                                         <td>
-                                            <button
-                                                className="watch-button"
-                                                onClick={() =>
-                                                    navigator.clipboard.writeText(
-                                                        `/watch ${item.id} // ${item.name}`
-                                                    )
-                                                }
-                                            >
-                                                Copy /watch
-                                            </button>
+                                            {discordLinked ? (
+                                                <button
+                                                    className="watch-button"
+                                                    style={{
+                                                        background: isWatched ? '#5865f2' : 'transparent',
+                                                        color: isWatched ? '#fff' : '#5865f2',
+                                                        border: '1px solid #5865f2'
+                                                    }}
+                                                    onClick={() => toggleWatch(item.id)}
+                                                    title={isWatched ? "Unwatch" : "Watch (5% threshold)"}
+                                                >
+                                                    {isWatched ? "🔔" : "🔕"}
+                                                </button>
+                                            ) : (
+                                                <button
+                                                    className="watch-button"
+                                                    onClick={() =>
+                                                        navigator.clipboard.writeText(
+                                                            `/watch ${item.id} // ${item.name}`
+                                                        )
+                                                    }
+                                                    title="Login and link Discord to enable 1-click watch"
+                                                >
+                                                    Copy
+                                                </button>
+                                            )}
                                         </td>
                                     </tr>
                                 );

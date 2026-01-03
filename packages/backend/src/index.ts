@@ -7,6 +7,7 @@ import { startAggregationScheduler } from "./aggregator";
 import itemsRouter from "./routes/items";
 import authRouter from "./routes/auth";
 import favoritesRouter from "./routes/favorites";
+import discordRouter from "./routes/discord";
 
 // Initialize database
 initializeDatabase();
@@ -27,6 +28,8 @@ app.get("/api/health", (_req, res) => {
 app.use("/api/auth", authRouter);
 // Favorites routes
 app.use("/api/favorites", favoritesRouter);
+// Discord routes
+app.use("/api/discord", discordRouter);
 
 app.get("/api/items", async (_req, res) => {
   try {

@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { PriceChart } from "../components/PriceChart";
+import { useAuth } from "../contexts/AuthContext";
+import { Header } from "../components/Header";
 
 interface Item {
   id: number;
@@ -27,11 +29,43 @@ interface PriceHistoryPoint {
 export const ItemDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { user, token } = useAuth();
+
   const [item, setItem] = useState<Item | null>(null);
   const [priceHistory, setPriceHistory] = useState<PriceHistoryPoint[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [timeRange, setTimeRange] = useState<"24h" | "7d" | "30d">("7d");
+
+  // Watch logic
+  const [watches, setWatches] = useState<number[]>([]);
+  const [discordLinked, setDiscordLinked] = useState(false);
+
+  // Load watches
+  useEffect(() => {
+    const loadWatches = async () => {
+      if (user && token && id) {
+        try {
+          const res = await fetch("/api/discord/settings", {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          if (res.ok) {
+            const data = await res.json();
+            if (data.linked) {
+              setDiscordLinked(true);
+              setWatches(data.watches ? data.watches.map((w: any) => w.item_id) : []);
+            } else {
+              setDiscordLinked(false);
+            }
+          }
+        } catch (err) {
+          // eslint-disable-next-line no-console
+          console.error("Failed to fetch watches", err);
+        }
+      }
+    };
+    loadWatches();
+  }, [user, token, id]);
 
   useEffect(() => {
     const fetchItem = async () => {
@@ -100,9 +134,44 @@ export const ItemDetail: React.FC = () => {
     fetchHistory();
   }, [id, timeRange]);
 
+  const toggleWatch = async () => {
+    if (!item || !user || !discordLinked) {
+      if (!discordLinked && user) {
+        alert("Please link your Discord account in Profile to use watches.");
+      }
+      return;
+    }
+
+    const itemId = item.id;
+    const isWatched = watches.includes(itemId);
+    const newWatches = isWatched
+      ? watches.filter(x => x !== itemId)
+      : [...watches, itemId];
+    setWatches(newWatches);
+
+    try {
+      const method = isWatched ? "DELETE" : "POST";
+      const url = isWatched ? `/api/discord/watch/${itemId}` : "/api/discord/watch";
+      const body = isWatched ? undefined : JSON.stringify({ itemId: itemId, threshold: 5.0 });
+
+      await fetch(url, {
+        method,
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
+        },
+        body
+      });
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error("Failed to sync watch", err);
+    }
+  };
+
   if (loading) {
     return (
       <div className="app">
+        <Header />
         <div className="item-detail-container">
           <p>Loading item details...</p>
         </div>
@@ -113,6 +182,7 @@ export const ItemDetail: React.FC = () => {
   if (error || !item) {
     return (
       <div className="app">
+        <Header />
         <div className="item-detail-container">
           <p className="error">{error || "Item not found"}</p>
           <Link to="/" className="back-link">
@@ -123,11 +193,11 @@ export const ItemDetail: React.FC = () => {
     );
   }
 
+  const isWatched = watches.includes(item.id);
+
   return (
     <div className="app">
-      <header className="app-header">
-        <h1>OSRS Trading Tools</h1>
-      </header>
+      <Header />
       <main className="app-main">
         <div className="item-detail-container">
           <Link to="/" className="back-link">
@@ -141,7 +211,38 @@ export const ItemDetail: React.FC = () => {
               className="item-detail-icon"
             />
             <div className="item-header-info">
-              <h2>{item.name}</h2>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+                <h2>{item.name}</h2>
+                {discordLinked ? (
+                  <button
+                    className="watch-button"
+                    style={{
+                      background: isWatched ? '#5865f2' : 'transparent',
+                      color: isWatched ? '#fff' : '#5865f2',
+                      border: '1px solid #5865f2',
+                      fontSize: '1.2rem',
+                      padding: '5px 10px'
+                    }}
+                    onClick={toggleWatch}
+                    title={isWatched ? "Unwatch" : "Watch (5% threshold)"}
+                  >
+                    {isWatched ? "🔔 Watching" : "🔕 Watch"}
+                  </button>
+                ) : (
+                  <button
+                    className="watch-button"
+                    onClick={() =>
+                      navigator.clipboard.writeText(
+                        `/watch ${item.id} // ${item.name}`
+                      )
+                    }
+                    title="Login and link Discord to enable 1-click watch"
+                  >
+                    Copy /watch
+                  </button>
+                )}
+              </div>
+
               <p className="item-examine">{item.examine}</p>
               <div className="item-meta">
                 {item.members && <span className="members-badge">Members</span>}
@@ -185,15 +286,14 @@ export const ItemDetail: React.FC = () => {
             <div className="stat-card">
               <div className="stat-label">24h Change</div>
               <div
-                className={`stat-value ${
-                  item.dayChange !== null
+                className={`stat-value ${item.dayChange !== null
                     ? item.dayChange > 0
                       ? "positive"
                       : item.dayChange < 0
-                      ? "negative"
-                      : ""
+                        ? "negative"
+                        : ""
                     : ""
-                }`}
+                  }`}
               >
                 {item.dayChange !== null
                   ? `${item.dayChange > 0 ? "+" : ""}${item.dayChange.toFixed(2)}%`
@@ -241,6 +341,3 @@ export const ItemDetail: React.FC = () => {
     </div>
   );
 };
-
-
-

@@ -17,196 +17,56 @@ This document outlines the plan to complete all remaining features from `Project
 - **Phase 3**: Item Detail Page (Charts, History, Routing)
 - **Phase 4**: Authentication System (Register/Login, User Favorites DB sync)
 - **Phase 5**: Discord Bot Features (Commands, Notifications, Linking)
+- **Phase 5.5**: Web-Discord Integration (Profile Page, UI Watch Toggles)
+- **Phase 5.6**: Discord OAuth2 Integration (Login/Linking via Discord)
 
 ### ❌ Remaining Features
 - **Phase 6**: AI Highlights & Trading Tools
 - **Phase 7**: Integration & Polish
 
 ## Phase 1: Database & Historical Data (Foundation) - ✅ COMPLETED
-
-### 1.1 Database Setup
-**Tech Choice**: SQLite (free, simple, file-based, perfect for hobby project)
-
-**Schema Design**:
-```sql
--- Item price history (with time-based aggregation strategy)
-item_price_history (
-  id INTEGER PRIMARY KEY,
-  item_id INTEGER NOT NULL,
-  timestamp INTEGER NOT NULL, -- Unix timestamp
-  buy_price INTEGER,
-  sell_price INTEGER,
-  volume INTEGER,
-  granularity TEXT -- 'minute', 'hour', 'day'
-)
-
--- Users table
-users (
-  id INTEGER PRIMARY KEY,
-  username TEXT UNIQUE NOT NULL,
-  password_hash TEXT NOT NULL,
-  email TEXT,
-  created_at INTEGER
-)
-
--- User favorites (migrate from localStorage)
-user_favorites (
-  user_id INTEGER,
-  item_id INTEGER,
-  PRIMARY KEY (user_id, item_id)
-)
-
--- Discord user linkage
-discord_users (
-  discord_id TEXT PRIMARY KEY,
-  user_id INTEGER REFERENCES users(id),
-  notifications_enabled BOOLEAN DEFAULT true,
-  created_at INTEGER
-)
-
--- Notification watch settings
-notification_settings (
-  id INTEGER PRIMARY KEY,
-  discord_id TEXT REFERENCES discord_users(discord_id),
-  item_id INTEGER,
-  day_change_threshold REAL, -- percentage (e.g., 5.0 for 5%)
-  enabled BOOLEAN DEFAULT true,
-  created_at INTEGER
-)
-```
-
-**Implementation**:
-- Install `better-sqlite3` (fast, synchronous SQLite)
-- Create migration scripts
-- Add database initialization on backend startup
-- Implement data retention: keep minute-level data for 24h, aggregate to hourly for 7 days, daily after that
-
-### 1.2 Scheduled Price Fetcher
-**Implementation**:
-- Replace current cache-only system with database-backed storage
-- Use `node-cron` or `setInterval` to fetch prices every minute
-- Store each fetch with timestamp
-- Implement aggregation job (runs daily) to compress old data
-- Keep API endpoint fast by querying latest data + aggregated history
-
-**Files to create/modify**:
-- `packages/backend/src/database.ts` - Database setup and queries
-- `packages/backend/src/scheduler.ts` - Cron job for price fetching
-- `packages/backend/src/aggregator.ts` - Data compression logic
+... (Impl 1 details) ...
 
 ## Phase 2: Enhanced Data & Calculations - ✅ COMPLETED
-
-### 2.1 Day Change Calculation
-**Implementation**:
-- Query database for price 24 hours ago
-- Calculate percentage change: `((current - old) / old) * 100`
-- Add `dayChange` field to API response
-- Handle cases where historical data doesn't exist yet
-
-**Files to modify**:
-- `packages/backend/src/osrsClient.ts` - Add day change calculation
-- `packages/backend/src/index.ts` - Include in API response
-
-### 2.2 Price Change & Margin*Volume Columns
-**Implementation**:
-- Add `dayChange` and `marginVolume` (margin * volume) to frontend
-- Add sorting/filtering for these columns
-- Update `SortKey` type to include new options
-
-**Files to modify**:
-- `packages/frontend/src/App.tsx` - Add columns and sorting logic
+... (Impl 2 details) ...
 
 ## Phase 3: Item Detail Page - ✅ COMPLETED
-
-### 3.1 Item Detail Route & Page
-**Implementation**:
-- Create `/item/:id` route in frontend
-- Fetch item details + price history from backend
-- Use `recharts` or `chart.js` for price graph (buy/sell over time)
-- Display: current prices, day change, volume, margin, historical chart, wiki link
-
-**Backend API**:
-- `GET /api/items/:id` - Single item details
-- `GET /api/items/:id/history` - Price history (with time range query params)
-
-**Files to create**:
-- `packages/frontend/src/ItemDetail.tsx`
-- `packages/frontend/src/PriceChart.tsx`
-- `packages/backend/src/routes/items.ts` - Item-specific routes
+... (Impl 3 details) ...
 
 ## Phase 4: Authentication System - ✅ COMPLETED
-
-### 4.1 Backend Authentication
-**Implementation**:
-- Install `bcrypt` for password hashing
-- Install `jsonwebtoken` for JWT tokens
-- Create `/api/auth/register` endpoint
-- Create `/api/auth/login` endpoint
-- Create `/api/auth/me` endpoint (get current user)
-- Add middleware to protect routes requiring auth
-- Migrate favorites to database (user-specific)
-
-**Files to create**:
-- `packages/backend/src/auth.ts` - Auth utilities and middleware
-- `packages/backend/src/routes/auth.ts` - Auth endpoints
-
-### 4.2 Frontend Authentication
-**Implementation**:
-- Create login/register pages
-- Add React Router for navigation
-- Create auth context/provider
-- Store JWT in localStorage
-- Protect routes (redirect to login if not authenticated)
-- Update favorites to sync with backend
-
-**Files to create**:
-- `packages/frontend/src/pages/Login.tsx`
-- `packages/frontend/src/pages/Register.tsx`
-- `packages/frontend/src/contexts/AuthContext.tsx`
-- `packages/frontend/src/components/ProtectedRoute.tsx`
+... (Impl 4 details) ...
 
 ## Phase 5: Discord Bot Features - ✅ COMPLETED
+... (Impl 5 details) ...
 
-### 5.1 Discord Bot Commands
-**Commands to implement**:
-- `/watch <item_id> [threshold]` - Add item to watch list with optional day change threshold (default 5%)
-- `/unwatch <item_id>` - Remove item from watch list
-- `/list-watches` - Show all watched items with thresholds
-- `/notifications on|off` - Enable/disable all notifications
-- `/help` - Show command list
+## Phase 5.5: Web-Discord Integration - ✅ COMPLETED
+... (Impl 5.5 details) ...
 
+## Phase 5.6: Discord OAuth2 Integration - ✅ COMPLETED
+
+### 5.6.1 Backend OAuth
 **Implementation**:
-- Use Discord.js slash commands or message-based commands
-- Store watch settings in database
-- Link Discord user to app user (optional, or standalone Discord users)
+- Implement Discord OAuth2 flow (Code Grant)
+- `POST /api/auth/discord/login`: Exchange code, find/create user, return JWT
+- `POST /api/discord/link-oauth`: Exchange code, link Discord ID to authenticated user
+- `GET /api/discord/config`: Public endpoint for Client ID
 
-**Files to modify**:
-- `packages/discord-bot/src/index.ts` - Add command handlers
-- `packages/discord-bot/src/commands/` - Command modules (Implemented in index.ts for simplicity)
+**Files created**:
+- `packages/backend/src/oauth.ts`
+- `packages/backend/src/routes/auth.ts` (updated)
+- `packages/backend/src/routes/discord.ts` (updated)
 
-### 5.2 Private Message Notification System
+### 5.6.2 Frontend OAuth
 **Implementation**:
-- Create notification checker service (runs every minute)
-- Query database for all active watch settings
-- Calculate day change for each watched item
-- Send PM if threshold exceeded
-- Rate limiting: max 1 notification per item per hour per user
-- Batch multiple alerts into single message when possible
+- **Callback Page**: Handles specific route `/auth/discord/callback`
+- **Login Page**: "Login with Discord" button -> Redirects to Discord
+- **Profile Page**: "Connect Discord" button -> Redirects to Discord
 
-**Files to create**:
-- `packages/discord-bot/src/notifier.ts` - Notification logic (Implemented in scheduler)
-- `packages/discord-bot/src/scheduler.ts` - Cron for checking notifications
-
-### 5.3 Notification Throttling Logic
-**Implementation**:
-- Track `last_notified_at` per item per user
-- Batch multiple alerts: "3 items exceeded thresholds: Item A (+8%), Item B (-6%), Item C (+12%)"
-- Prioritize high-margin items
-- Respect user's notification preferences
-- Add cooldown periods
-
-**Files to modify**:
-- `packages/discord-bot/src/notifier.ts` - Add throttling logic (Implemented in scheduler)
+**Files created/modified**:
+- `packages/frontend/src/pages/DiscordCallback.tsx`
+- `packages/frontend/src/pages/Login.tsx`
+- `packages/frontend/src/pages/Profile.tsx`
+- `packages/frontend/src/App.tsx`
 
 ## Phase 6: AI Highlights & Trading Tools (Current Focus)
 
@@ -256,52 +116,11 @@ notification_settings (
 
 ## Phase 7: Integration & Polish
 
-### 7.1 Backend-Discord Integration
-**Implementation**:
-- Discord bot queries backend API or shared database
-- Coordinate price fetching (backend fetches, bot reads)
-- Shared types/interfaces between packages
-
-**Files to create**:
-- `packages/shared/` - Shared types and utilities (optional)
-- Or: Discord bot uses backend API endpoints
-
-### 7.2 Testing & Documentation
-**Implementation**:
-- Add example `.env` files (`.env.example`)
-- Update README with database setup instructions
-- Document all API endpoints
-- Add error handling and logging
-
-## Implementation Order Recommendation
-
-1. **Phase 1** (Database & Scheduled Fetching) - ✅ COMPLETED
-2. **Phase 2** (Day Change & Enhanced Columns) - ✅ COMPLETED
-3. **Phase 3** (Item Detail Page) - ✅ COMPLETED
-4. **Phase 4** (Authentication) - ✅ COMPLETED
-5. **Phase 5** (Discord Bot Features) - ✅ COMPLETED
-6. **Phase 6** (AI & Trading Tools) - Advanced features
-7. **Phase 7** (Integration & Polish) - Final touches
+... (Phase 7 details) ...
 
 ## Dependencies to Install
 
-### Backend
-```bash
-npm install better-sqlite3 node-cron bcrypt jsonwebtoken
-npm install -D @types/better-sqlite3 @types/bcrypt @types/jsonwebtoken @types/node-cron
-```
-
-### Frontend
-```bash
-npm install react-router-dom recharts
-npm install -D @types/react-router-dom
-```
-
-### Discord Bot
-```bash
-npm install dotenv
-# (discord.js already installed)
-```
+... (Keep existing) ...
 
 ## Environment Variables Needed
 
@@ -310,22 +129,7 @@ npm install dotenv
 PORT=4000
 DATABASE_PATH=./data/osrs_trading.db
 JWT_SECRET=your_secret_key_here
+DISCORD_CLIENT_ID=your_client_id
+DISCORD_CLIENT_SECRET=your_client_secret
+DISCORD_REDIRECT_URI=http://localhost:5173/auth/discord/callback
 ```
-
-### Discord Bot `.env`
-```
-DISCORD_BOT_TOKEN=your_token_here
-BACKEND_API_URL=http://localhost:4000
-```
-
-### Optional: AI Service `.env`
-```
-OPENAI_API_KEY=your_key_here  # Or other AI service
-```
-
-## Notes
-
-- **Database Growth**: The aggregation strategy (minute → hour → day) should keep database size manageable. Monitor and adjust retention policies as needed.
-- **Rate Limiting**: Discord API has rate limits. Implement queuing/backoff for PM sending.
-- **Error Handling**: Add comprehensive error handling and logging throughout.
-- **Security**: Always hash passwords, validate inputs, use HTTPS in production, sanitize database queries.
