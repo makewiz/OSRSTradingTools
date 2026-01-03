@@ -39,11 +39,45 @@ export const Register: React.FC = () => {
         }
     };
 
+    const handleDiscordSignup = () => {
+        fetch("/api/discord/config")
+            .then(res => res.json())
+            .then(data => {
+                const clientId = data.clientId;
+                if (!clientId) {
+                    alert("Discord Client ID not configured on backend.");
+                    return;
+                }
+                const scope = encodeURIComponent("identify email");
+                const state = encodeURIComponent("login");
+                const redirectUri = window.location.origin + "/auth/discord/callback";
+                const url = `https://discord.com/api/oauth2/authorize?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=${scope}&state=${state}`;
+                window.location.href = url;
+            })
+            .catch(err => {
+                console.error(err);
+                alert("Failed to get Discord config");
+            });
+    };
+
     return (
         <div className="auth-page">
             <div className="auth-container">
                 <h2>Register</h2>
                 {error && <div className="error-message">{error}</div>}
+
+                <button
+                    type="button"
+                    className="discord-signup-button"
+                    onClick={handleDiscordSignup}
+                    disabled={loading}
+                    style={{ background: '#5865f2', color: 'white', border: 'none', width: '100%', padding: '10px', borderRadius: '4px', marginBottom: '15px', cursor: 'pointer', fontWeight: 'bold' }}
+                >
+                    Sign up with Discord
+                </button>
+
+                <div className="divider" style={{ textAlign: 'center', margin: '10px 0', color: '#888' }}>OR</div>
+
                 <form onSubmit={handleSubmit}>
                     <div className="form-group">
                         <label htmlFor="username">Username</label>

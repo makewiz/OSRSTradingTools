@@ -142,4 +142,20 @@ router.get("/me", authenticateToken, (req, res) => {
     res.json({ user: userSafe });
 });
 
+// Delete Account
+router.delete("/account", authenticateToken, async (req, res) => {
+    try {
+        const userId = req.user!.id;
+
+        const { deleteUser } = await import("../database");
+        await deleteUser(userId);
+
+        res.json({ success: true, message: "Account deleted successfully" });
+    } catch (err) {
+        // eslint-disable-next-line no-console
+        console.error(err);
+        res.status(500).json({ error: "Failed to delete account" });
+    }
+});
+
 export default router;

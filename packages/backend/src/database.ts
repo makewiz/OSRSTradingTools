@@ -346,6 +346,21 @@ export async function getUserById(id: number): Promise<User | null> {
   return null;
 }
 
+// Delete user and all associated data
+export async function deleteUser(userId: number): Promise<void> {
+  // First, delete discord_users if linked (cascades to notification_settings)
+  const deleteDiscordQuery = `
+    DELETE FROM discord_users WHERE user_id = $1
+  `;
+  await pool.query(deleteDiscordQuery, [userId]);
+
+  // Then delete the user (cascades to user_favorites)
+  const deleteUserQuery = `
+    DELETE FROM users WHERE id = $1
+  `;
+  await pool.query(deleteUserQuery, [userId]);
+}
+
 /**
  * Favorites Management Functions
  */

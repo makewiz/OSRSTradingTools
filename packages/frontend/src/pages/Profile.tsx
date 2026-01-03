@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 
 interface Watch {
@@ -16,7 +16,8 @@ interface Watch {
 const REDIRECT_URI = window.location.origin + "/auth/discord/callback";
 
 export const Profile: React.FC = () => {
-    const { user, token } = useAuth();
+    const { user, token, logout } = useAuth();
+    const navigate = useNavigate();
     const [discordId, setDiscordId] = useState("");
     const [isLinked, setIsLinked] = useState(false);
     const [notificationsEnabled, setNotificationsEnabled] = useState(true);
@@ -281,6 +282,48 @@ export const Profile: React.FC = () => {
                         </button>
                     </div>
                 )}
+            </div>
+
+            <div className="section" style={{ background: 'rgba(139,0,0,0.15)', padding: '20px', borderRadius: '8px', marginTop: '20px', border: '1px solid rgba(139,0,0,0.3)' }}>
+                <h2 style={{ color: '#ff6b6b' }}>Danger Zone</h2>
+                <p style={{ color: '#ccc', marginBottom: '15px' }}>
+                    Once you delete your account, there is no going back. This will permanently delete your profile, favorites, and Discord link.
+                </p>
+                <button
+                    className="page-button"
+                    style={{ background: '#d32f2f', border: 'none', fontWeight: 'bold' }}
+                    onClick={async () => {
+                        const confirmed = confirm(
+                            "Are you sure you want to delete your account? This action cannot be undone.\n\n" +
+                            "All your data will be permanently deleted:\n" +
+                            "- Your user profile\n" +
+                            "- All favorites\n" +
+                            "- Discord link and notification settings"
+                        );
+
+                        if (!confirmed) return;
+
+                        const doubleCheck = confirm("This is your last chance. Are you absolutely sure?");
+                        if (!doubleCheck) return;
+
+                        try {
+                            const res = await fetch("/api/auth/account", {
+                                method: "DELETE",
+                                headers: { Authorization: `Bearer ${token}` }
+                            });
+
+                            if (!res.ok) throw new Error("Failed to delete account");
+
+                            alert("Your account has been deleted.");
+                            logout();
+                            navigate("/");
+                        } catch (err) {
+                            alert("Failed to delete account. Please try again.");
+                        }
+                    }}
+                >
+                    Delete Account
+                </button>
             </div>
         </div>
     );
