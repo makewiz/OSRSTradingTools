@@ -9,6 +9,7 @@ import {
     getBackendWatches
 } from "../database";
 import { exchangeCodeForToken, getDiscordUser } from "../oauth";
+import { getCombinedItems } from "../osrsClient";
 
 const router = express.Router();
 
@@ -77,7 +78,11 @@ router.post("/link-oauth", async (req, res) => {
  * Get Discord Settings & Status
  * GET /api/discord/settings
  */
-router.get("/settings", (req, res) => {
+/**
+ * Get Discord Settings & Status
+ * GET /api/discord/settings
+ */
+router.get("/settings", async (req, res) => {
     const userId = req.user!.id;
     try {
         const discordUser = getDiscordUserByUserId(userId);
@@ -88,11 +93,23 @@ router.get("/settings", (req, res) => {
         // Get active watches
         const watches = getBackendWatches(discordUser.discord_id);
 
+        // Enrich with item names
+        // Note: In a production app with DB "items" table, we would JOIN. 
+        // Here we fetch from cache.
+        const allItems = await getCombinedItems();
+        const enrichedWatches = watches.map(w => {
+            const item = allItems.find(i => i.id === w.item_id);
+            return {
+                ...w,
+                itemName: item ? item.name : `Item ${w.item_id}`
+            };
+        });
+
         res.json({
             linked: true,
             discordId: discordUser.discord_id,
             notificationsEnabled: discordUser.notifications_enabled,
-            watches
+            watches: enrichedWatches
         });
     } catch (err) {
         // eslint-disable-next-line no-console
@@ -132,6 +149,10 @@ router.post("/settings", (req, res) => {
  * Add a Watch
  * POST /api/discord/watch
  */
+/**
+ * Add a Watch
+ * POST /api/discord/watch
+ */
 router.post("/watch", (req, res) => {
     const userId = req.user!.id;
     const { itemId, threshold } = req.body;
@@ -152,6 +173,37 @@ router.post("/watch", (req, res) => {
         // eslint-disable-next-line no-console
         console.error(err);
         res.status(500).json({ error: "Failed to add watch" });
+    }
+});
+
+/**
+ * Update Watch Threshold
+ * PUT /api/discord/watch/:itemId
+ */
+router.put("/watch/:itemId", (req, res) => {
+    const userId = req.user!.id;
+    const itemId = parseInt(req.params.itemId, 10);
+    const { threshold } = req.body;
+
+    if (isNaN(itemId)) {
+        return res.status(400).json({ error: "Invalid item ID" });
+    }
+    if (typeof threshold !== "number") {
+        return res.status(400).json({ error: "Invalid threshold" });
+    }
+
+    try {
+        const discordUser = getDiscordUserByUserId(userId);
+        if (!discordUser) {
+            return res.status(404).json({ error: "No Discord account linked" });
+        }
+
+        addBackendWatch(discordUser.discord_id, itemId, threshold);
+        res.json({ success: true, itemId, threshold });
+    } catch (err) {
+        // eslint-disable-next-line no-console
+        console.error(err);
+        res.status(500).json({ error: "Failed to update watch" });
     }
 });
 
