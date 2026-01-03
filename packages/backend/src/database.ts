@@ -179,6 +179,8 @@ export async function getLatestPrice(itemId: number): Promise<ItemPriceHistory |
   return result.rows[0] ? (result.rows[0] as ItemPriceHistory) : null;
 }
 
+
+
 export async function getPriceAtTime(
   itemId: number,
   targetTimestamp: number
@@ -285,6 +287,7 @@ export async function calculateDayChange(
  * User Management Functions
  */
 
+// Create new user
 export async function createUser(
   username: string,
   passwordHash: string,
@@ -301,8 +304,20 @@ export async function createUser(
 
   return {
     ...user,
-    created_at: parseInt(user.created_at) // Ensure bigint is parsed to number if needed (pg returns strings for bigint sometimes, but node-pg defaults to string for bigint. For timestamps, usually fine to keep as number if not huge)
+    created_at: parseInt(user.created_at) // Ensure bigint is parsed to number if needed
   } as User;
+}
+
+// Get active watches for a discord user
+export async function getBackendWatches(discordId: string): Promise<NotificationSetting[]> {
+  const query = `
+    SELECT * FROM notification_settings WHERE discord_id = $1 AND enabled = 1
+  `;
+  const result = await pool.query(query, [discordId]);
+  return result.rows.map(row => ({
+    ...row,
+    created_at: parseInt(row.created_at)
+  })) as NotificationSetting[];
 }
 
 export async function getUserByUsername(username: string): Promise<User | null> {
@@ -311,7 +326,11 @@ export async function getUserByUsername(username: string): Promise<User | null> 
   `;
 
   const result = await pool.query(query, [username]);
-  return result.rows[0] ? (result.rows[0] as User) : null;
+  if (result.rows.length > 0) {
+    const user = result.rows[0];
+    return { ...user, created_at: parseInt(user.created_at) } as User;
+  }
+  return null;
 }
 
 export async function getUserById(id: number): Promise<User | null> {
@@ -320,7 +339,11 @@ export async function getUserById(id: number): Promise<User | null> {
   `;
 
   const result = await pool.query(query, [id]);
-  return result.rows[0] ? (result.rows[0] as User) : null;
+  if (result.rows.length > 0) {
+    const user = result.rows[0];
+    return { ...user, created_at: parseInt(user.created_at) } as User;
+  }
+  return null;
 }
 
 /**
@@ -369,14 +392,7 @@ export async function linkDiscordUser(userId: number, discordId: string): Promis
   await pool.query(query, [discordId, userId]);
 }
 
-// Get Discord User for a given App User ID
-export async function getDiscordUserByUserId(userId: number): Promise<DiscordUser | null> {
-  const query = `
-    SELECT * FROM discord_users WHERE user_id = $1
-  `;
-  const result = await pool.query(query, [userId]);
-  return result.rows[0] ? (result.rows[0] as DiscordUser) : null;
-}
+
 
 // Get App User for a given Discord ID (for login)
 export async function getUserByDiscordId(discordId: string): Promise<User | null> {
@@ -386,7 +402,27 @@ export async function getUserByDiscordId(discordId: string): Promise<User | null
     WHERE du.discord_id = $1
   `;
   const result = await pool.query(query, [discordId]);
-  return result.rows[0] ? (result.rows[0] as User) : null;
+  if (result.rows.length > 0) {
+    const user = result.rows[0];
+    return {
+      ...user,
+      created_at: parseInt(user.created_at) // Ensure number
+    } as User;
+  }
+  return null;
+}
+
+// Get Discord User for a given App User ID
+export async function getDiscordUserByUserId(userId: number): Promise<DiscordUser | null> {
+  const query = `
+    SELECT * FROM discord_users WHERE user_id = $1
+  `;
+  const result = await pool.query(query, [userId]);
+  if (result.rows.length > 0) {
+    const dUser = result.rows[0];
+    return { ...dUser, created_at: parseInt(dUser.created_at) } as DiscordUser;
+  }
+  return null;
 }
 
 // Update settings
@@ -394,10 +430,11 @@ export async function updateDiscordSettings(discordId: string, enabled: boolean)
   const query = `
     UPDATE discord_users SET notifications_enabled = $1 WHERE discord_id = $2
   `;
-  await pool.query(query, [enabled ? 1 : 0, discordId]);
+  const val = enabled ? 1 : 0;
+  await pool.query(query, [val, discordId]);
 }
 
-// Add Watch via backend (similar to Favorites logic but for notification_settings)
+// Add/Update Watch
 export async function addBackendWatch(discordId: string, itemId: number, threshold: number): Promise<void> {
   const query = `
     INSERT INTO notification_settings (discord_id, item_id, day_change_threshold, enabled)
@@ -409,6 +446,7 @@ export async function addBackendWatch(discordId: string, itemId: number, thresho
   await pool.query(query, [discordId, itemId, threshold]);
 }
 
+// Remove Watch
 export async function removeBackendWatch(discordId: string, itemId: number): Promise<void> {
   const query = `
     DELETE FROM notification_settings WHERE discord_id = $1 AND item_id = $2
@@ -416,13 +454,7 @@ export async function removeBackendWatch(discordId: string, itemId: number): Pro
   await pool.query(query, [discordId, itemId]);
 }
 
-export async function getBackendWatches(discordId: string): Promise<NotificationSetting[]> {
-  const query = `
-    SELECT * FROM notification_settings WHERE discord_id = $1 AND enabled = 1
-  `;
-  const result = await pool.query(query, [discordId]);
-  return result.rows as NotificationSetting[];
-}
+
 
 // Close database connection gracefully
 export async function closeDatabase(): Promise<void> {

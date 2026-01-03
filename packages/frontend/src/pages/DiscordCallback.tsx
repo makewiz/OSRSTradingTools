@@ -8,7 +8,11 @@ export const DiscordCallback: React.FC = () => {
     const { login, token } = useAuth();
     const [error, setError] = useState<string | null>(null);
 
+    const processed = React.useRef(false); // Add ref to track if already processed
+
     useEffect(() => {
+        if (processed.current) return; // Skip if already processed
+
         const code = searchParams.get("code");
         const state = searchParams.get("state"); // "login" or "link"
 
@@ -16,6 +20,8 @@ export const DiscordCallback: React.FC = () => {
             setError("No authorization code found.");
             return;
         }
+
+        processed.current = true; // Mark as processed
 
         const handleCallback = async () => {
             try {
@@ -47,11 +53,13 @@ export const DiscordCallback: React.FC = () => {
                     if (!res.ok) throw new Error("Failed to login with Discord.");
 
                     const data = await res.json();
-                    login(data.user, data.token);
+                    // Fix argument order: login(token, user)
+                    login(data.token, data.user);
                     navigate("/");
                 }
             } catch (err: any) {
                 setError(err.message || "An unknown error occurred.");
+                processed.current = false; // Allow retry if it failed? Or maybe not.
             }
         };
 
