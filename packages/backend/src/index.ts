@@ -5,6 +5,8 @@ import { initializeDatabase, closeDatabase } from "./database";
 import { startPriceScheduler } from "./scheduler";
 import { startAggregationScheduler } from "./aggregator";
 import itemsRouter from "./routes/items";
+import authRouter from "./routes/auth";
+import favoritesRouter from "./routes/favorites";
 
 // Initialize database
 initializeDatabase();
@@ -20,6 +22,11 @@ app.use(express.json());
 app.get("/api/health", (_req, res) => {
   res.json({ status: "ok", service: "osrs-trading-tools-backend" });
 });
+
+// Auth routes
+app.use("/api/auth", authRouter);
+// Favorites routes
+app.use("/api/favorites", favoritesRouter);
 
 app.get("/api/items", async (_req, res) => {
   try {
@@ -66,6 +73,3 @@ process.on("SIGTERM", () => {
     process.exit(0);
   });
 });
-
-
-

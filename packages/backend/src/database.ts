@@ -280,8 +280,79 @@ export function calculateDayChange(
   return { buyDayChange, sellDayChange, dayChange };
 }
 
+/**
+ * User Management Functions
+ */
+
+export function createUser(
+  username: string,
+  passwordHash: string,
+  email: string | null = null
+): User {
+  const stmt = db.prepare(`
+    INSERT INTO users (username, password_hash, email)
+    VALUES (?, ?, ?)
+  `);
+
+  const info = stmt.run(username, passwordHash, email);
+
+  return {
+    id: info.lastInsertRowid as number,
+    username,
+    password_hash: passwordHash,
+    email,
+    created_at: Math.floor(Date.now() / 1000)
+  };
+}
+
+export function getUserByUsername(username: string): User | null {
+  const stmt = db.prepare(`
+    SELECT * FROM users WHERE username = ?
+  `);
+
+  return stmt.get(username) as User | null;
+}
+
+export function getUserById(id: number): User | null {
+  const stmt = db.prepare(`
+    SELECT * FROM users WHERE id = ?
+  `);
+
+  return stmt.get(id) as User | null;
+}
+
+/**
+ * Favorites Management Functions
+ */
+
+export function getUserFavorites(userId: number): number[] {
+  const stmt = db.prepare(`
+    SELECT item_id FROM user_favorites WHERE user_id = ?
+  `);
+
+  const rows = stmt.all(userId) as { item_id: number }[];
+  return rows.map(r => r.item_id);
+}
+
+export function addFavorite(userId: number, itemId: number): void {
+  const stmt = db.prepare(`
+    INSERT OR IGNORE INTO user_favorites (user_id, item_id)
+    VALUES (?, ?)
+  `);
+
+  stmt.run(userId, itemId);
+}
+
+export function removeFavorite(userId: number, itemId: number): void {
+  const stmt = db.prepare(`
+    DELETE FROM user_favorites WHERE user_id = ? AND item_id = ?
+  `);
+
+  stmt.run(userId, itemId);
+}
+
+
 // Close database connection gracefully
 export function closeDatabase(): void {
   db.close();
 }
-
