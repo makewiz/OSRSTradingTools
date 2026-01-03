@@ -1,57 +1,54 @@
-# Walkthrough: Authentication System (Phase 4)
+# Walkthrough: Discord Bot Features (Phase 5)
 
-I have successfully implemented the Authentication System for OSRS Trading Tools.
+I have successfully implemented the Discord Bot features for OSRS Trading Tools.
 
 ## Features Implemented
 
-### 1. Backend Authentication
-- **User Management**: Users can now register and login.
-- **Security**: Passwords are securely hashed using `bcrypt` before storage in the SQLite database.
-- **Tokens**: JSON Web Tokens (JWT) are issued upon login for stateless authentication.
-- **Middleware**: Protected routes (like favorites management) are secured with an `authenticateToken` middleware.
+### 1. Slash Commands
+The bot now supports the following slash commands:
+- `/watch <item_id> [threshold]`: Watch an item. Warns if the day change (24h%) exceeds the threshold (default 5%).
+  - Example: `/watch item_id:4151 threshold:10` (Watch Abyssal Whip for 10% change)
+- `/unwatch <item_id>`: Stop watching an item.
+- `/listwatches`: Shows your currently active watches.
+- `/notifications <on|off>`: Globally toggle notifications for your user.
+- `/help`: Show available commands.
 
-### 2. Frontend Authentication
-- **Login & Register Pages**: New pages for user onboarding.
-- **Auth Context**: Global state management for user sessions, handling token storage in `localStorage`.
-- **Protected Routes**: Redirects unauthenticated users to the login page when accessing restricted areas (extensible for future features).
-- **Header Navigation**: Dynamic header showing specific links based on login status.
+### 2. Notification System
+- **Scheduler**: A background job runs every minute to check active watches.
+- **Alerts**: If an item's day change exceeds your threshold, the bot sends you a Direct Message (DM).
+- **Cooldown**: To prevent spam, notifications for the same item are rate-limited to once per hour.
+- **Database Integration**: Watch settings and user preferences are stored in the shared SQLite database.
 
-### 3. Favorites Synchronization
-- **Database Storage**: Favorites are now stored in the database (`user_favorites` table).
-- **Sync Logic**: 
-  - When logged in, adding/removing favorites updates the server database.
-  - When logged out, it falls back to `localStorage` so guests can still use the feature.
-  - On login, the app fetches the user's persisted favorites.
+## Setup & Testing
 
-## How to Test
+### Prerequisites
+1. **Discord Bot Token**: You need a bot token from the [Discord Developer Portal](https://discord.com/developers/applications).
+2. **Client ID**: You also need the Application (Client) ID for slash command registration.
+3. **Invite Bot**: Invite the bot to your server (or just DM it if you enable the intent). Currently, it responds to interactions anywhere.
 
-1. **Start the Application**:
-   Ensure both backend and frontend are running.
+### Environment Variables
+Updated `.env` requirements (add these to your root `.env`):
+```
+DISCORD_BOT_TOKEN=your_actual_bot_token_here
+DISCORD_CLIENT_ID=your_client_id_here
+```
 
-2. **Register a New Account**:
-   - Click "Register" in the header.
-   - Enter a username (min 3 chars) and password (min 6 chars).
-   - Click "Register". You will be automatically logged in.
+### Running the Bot
+1. Open a new terminal.
+2. Navigate to `packages/discord-bot`.
+3. Run `npm run dev` (or `npm start` for production).
+4. The bot should log "Logged in as..." and "Successfully reloaded application (/) commands.".
 
-3. **Login**:
-   - Logout (if logged in).
-   - Click "Login".
-   - Enter your credentials.
-
-4. **Test Favorites**:
-   - **As Guest**: Click the heart icon on an item. Reload the page. It should persist (localStorage).
-   - **As User**: Login. Click the heart icon on an item. Reload the page. It should persist (Database).
-   - **Sync Check**: Open the app in a different browser/incognito window key. Login with the same account. Your favorites should appear!
+### Verifying
+1. Go to Discord.
+2. Type `/help` to see if commands are registered.
+3. Try `/watch item_id:2` (Cannonball) or any valid ID.
+4. Try `/listwatches`.
+5. Wait for price updates (needs the Backend running to fetch prices!).
 
 ## Files Created/Modified
 
-- `packages/backend/src/auth.ts`: Auth logic.
-- `packages/backend/src/database.ts`: User & Favorites table logic.
-- `packages/backend/src/routes/auth.ts`: Auth endpoints.
-- `packages/backend/src/routes/favorites.ts`: Favorites endpoints.
-- `packages/backend/src/index.ts`: Route registration.
-- `packages/frontend/src/contexts/AuthContext.tsx`: React Context.
-- `packages/frontend/src/pages/Login.tsx` & `Register.tsx`: Pages.
-- `packages/frontend/src/components/Header.tsx`: Navigation.
-- `packages/frontend/src/App.tsx`: Routing wiring.
-- `packages/frontend/src/pages/ItemList.tsx`: Refactored list with sync logic.
+- `packages/discord-bot/src/index.ts`: Main bot logic and command handlers.
+- `packages/discord-bot/src/database.ts`: Database access for watches/users.
+- `packages/discord-bot/src/scheduler.ts`: Notification checking logic.
+- `packages/discord-bot/package.json`: Added `dotenv`, `better-sqlite3`, `node-cron`.

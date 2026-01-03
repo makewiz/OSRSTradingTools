@@ -15,10 +15,10 @@ This document outlines the plan to complete all remaining features from `Project
 - **Phase 1**: Database & Historical Data (SQLite, Scheduler, Aggregator)
 - **Phase 2**: Enhanced Data (Day Change, Margin*Volume)
 - **Phase 3**: Item Detail Page (Charts, History, Routing)
-
-### ❌ Remaining Features
 - **Phase 4**: Authentication System (Register/Login, User Favorites DB sync)
 - **Phase 5**: Discord Bot Features (Commands, Notifications, Linking)
+
+### ❌ Remaining Features
 - **Phase 6**: AI Highlights & Trading Tools
 - **Phase 7**: Integration & Polish
 
@@ -134,7 +134,7 @@ notification_settings (
 - `packages/frontend/src/PriceChart.tsx`
 - `packages/backend/src/routes/items.ts` - Item-specific routes
 
-## Phase 4: Authentication System (Current Focus)
+## Phase 4: Authentication System - ✅ COMPLETED
 
 ### 4.1 Backend Authentication
 **Implementation**:
@@ -165,7 +165,7 @@ notification_settings (
 - `packages/frontend/src/contexts/AuthContext.tsx`
 - `packages/frontend/src/components/ProtectedRoute.tsx`
 
-## Phase 5: Discord Bot Features
+## Phase 5: Discord Bot Features - ✅ COMPLETED
 
 ### 5.1 Discord Bot Commands
 **Commands to implement**:
@@ -182,7 +182,7 @@ notification_settings (
 
 **Files to modify**:
 - `packages/discord-bot/src/index.ts` - Add command handlers
-- `packages/discord-bot/src/commands/` - Command modules
+- `packages/discord-bot/src/commands/` - Command modules (Implemented in index.ts for simplicity)
 
 ### 5.2 Private Message Notification System
 **Implementation**:
@@ -194,7 +194,7 @@ notification_settings (
 - Batch multiple alerts into single message when possible
 
 **Files to create**:
-- `packages/discord-bot/src/notifier.ts` - Notification logic
+- `packages/discord-bot/src/notifier.ts` - Notification logic (Implemented in scheduler)
 - `packages/discord-bot/src/scheduler.ts` - Cron for checking notifications
 
 ### 5.3 Notification Throttling Logic
@@ -206,9 +206,9 @@ notification_settings (
 - Add cooldown periods
 
 **Files to modify**:
-- `packages/discord-bot/src/notifier.ts` - Add throttling logic
+- `packages/discord-bot/src/notifier.ts` - Add throttling logic (Implemented in scheduler)
 
-## Phase 6: AI Highlights & Trading Tools
+## Phase 6: AI Highlights & Trading Tools (Current Focus)
 
 ### 6.1 AI Highlights Service
 **Tech Choice**: Use OpenAI API or similar (via environment variable, not hardcoded)
@@ -278,8 +278,8 @@ notification_settings (
 1. **Phase 1** (Database & Scheduled Fetching) - ✅ COMPLETED
 2. **Phase 2** (Day Change & Enhanced Columns) - ✅ COMPLETED
 3. **Phase 3** (Item Detail Page) - ✅ COMPLETED
-4. **Phase 4** (Authentication) - Needed before user-specific features
-5. **Phase 5** (Discord Bot Features) - Core Discord functionality
+4. **Phase 4** (Authentication) - ✅ COMPLETED
+5. **Phase 5** (Discord Bot Features) - ✅ COMPLETED
 6. **Phase 6** (AI & Trading Tools) - Advanced features
 7. **Phase 7** (Integration & Polish) - Final touches
 
