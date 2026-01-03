@@ -19,7 +19,7 @@ export function startNotificationScheduler(client: Client) {
 }
 
 async function checkNotifications(client: Client) {
-    const watches = getAllActiveWatches();
+    const watches = await getAllActiveWatches();
     const now = Math.floor(Date.now() / 1000);
 
     // Group by user to batch messages if we wanted to (simple version sends individual for now or basic batching)
@@ -32,11 +32,11 @@ async function checkNotifications(client: Client) {
         }
 
         // Get price data
-        const price = getLatestPrice(watch.item_id);
+        const price = await getLatestPrice(watch.item_id);
         if (!price) continue;
 
         // Calculate change
-        const dayChange = getDayChange(watch.item_id, price.buy_price, price.sell_price);
+        const dayChange = await getDayChange(watch.item_id, price.buy_price, price.sell_price);
 
         // Check threshold
         // Threshold is magnitude? Or direction? Assuming magnitude for now (absolute change) based on "day change".
@@ -50,7 +50,7 @@ async function checkNotifications(client: Client) {
             const msg = `**Item ${watch.item_id}**: ${direction} ${dayChange.toFixed(2)}% (Buy: ${price.buy_price}, Sell: ${price.sell_price})`;
 
             // Update DB
-            updateLastNotified(watch.id);
+            await updateLastNotified(watch.id);
 
             // Add to send list
             let userBatch = notificationsToSend.find(n => n.discordId === watch.discord_id);

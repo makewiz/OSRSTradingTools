@@ -28,7 +28,7 @@ router.use(authenticateToken);
  * Link Discord Account
  * POST /api/discord/link
  */
-router.post("/link", (req, res) => {
+router.post("/link", async (req, res) => {
     const userId = req.user!.id;
     const { discordId } = req.body;
 
@@ -37,7 +37,7 @@ router.post("/link", (req, res) => {
     }
 
     try {
-        linkDiscordUser(userId, discordId);
+        await linkDiscordUser(userId, discordId);
         res.json({ success: true, discordId });
     } catch (err) {
         // eslint-disable-next-line no-console
@@ -62,7 +62,7 @@ router.post("/link-oauth", async (req, res) => {
         const tokenData = await exchangeCodeForToken(code);
         const discordProfile = await getDiscordUser(tokenData.access_token);
 
-        linkDiscordUser(userId, discordProfile.id);
+        await linkDiscordUser(userId, discordProfile.id);
         res.json({ success: true, discordId: discordProfile.id });
     } catch (err: any) {
         // eslint-disable-next-line no-console
@@ -78,20 +78,16 @@ router.post("/link-oauth", async (req, res) => {
  * Get Discord Settings & Status
  * GET /api/discord/settings
  */
-/**
- * Get Discord Settings & Status
- * GET /api/discord/settings
- */
 router.get("/settings", async (req, res) => {
     const userId = req.user!.id;
     try {
-        const discordUser = getDiscordUserByUserId(userId);
+        const discordUser = await getDiscordUserByUserId(userId);
         if (!discordUser) {
             return res.json({ linked: false });
         }
 
         // Get active watches
-        const watches = getBackendWatches(discordUser.discord_id);
+        const watches = await getBackendWatches(discordUser.discord_id);
 
         // Enrich with item names
         // Note: In a production app with DB "items" table, we would JOIN. 
@@ -122,7 +118,7 @@ router.get("/settings", async (req, res) => {
  * Update Discord Settings
  * POST /api/discord/settings
  */
-router.post("/settings", (req, res) => {
+router.post("/settings", async (req, res) => {
     const userId = req.user!.id;
     const { enabled } = req.body;
 
@@ -131,12 +127,12 @@ router.post("/settings", (req, res) => {
     }
 
     try {
-        const discordUser = getDiscordUserByUserId(userId);
+        const discordUser = await getDiscordUserByUserId(userId);
         if (!discordUser) {
             return res.status(404).json({ error: "No Discord account linked" });
         }
 
-        updateDiscordSettings(discordUser.discord_id, enabled);
+        await updateDiscordSettings(discordUser.discord_id, enabled);
         res.json({ success: true, enabled });
     } catch (err) {
         // eslint-disable-next-line no-console
@@ -149,11 +145,7 @@ router.post("/settings", (req, res) => {
  * Add a Watch
  * POST /api/discord/watch
  */
-/**
- * Add a Watch
- * POST /api/discord/watch
- */
-router.post("/watch", (req, res) => {
+router.post("/watch", async (req, res) => {
     const userId = req.user!.id;
     const { itemId, threshold } = req.body;
 
@@ -162,12 +154,12 @@ router.post("/watch", (req, res) => {
     }
 
     try {
-        const discordUser = getDiscordUserByUserId(userId);
+        const discordUser = await getDiscordUserByUserId(userId);
         if (!discordUser) {
             return res.status(404).json({ error: "No Discord account linked" });
         }
 
-        addBackendWatch(discordUser.discord_id, itemId, threshold || 5.0);
+        await addBackendWatch(discordUser.discord_id, itemId, threshold || 5.0);
         res.status(201).json({ success: true, itemId });
     } catch (err) {
         // eslint-disable-next-line no-console
@@ -180,7 +172,7 @@ router.post("/watch", (req, res) => {
  * Update Watch Threshold
  * PUT /api/discord/watch/:itemId
  */
-router.put("/watch/:itemId", (req, res) => {
+router.put("/watch/:itemId", async (req, res) => {
     const userId = req.user!.id;
     const itemId = parseInt(req.params.itemId, 10);
     const { threshold } = req.body;
@@ -193,12 +185,12 @@ router.put("/watch/:itemId", (req, res) => {
     }
 
     try {
-        const discordUser = getDiscordUserByUserId(userId);
+        const discordUser = await getDiscordUserByUserId(userId);
         if (!discordUser) {
             return res.status(404).json({ error: "No Discord account linked" });
         }
 
-        addBackendWatch(discordUser.discord_id, itemId, threshold);
+        await addBackendWatch(discordUser.discord_id, itemId, threshold);
         res.json({ success: true, itemId, threshold });
     } catch (err) {
         // eslint-disable-next-line no-console
@@ -211,7 +203,7 @@ router.put("/watch/:itemId", (req, res) => {
  * Remove a Watch
  * DELETE /api/discord/watch/:itemId
  */
-router.delete("/watch/:itemId", (req, res) => {
+router.delete("/watch/:itemId", async (req, res) => {
     const userId = req.user!.id;
     const itemId = parseInt(req.params.itemId, 10);
 
@@ -220,13 +212,13 @@ router.delete("/watch/:itemId", (req, res) => {
     }
 
     try {
-        const discordUser = getDiscordUserByUserId(userId);
+        const discordUser = await getDiscordUserByUserId(userId);
         if (!discordUser) {
             // If not linked, maybe they are just trying to clean up? But we can't do anything.
             return res.status(404).json({ error: "No Discord account linked" });
         }
 
-        removeBackendWatch(discordUser.discord_id, itemId);
+        await removeBackendWatch(discordUser.discord_id, itemId);
         res.json({ success: true, itemId });
     } catch (err) {
         // eslint-disable-next-line no-console

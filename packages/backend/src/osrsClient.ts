@@ -76,7 +76,7 @@ export async function getCombinedItems(): Promise<CombinedItem[]> {
     fetchJson<OsrsVolumesResponse>(VOLUMES_URL)
   ]);
 
-  const items: CombinedItem[] = mapping.map((m) => {
+  const items = await Promise.all(mapping.map(async (m) => {
     const latestEntry = latest.data[String(m.id)];
     const volume = volumes[m.name];
 
@@ -86,7 +86,7 @@ export async function getCombinedItems(): Promise<CombinedItem[]> {
       buyPrice !== null && sellPrice !== null ? sellPrice - buyPrice : null;
 
     // Calculate day change from database
-    const { dayChange } = calculateDayChange(m.id, buyPrice, sellPrice);
+    const { dayChange } = await calculateDayChange(m.id, buyPrice, sellPrice);
 
     // Calculate margin * volume
     const marginVolume =
@@ -108,10 +108,8 @@ export async function getCombinedItems(): Promise<CombinedItem[]> {
       dayChange,
       marginVolume
     };
-  });
+  }));
 
   cache = { items, fetchedAt: now };
   return items;
 }
-
-

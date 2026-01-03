@@ -13,9 +13,17 @@ import favoritesRouter from "./routes/favorites";
 import discordRouter from "./routes/discord";
 
 // Initialize database
-initializeDatabase();
-// eslint-disable-next-line no-console
-console.log("[Database] Initialized");
+// Initialize database
+(async () => {
+  try {
+    await initializeDatabase();
+    // eslint-disable-next-line no-console
+    console.log("[Database] Initialized");
+  } catch (err) {
+    console.error("[Database] Failed to initialize:", err);
+    process.exit(1);
+  }
+})();
 
 const app = express();
 const port = process.env.PORT || 4000;
@@ -61,8 +69,8 @@ const server = app.listen(port, () => {
 process.on("SIGINT", () => {
   // eslint-disable-next-line no-console
   console.log("\n[SIGINT] Shutting down gracefully...");
-  server.close(() => {
-    closeDatabase();
+  server.close(async () => {
+    await closeDatabase();
     // eslint-disable-next-line no-console
     console.log("[Shutdown] Database closed");
     process.exit(0);
@@ -72,8 +80,8 @@ process.on("SIGINT", () => {
 process.on("SIGTERM", () => {
   // eslint-disable-next-line no-console
   console.log("\n[SIGTERM] Shutting down gracefully...");
-  server.close(() => {
-    closeDatabase();
+  server.close(async () => {
+    await closeDatabase();
     // eslint-disable-next-line no-console
     console.log("[Shutdown] Database closed");
     process.exit(0);

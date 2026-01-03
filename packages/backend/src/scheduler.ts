@@ -25,7 +25,7 @@ async function fetchAndStorePrices(): Promise<void> {
 
     // Store each item's price data
     for (const item of items) {
-      insertPriceHistory(
+      await insertPriceHistory(
         item.id,
         timestamp,
         item.buyPrice,

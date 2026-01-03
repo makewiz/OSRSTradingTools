@@ -58,7 +58,7 @@ router.get("/:id/history", async (req, res) => {
       return res.status(400).json({ error: "Invalid timestamp" });
     }
 
-    const history = getPriceHistory(itemId, startTime, endTime, granularity);
+    const history = await getPriceHistory(itemId, startTime, endTime, granularity);
 
     res.json({
       itemId,

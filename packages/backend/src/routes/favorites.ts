@@ -11,10 +11,10 @@ router.use(authenticateToken);
  * Get all favorites for current user
  * GET /api/favorites
  */
-router.get("/", (req, res) => {
+router.get("/", async (req, res) => {
     const userId = req.user!.id;
     try {
-        const favorites = getUserFavorites(userId);
+        const favorites = await getUserFavorites(userId);
         res.json({ favorites });
     } catch (err) {
         // eslint-disable-next-line no-console
@@ -27,7 +27,7 @@ router.get("/", (req, res) => {
  * Add a favorite
  * POST /api/favorites
  */
-router.post("/", (req, res) => {
+router.post("/", async (req, res) => {
     const userId = req.user!.id;
     const { itemId } = req.body;
 
@@ -36,7 +36,7 @@ router.post("/", (req, res) => {
     }
 
     try {
-        addFavorite(userId, itemId);
+        await addFavorite(userId, itemId);
         res.status(201).json({ success: true, itemId });
     } catch (err) {
         // eslint-disable-next-line no-console
@@ -49,7 +49,7 @@ router.post("/", (req, res) => {
  * Remove a favorite
  * DELETE /api/favorites/:itemId
  */
-router.delete("/:itemId", (req, res) => {
+router.delete("/:itemId", async (req, res) => {
     const userId = req.user!.id;
     const itemId = parseInt(req.params.itemId, 10);
 
@@ -58,7 +58,7 @@ router.delete("/:itemId", (req, res) => {
     }
 
     try {
-        removeFavorite(userId, itemId);
+        await removeFavorite(userId, itemId);
         res.json({ success: true, itemId });
     } catch (err) {
         // eslint-disable-next-line no-console

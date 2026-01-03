@@ -27,14 +27,14 @@ router.post("/register", async (req, res) => {
         }
 
         // Check if user already exists
-        const existingUser = getUserByUsername(username);
+        const existingUser = await getUserByUsername(username);
         if (existingUser) {
             return res.status(409).json({ error: "Username already exists" });
         }
 
         // Hash password and create user
         const passwordHash = await hashPassword(password);
-        const user = createUser(username, passwordHash, email || null);
+        const user = await createUser(username, passwordHash, email || null);
 
         // Generate token
         const token = generateToken(user);
@@ -59,7 +59,7 @@ router.post("/login", async (req, res) => {
             return res.status(400).json({ error: "Username and password are required" });
         }
 
-        const user = getUserByUsername(username);
+        const user = await getUserByUsername(username);
         if (!user) {
             return res.status(401).json({ error: "Invalid credentials" });
         }
@@ -95,7 +95,7 @@ router.post("/discord/login", async (req, res) => {
         const discordProfile = await getDiscordUser(tokenData.access_token);
 
         // 2. Check if user exists with this Discord ID
-        let user = getUserByDiscordId(discordProfile.id);
+        let user = await getUserByDiscordId(discordProfile.id);
 
         if (!user) {
             // 3. If not, treat as "Register via Discord"
@@ -105,7 +105,7 @@ router.post("/discord/login", async (req, res) => {
 
             // Check collision
             let suffix = 1;
-            while (getUserByUsername(username)) {
+            while (await getUserByUsername(username)) {
                 username = `${discordProfile.username}${suffix}`;
                 suffix++;
             }
@@ -114,10 +114,10 @@ router.post("/discord/login", async (req, res) => {
             const randomPw = crypto.randomBytes(16).toString("hex");
             const pwHash = await hashPassword(randomPw);
 
-            user = createUser(username, pwHash, discordProfile.email || null);
+            user = await createUser(username, pwHash, discordProfile.email || null);
 
             // Link Immediately
-            linkDiscordUser(user.id, discordProfile.id);
+            await linkDiscordUser(user.id, discordProfile.id);
         }
 
         // 4. Generate Token

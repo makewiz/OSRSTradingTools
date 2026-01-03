@@ -98,16 +98,16 @@ client.on("interactionCreate", async (interaction) => {
       const threshold = interaction.options.getNumber("threshold") ?? 5.0;
 
       // Used default item name for now, in a real app we'd fetch the name to confirm
-      addWatch(discordId, itemId, threshold);
+      await addWatch(discordId, itemId, threshold);
       await interaction.reply({ content: `✅ Watching item ${itemId} with threshold ${threshold}%`, ephemeral: true });
 
     } else if (commandName === "unwatch") {
       const itemId = interaction.options.getInteger("item_id", true);
-      removeWatch(discordId, itemId);
+      await removeWatch(discordId, itemId);
       await interaction.reply({ content: `❌ Stopped watching item ${itemId}`, ephemeral: true });
 
     } else if (commandName === "listwatches") {
-      const watches = getWatches(discordId);
+      const watches = await getWatches(discordId);
       if (watches.length === 0) {
         await interaction.reply({ content: "You have no active watches.", ephemeral: true });
       } else {
@@ -117,7 +117,7 @@ client.on("interactionCreate", async (interaction) => {
 
     } else if (commandName === "notifications") {
       const enabled = interaction.options.getBoolean("enabled", true);
-      setNotificationsEnabled(discordId, enabled);
+      await setNotificationsEnabled(discordId, enabled);
       await interaction.reply({ content: enabled ? "🔔 Notifications enabled" : "🔕 Notifications disabled", ephemeral: true });
 
     } else if (commandName === "help") {
@@ -138,9 +138,9 @@ client.on("interactionCreate", async (interaction) => {
 });
 
 // Graceful shutdown
-process.on("SIGINT", () => {
+process.on("SIGINT", async () => {
   client.destroy();
-  closeDatabase();
+  await closeDatabase();
   process.exit(0);
 });
 
