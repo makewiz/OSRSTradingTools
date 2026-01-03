@@ -63,9 +63,12 @@ router.post("/link-oauth", async (req, res) => {
 
         linkDiscordUser(userId, discordProfile.id);
         res.json({ success: true, discordId: discordProfile.id });
-    } catch (err) {
+    } catch (err: any) {
         // eslint-disable-next-line no-console
-        console.error(err);
+        console.error("Link OAuth Error:", err.message);
+        // eslint-disable-next-line no-console
+        if (err.response) console.error(err.response.data);
+
         res.status(500).json({ error: "Failed to link Discord account" });
     }
 });

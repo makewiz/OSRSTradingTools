@@ -32,9 +32,16 @@ export async function exchangeCodeForToken(code: string): Promise<DiscordTokenRe
         });
         return response.data;
     } catch (err: any) {
+        // eslint-disable-next-line no-console
+        console.error("Discord Token Exchange Failed:");
         if (err.response) {
             // eslint-disable-next-line no-console
-            console.error("Discord Token Error:", err.response.data);
+            console.error("Status:", err.response.status);
+            // eslint-disable-next-line no-console
+            console.error("Data:", err.response.data);
+        } else {
+            // eslint-disable-next-line no-console
+            console.error(err.message);
         }
         throw new Error("Failed to exchange code for token");
     }
@@ -47,9 +54,16 @@ export async function getDiscordUser(accessToken: string): Promise<DiscordUser> 
         });
         return response.data;
     } catch (err: any) {
+        // eslint-disable-next-line no-console
+        console.error("Discord User Fetch Failed:");
         if (err.response) {
             // eslint-disable-next-line no-console
-            console.error("Discord User Fetch Error:", err.response.data);
+            console.error("Status:", err.response.status);
+            // eslint-disable-next-line no-console
+            console.error("Data:", err.response.data);
+        } else {
+            // eslint-disable-next-line no-console
+            console.error(err.message);
         }
         throw new Error("Failed to fetch Discord user");
     }

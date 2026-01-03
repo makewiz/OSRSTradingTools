@@ -150,7 +150,7 @@ export const Profile: React.FC = () => {
                         {watches.length === 0 ? (
                             <p style={{ color: '#888' }}>No items are currently being watched.</p>
                         ) : (
-                            <table className="items-table" style={{ marginTop: '10px' }}>
+                            <table className="items-table" style={{ marginTop: '10px', minWidth: 'auto' }}>
                                 <thead>
                                     <tr>
                                         <th>Item ID</th>

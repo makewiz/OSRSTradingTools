@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { PriceChart } from "../components/PriceChart";
 import { useAuth } from "../contexts/AuthContext";
-import { Header } from "../components/Header";
+// Header import removed as it is handled by App.tsx
 
 interface Item {
   id: number;
@@ -170,25 +170,19 @@ export const ItemDetail: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="app">
-        <Header />
-        <div className="item-detail-container">
-          <p>Loading item details...</p>
-        </div>
+      <div className="item-detail-container">
+        <p>Loading item details...</p>
       </div>
     );
   }
 
   if (error || !item) {
     return (
-      <div className="app">
-        <Header />
-        <div className="item-detail-container">
-          <p className="error">{error || "Item not found"}</p>
-          <Link to="/" className="back-link">
-            ← Back to items
-          </Link>
-        </div>
+      <div className="item-detail-container">
+        <p className="error">{error || "Item not found"}</p>
+        <Link to="/" className="back-link">
+          ← Back to items
+        </Link>
       </div>
     );
   }
@@ -196,148 +190,145 @@ export const ItemDetail: React.FC = () => {
   const isWatched = watches.includes(item.id);
 
   return (
-    <div className="app">
-      <Header />
-      <main className="app-main">
-        <div className="item-detail-container">
-          <Link to="/" className="back-link">
-            ← Back to items
-          </Link>
+    <main className="app-main">
+      <div className="item-detail-container">
+        <Link to="/" className="back-link">
+          ← Back to items
+        </Link>
 
-          <div className="item-header">
-            <img
-              src={item.iconUrl}
-              alt={item.name}
-              className="item-detail-icon"
-            />
-            <div className="item-header-info">
-              <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
-                <h2>{item.name}</h2>
-                {discordLinked ? (
-                  <button
-                    className="watch-button"
-                    style={{
-                      background: isWatched ? '#5865f2' : 'transparent',
-                      color: isWatched ? '#fff' : '#5865f2',
-                      border: '1px solid #5865f2',
-                      fontSize: '1.2rem',
-                      padding: '5px 10px'
-                    }}
-                    onClick={toggleWatch}
-                    title={isWatched ? "Unwatch" : "Watch (5% threshold)"}
-                  >
-                    {isWatched ? "🔔 Watching" : "🔕 Watch"}
-                  </button>
-                ) : (
-                  <button
-                    className="watch-button"
-                    onClick={() =>
-                      navigator.clipboard.writeText(
-                        `/watch ${item.id} // ${item.name}`
-                      )
-                    }
-                    title="Login and link Discord to enable 1-click watch"
-                  >
-                    Copy /watch
-                  </button>
-                )}
-              </div>
-
-              <p className="item-examine">{item.examine}</p>
-              <div className="item-meta">
-                {item.members && <span className="members-badge">Members</span>}
-                <a
-                  href={item.wikiUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="wiki-link"
+        <div className="item-header">
+          <img
+            src={item.iconUrl}
+            alt={item.name}
+            className="item-detail-icon"
+          />
+          <div className="item-header-info">
+            <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+              <h2>{item.name}</h2>
+              {discordLinked ? (
+                <button
+                  className="watch-button"
+                  style={{
+                    background: isWatched ? '#5865f2' : 'transparent',
+                    color: isWatched ? '#fff' : '#5865f2',
+                    border: '1px solid #5865f2',
+                    fontSize: '1.2rem',
+                    padding: '5px 10px'
+                  }}
+                  onClick={toggleWatch}
+                  title={isWatched ? "Unwatch" : "Watch (5% threshold)"}
                 >
-                  View on Wiki →
-                </a>
-              </div>
+                  {isWatched ? "🔔 Watching" : "🔕 Watch"}
+                </button>
+              ) : (
+                <button
+                  className="watch-button"
+                  onClick={() =>
+                    navigator.clipboard.writeText(
+                      `/watch ${item.id} // ${item.name}`
+                    )
+                  }
+                  title="Login and link Discord to enable 1-click watch"
+                >
+                  Copy /watch
+                </button>
+              )}
             </div>
-          </div>
 
-          <div className="item-stats-grid">
-            <div className="stat-card">
-              <div className="stat-label">Buy Price</div>
-              <div className="stat-value">
-                {item.buyPrice?.toLocaleString() ?? "-"}
-              </div>
-            </div>
-            <div className="stat-card">
-              <div className="stat-label">Sell Price</div>
-              <div className="stat-value">
-                {item.sellPrice?.toLocaleString() ?? "-"}
-              </div>
-            </div>
-            <div className="stat-card">
-              <div className="stat-label">Margin</div>
-              <div className="stat-value">
-                {item.margin?.toLocaleString() ?? "-"}
-              </div>
-            </div>
-            <div className="stat-card">
-              <div className="stat-label">Volume</div>
-              <div className="stat-value">
-                {item.volume?.toLocaleString() ?? "-"}
-              </div>
-            </div>
-            <div className="stat-card">
-              <div className="stat-label">24h Change</div>
-              <div
-                className={`stat-value ${item.dayChange !== null
-                    ? item.dayChange > 0
-                      ? "positive"
-                      : item.dayChange < 0
-                        ? "negative"
-                        : ""
-                    : ""
-                  }`}
+            <p className="item-examine">{item.examine}</p>
+            <div className="item-meta">
+              {item.members && <span className="members-badge">Members</span>}
+              <a
+                href={item.wikiUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="wiki-link"
               >
-                {item.dayChange !== null
-                  ? `${item.dayChange > 0 ? "+" : ""}${item.dayChange.toFixed(2)}%`
-                  : "-"}
-              </div>
-            </div>
-            <div className="stat-card">
-              <div className="stat-label">Margin × Volume</div>
-              <div className="stat-value">
-                {item.marginVolume?.toLocaleString() ?? "-"}
-              </div>
-            </div>
-          </div>
-
-          <div className="price-history-section">
-            <div className="price-history-header">
-              <h3>Price History</h3>
-              <div className="time-range-selector">
-                <button
-                  className={`time-range-btn ${timeRange === "24h" ? "active" : ""}`}
-                  onClick={() => setTimeRange("24h")}
-                >
-                  24h
-                </button>
-                <button
-                  className={`time-range-btn ${timeRange === "7d" ? "active" : ""}`}
-                  onClick={() => setTimeRange("7d")}
-                >
-                  7d
-                </button>
-                <button
-                  className={`time-range-btn ${timeRange === "30d" ? "active" : ""}`}
-                  onClick={() => setTimeRange("30d")}
-                >
-                  30d
-                </button>
-              </div>
-            </div>
-            <div className="chart-container">
-              <PriceChart data={priceHistory} />
+                View on Wiki →
+              </a>
             </div>
           </div>
         </div>
-      </main>
-    </div>
+
+        <div className="item-stats-grid">
+          <div className="stat-card">
+            <div className="stat-label">Buy Price</div>
+            <div className="stat-value">
+              {item.buyPrice?.toLocaleString() ?? "-"}
+            </div>
+          </div>
+          <div className="stat-card">
+            <div className="stat-label">Sell Price</div>
+            <div className="stat-value">
+              {item.sellPrice?.toLocaleString() ?? "-"}
+            </div>
+          </div>
+          <div className="stat-card">
+            <div className="stat-label">Margin</div>
+            <div className="stat-value">
+              {item.margin?.toLocaleString() ?? "-"}
+            </div>
+          </div>
+          <div className="stat-card">
+            <div className="stat-label">Volume</div>
+            <div className="stat-value">
+              {item.volume?.toLocaleString() ?? "-"}
+            </div>
+          </div>
+          <div className="stat-card">
+            <div className="stat-label">24h Change</div>
+            <div
+              className={`stat-value ${item.dayChange !== null
+                ? item.dayChange > 0
+                  ? "positive"
+                  : item.dayChange < 0
+                    ? "negative"
+                    : ""
+                : ""
+                }`}
+            >
+              {item.dayChange !== null
+                ? `${item.dayChange > 0 ? "+" : ""}${item.dayChange.toFixed(2)}%`
+                : "-"}
+            </div>
+          </div>
+          <div className="stat-card">
+            <div className="stat-label">Margin × Volume</div>
+            <div className="stat-value">
+              {item.marginVolume?.toLocaleString() ?? "-"}
+            </div>
+          </div>
+        </div>
+
+        <div className="price-history-section">
+          <div className="price-history-header">
+            <h3>Price History</h3>
+            <div className="time-range-selector">
+              <button
+                className={`time-range-btn ${timeRange === "24h" ? "active" : ""}`}
+                onClick={() => setTimeRange("24h")}
+              >
+                24h
+              </button>
+              <button
+                className={`time-range-btn ${timeRange === "7d" ? "active" : ""}`}
+                onClick={() => setTimeRange("7d")}
+              >
+                7d
+              </button>
+              <button
+                className={`time-range-btn ${timeRange === "30d" ? "active" : ""}`}
+                onClick={() => setTimeRange("30d")}
+              >
+                30d
+              </button>
+            </div>
+          </div>
+          <div className="chart-container">
+            <PriceChart data={priceHistory} />
+          </div>
+        </div>
+      </div>
+    </main>
   );
 };
