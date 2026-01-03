@@ -78,7 +78,7 @@ export async function getCombinedItems(): Promise<CombinedItem[]> {
 
   const items: CombinedItem[] = mapping.map((m) => {
     const latestEntry = latest.data[String(m.id)];
-    const volume = volumes[String(m.id)];
+    const volume = volumes[m.name];
 
     const buyPrice = latestEntry?.low ?? null;
     const sellPrice = latestEntry?.high ?? null;
