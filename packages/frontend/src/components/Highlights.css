@@ -19,9 +19,21 @@
 .highlights-header h2 {
     margin: 0;
     font-size: 1.5rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: #fff;
+}
+
+.header-title-text {
     background: linear-gradient(90deg, #fff, #aaa);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.header-icon {
+    font-size: 1.5rem;
 }
 
 .highlights-timestamp {
@@ -143,4 +155,10 @@
 .highlight-reason {
     font-size: 0.75rem;
     color: #bbb;
+}
+
+.stat-subtext {
+    font-size: 0.75rem;
+    color: #888;
+    margin-top: 2px;
 }

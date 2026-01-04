@@ -49,7 +49,10 @@ export const Highlights: React.FC = () => {
     return (
         <div className="highlights-container">
             <div className="highlights-header">
-                <h2>📊 Daily Market Analysis</h2>
+                <h2>
+                    <span className="header-icon">📊</span>
+                    <span className="header-title-text">Daily Market Analysis</span>
+                </h2>
                 <span className="highlights-timestamp">
                     Updated: {new Date(analysis.timestamp).toLocaleString()}
                 </span>

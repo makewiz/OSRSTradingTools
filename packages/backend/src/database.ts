@@ -55,6 +55,53 @@ export interface NotificationSetting {
 export async function initializeDatabase(): Promise<void> {
   const client = await pool.connect();
   try {
+    // Item buy prices table (high fidelity)
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS item_buy_prices (
+        item_id INTEGER NOT NULL,
+        timestamp BIGINT NOT NULL,
+        price INTEGER NOT NULL,
+        PRIMARY KEY (item_id, timestamp)
+      )
+    `);
+
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_item_buy_prices_time 
+      ON item_buy_prices(item_id, timestamp DESC)
+    `);
+
+    // Item sell prices table (high fidelity)
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS item_sell_prices (
+        item_id INTEGER NOT NULL,
+        timestamp BIGINT NOT NULL,
+        price INTEGER NOT NULL,
+        PRIMARY KEY (item_id, timestamp)
+      )
+    `);
+
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_item_sell_prices_time 
+      ON item_sell_prices(item_id, timestamp DESC)
+    `);
+
+    // Item 5m volumes table
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS item_volumes_5m (
+        item_id INTEGER NOT NULL,
+        timestamp BIGINT NOT NULL,
+        buy_volume INTEGER,
+        sell_volume INTEGER,
+        PRIMARY KEY (item_id, timestamp)
+      )
+    `);
+
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_item_volumes_5m_time 
+      ON item_volumes_5m(item_id, timestamp DESC)
+    `);
+
+    // Existing legacy table...
     // Item price history table
     await client.query(`
       CREATE TABLE IF NOT EXISTS item_price_history (
@@ -69,7 +116,7 @@ export async function initializeDatabase(): Promise<void> {
       )
     `);
 
-    // Index for fast lookups
+    // ... indexes ...
     await client.query(`
       CREATE INDEX IF NOT EXISTS idx_item_price_history_item_timestamp 
       ON item_price_history(item_id, timestamp DESC)
@@ -165,6 +212,80 @@ export async function insertPriceHistory(
   `;
 
   await pool.query(query, [itemId, timestamp, buyPrice, sellPrice, volume, granularity]);
+}
+
+export async function insertBuyPrice(itemId: number, timestamp: number, price: number): Promise<void> {
+  const query = `
+    INSERT INTO item_buy_prices (item_id, timestamp, price)
+    VALUES ($1, $2, $3)
+    ON CONFLICT (item_id, timestamp) DO NOTHING
+  `;
+  await pool.query(query, [itemId, timestamp, price]);
+}
+
+export async function insertSellPrice(itemId: number, timestamp: number, price: number): Promise<void> {
+  const query = `
+    INSERT INTO item_sell_prices (item_id, timestamp, price)
+    VALUES ($1, $2, $3)
+    ON CONFLICT (item_id, timestamp) DO NOTHING
+  `;
+  await pool.query(query, [itemId, timestamp, price]);
+}
+
+export async function insertVolume5m(
+  itemId: number,
+  timestamp: number,
+  buyVolume: number | null,
+  sellVolume: number | null
+): Promise<void> {
+  const query = `
+    INSERT INTO item_volumes_5m (item_id, timestamp, buy_volume, sell_volume)
+    VALUES ($1, $2, $3, $4)
+    ON CONFLICT (item_id, timestamp) DO NOTHING
+  `;
+  await pool.query(query, [itemId, timestamp, buyVolume, sellVolume]);
+}
+
+export async function getHighFidelityHistory(
+  itemId: number,
+  startTime: number,
+  endTime: number
+): Promise<{
+  buy: { timestamp: number; price: number }[];
+  sell: { timestamp: number; price: number }[];
+  volume: { timestamp: number; buy_volume: number | null; sell_volume: number | null }[];
+}> {
+  const buyQuery = `
+    SELECT timestamp, price FROM item_buy_prices
+    WHERE item_id = $1 AND timestamp >= $2 AND timestamp <= $3
+    ORDER BY timestamp ASC
+  `;
+  const sellQuery = `
+    SELECT timestamp, price FROM item_sell_prices
+    WHERE item_id = $1 AND timestamp >= $2 AND timestamp <= $3
+    ORDER BY timestamp ASC
+  `;
+  const volumeQuery = `
+    SELECT timestamp, buy_volume, sell_volume FROM item_volumes_5m
+    WHERE item_id = $1 AND timestamp >= $2 AND timestamp <= $3
+    ORDER BY timestamp ASC
+  `;
+
+  const [buyRes, sellRes, volRes] = await Promise.all([
+    pool.query(buyQuery, [itemId, startTime, endTime]),
+    pool.query(sellQuery, [itemId, startTime, endTime]),
+    pool.query(volumeQuery, [itemId, startTime, endTime])
+  ]);
+
+  return {
+    buy: buyRes.rows.map(r => ({ timestamp: parseInt(r.timestamp), price: r.price })),
+    sell: sellRes.rows.map(r => ({ timestamp: parseInt(r.timestamp), price: r.price })),
+    volume: volRes.rows.map(r => ({
+      timestamp: parseInt(r.timestamp),
+      buy_volume: r.buy_volume,
+      sell_volume: r.sell_volume
+    }))
+  };
 }
 
 export async function getLatestPrice(itemId: number): Promise<ItemPriceHistory | null> {

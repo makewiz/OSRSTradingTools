@@ -102,18 +102,22 @@ export class AnalysisService {
     ): Promise<string> {
         const apiKey = process.env.OPENAI_API_KEY;
 
-        const topMargin = highMargin[0]?.name || "N/A";
-        const topSpike = spikes[0]?.name || "N/A";
-        const topDrop = drops[0]?.name || "N/A";
+        let promptContext = `Market Report:\n`;
 
-        const promptContext = `
-      Market Report:
-      Top Money Maker: ${topMargin} (${highMargin[0]?.roi?.toFixed(1)}% ROI)
-      Top Spike: ${topSpike} (+${spikes[0]?.dayChange?.toFixed(1)}%)
-      Top Drop: ${topDrop} (${drops[0]?.dayChange?.toFixed(1)}%)
-      
-      Other notable items: ${highMargin.slice(1, 3).map(i => i.name).join(", ")}.
-    `;
+        if (highMargin.length > 0) {
+            promptContext += `Top Money Maker: ${highMargin[0].name} (${highMargin[0].roi?.toFixed(1)}% ROI)\n`;
+        }
+        if (spikes.length > 0) {
+            promptContext += `Top Spike: ${spikes[0].name} (+${spikes[0].dayChange?.toFixed(1)}%)\n`;
+        }
+        if (drops.length > 0) {
+            promptContext += `Top Drop: ${drops[0].name} (${drops[0].dayChange?.toFixed(1)}%)\n`;
+        }
+
+        const notable = highMargin.slice(1, 3).map(i => i.name).join(", ");
+        if (notable) {
+            promptContext += `Other notable items: ${notable}.\n`;
+        }
 
         if (apiKey) {
             try {
@@ -142,6 +146,26 @@ export class AnalysisService {
         }
 
         // Fallback template
-        return `Today's top money maker is ${topMargin}. We are seeing significant volatility in ${topSpike}, while ${topDrop} has dropped in price. Check the details below for more opportunities.`;
+        const parts = [];
+        if (highMargin.length > 0) {
+            parts.push(`Today's top money maker is ${highMargin[0].name}.`);
+        } else {
+            parts.push("No significant high-margin items found currently.");
+        }
+
+        if (spikes.length > 0) {
+            parts.push(`We are seeing significant volatility in ${spikes[0].name}.`);
+        }
+
+        if (drops.length > 0) {
+            parts.push(`${drops[0].name} has dropped significantly in price.`);
+        }
+
+        if (parts.length === 0) {
+            return "Market is currently stable with no major outliers detected.";
+        }
+
+        parts.push("Check the details below for more opportunities.");
+        return parts.join(" ");
     }
 }

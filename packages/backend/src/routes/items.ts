@@ -62,6 +62,18 @@ router.get("/:id/history", async (req, res) => {
       return res.status(400).json({ error: "Invalid timestamp" });
     }
 
+    if (req.query.fidelity === "high") {
+      const { getHighFidelityHistory } = await import("../database"); // Dynamic import to avoid circular dependency issues if any, or just import at top
+      const history = await getHighFidelityHistory(itemId, startTime, endTime);
+      return res.json({
+        itemId,
+        highFidelity: true,
+        buy: history.buy,
+        sell: history.sell,
+        volume: history.volume
+      });
+    }
+
     const history = await getPriceHistory(itemId, startTime, endTime, granularity);
 
     res.json({

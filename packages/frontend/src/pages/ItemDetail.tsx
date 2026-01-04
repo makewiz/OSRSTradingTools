@@ -18,6 +18,11 @@ interface Item {
   volume: number | null;
   dayChange: number | null;
   marginVolume: number | null;
+  limit: number | null;
+  lastBuyTime: number | null;
+  lastSellTime: number | null;
+  lastBuyVolume: number | null;
+  lastSellVolume: number | null;
   roi: number | null;
   profit: number | null;
   tax: number | null;
@@ -31,13 +36,25 @@ interface PriceHistoryPoint {
   volume: number | null;
 }
 
+function formatTimeAgo(timestamp: number | null): string {
+  if (!timestamp) return "-";
+  const seconds = Math.floor((Date.now() / 1000) - timestamp);
+
+  if (seconds < 60) return `${seconds}s ago`;
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  return `${Math.floor(hours / 24)}d ago`;
+}
+
 export const ItemDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { user, token, fetchWithAuth } = useAuth();
 
   const [item, setItem] = useState<Item | null>(null);
-  const [priceHistory, setPriceHistory] = useState<PriceHistoryPoint[]>([]);
+  const [priceHistory, setPriceHistory] = useState<any>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [timeRange, setTimeRange] = useState<"24h" | "7d" | "30d">("7d");
@@ -121,13 +138,18 @@ export const ItemDetail: React.FC = () => {
         }
 
         const res = await fetchWithAuth(
-          `${API_BASE_URL}/api/items/${id}/history?startTime=${startTime}&endTime=${now}&granularity=${granularity}`
+          `${API_BASE_URL}/api/items/${id}/history?startTime=${startTime}&endTime=${now}&granularity=${granularity}&fidelity=high`
         );
         if (!res.ok) {
           throw new Error(`HTTP ${res.status}`);
         }
         const data = await res.json();
-        setPriceHistory(data.history || []);
+
+        if (data.highFidelity) {
+          setPriceHistory(data);
+        } else {
+          setPriceHistory(data.history || []);
+        }
       } catch (err) {
         // eslint-disable-next-line no-console
         console.error("Failed to load price history:", err);
@@ -258,11 +280,17 @@ export const ItemDetail: React.FC = () => {
             <div className="stat-value">
               {item.buyPrice?.toLocaleString() ?? "-"}
             </div>
+            <div className="stat-subtext">
+              {formatTimeAgo(item.lastBuyTime)} • {item.lastBuyVolume !== null ? `${item.lastBuyVolume} vol (5m)` : "-"}
+            </div>
           </div>
           <div className="stat-card">
             <div className="stat-label">Sell Price</div>
             <div className="stat-value">
               {item.sellPrice?.toLocaleString() ?? "-"}
+            </div>
+            <div className="stat-subtext">
+              {formatTimeAgo(item.lastSellTime)} • {item.lastSellVolume !== null ? `${item.lastSellVolume} vol (5m)` : "-"}
             </div>
           </div>
           <div className="stat-card">
@@ -301,33 +329,43 @@ export const ItemDetail: React.FC = () => {
             </div>
           </div>
 
+
           <div className="stat-card">
-            <div className="stat-label">Tax (2%)</div>
+            <div className="stat-label">Buy Limit</div>
+            <div className="stat-value">
+              {item.limit?.toLocaleString() ?? "-"}
+            </div>
+          </div>
+
+          <div className="stat-card">
+            <div className="stat-label" title="2% tax on Sell Price (capped at 5m)">Tax (2%) ⓘ</div>
             <div className="stat-value text-muted">
               {item.tax !== null ? `-${item.tax.toLocaleString()}` : "-"}
             </div>
           </div>
 
           <div className="stat-card highlight-card">
-            <div className="stat-label">Net Profit</div>
+            <div className="stat-label" title="(Sell Price - Tax) - Buy Price">Net Profit ⓘ</div>
             <div className="stat-value" style={{ color: (item.profit || 0) > 0 ? '#4caf50' : '#f44336' }}>
               {item.profit?.toLocaleString() ?? "-"}
             </div>
           </div>
 
           <div className="stat-card highlight-card">
-            <div className="stat-label">ROI</div>
+            <div className="stat-label" title="Net Profit / Buy Price * 100">ROI ⓘ</div>
             <div className="stat-value" style={{ color: (item.roi || 0) > 5 ? '#4caf50' : (item.roi || 0) > 0 ? '#ff9800' : '#f44336' }}>
               {item.roi?.toFixed(2)}%
             </div>
           </div>
 
           <div className="stat-card">
-            <div className="stat-label">Daily Potential</div>
+            <div className="stat-label" title="Net Profit * Buy Limit">Potential Profit ⓘ</div>
             <div className="stat-value text-gold">
               {item.potentialProfit?.toLocaleString() ?? "-"}
             </div>
           </div>
+
+
         </div>
 
         <div className="price-history-section">
@@ -355,7 +393,7 @@ export const ItemDetail: React.FC = () => {
             </div>
           </div>
           <div className="chart-container">
-            <PriceChart data={priceHistory} />
+            <PriceChart data={priceHistory} isHighFidelity={!(Array.isArray(priceHistory) && priceHistory.length > 0 && 'buyPrice' in priceHistory[0])} />
           </div>
         </div>
       </div>

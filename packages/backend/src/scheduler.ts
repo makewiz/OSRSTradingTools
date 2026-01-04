@@ -1,6 +1,6 @@
 import cron from "node-cron";
 import { getCombinedItems } from "./osrsClient";
-import { insertPriceHistory } from "./database";
+import { insertPriceHistory, insertBuyPrice, insertSellPrice, insertVolume5m } from "./database";
 
 let isRunning = false;
 
@@ -23,16 +23,44 @@ async function fetchAndStorePrices(): Promise<void> {
 
     const items = await getCombinedItems();
 
-    // Store each item's price data
+    // Store each item's price and volume data
     for (const item of items) {
-      await insertPriceHistory(
+      const promises = [];
+
+      // 1. Legacy Store (Minute Granularity) - KEEPING FOR NOW BACKWARD COMPAT
+      promises.push(insertPriceHistory(
         item.id,
         timestamp,
         item.buyPrice,
         item.sellPrice,
         item.volume,
         "minute"
-      );
+      ));
+
+      // 2. High Fidelity Buy Price (only if timestamp exists and price exists)
+      if (item.lastBuyTime && item.buyPrice !== null) {
+        promises.push(insertBuyPrice(item.id, item.lastBuyTime, item.buyPrice));
+      }
+
+      // 3. High Fidelity Sell Price (only if timestamp exists and price exists)
+      if (item.lastSellTime && item.sellPrice !== null) {
+        promises.push(insertSellPrice(item.id, item.lastSellTime, item.sellPrice));
+      }
+
+      // 4. High Fidelity 5m Volume (using the 5m timestamp)
+      if (item.fiveMinTimestamp) {
+        // Only insert if we have actual volume data
+        if (item.lastBuyVolume !== null || item.lastSellVolume !== null) {
+          promises.push(insertVolume5m(
+            item.id,
+            item.fiveMinTimestamp,
+            item.lastBuyVolume,
+            item.lastSellVolume
+          ));
+        }
+      }
+
+      await Promise.all(promises);
     }
 
     // eslint-disable-next-line no-console
