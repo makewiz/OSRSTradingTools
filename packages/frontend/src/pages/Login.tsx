@@ -15,6 +15,8 @@ const DISCORD_CLIENT_ID = "1324022137684066375"; // Replace or use process.env i
 
 const REDIRECT_URI = window.location.origin + "/auth/discord/callback";
 
+import { API_BASE_URL } from "../config";
+
 export const Login: React.FC = () => {
     const [username, setUsername] = useState("");
     const [password, setPassword] = useState("");
@@ -33,7 +35,7 @@ export const Login: React.FC = () => {
         setError(null);
 
         try {
-            const res = await fetch("/api/auth/login", {
+            const res = await fetch(`${API_BASE_URL}/api/auth/login`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ username, password })

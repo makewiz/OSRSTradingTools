@@ -2,6 +2,8 @@ import React, { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 
+import { API_BASE_URL } from "../config";
+
 export const DiscordCallback: React.FC = () => {
     const [searchParams] = useSearchParams();
     const navigate = useNavigate();
@@ -30,7 +32,7 @@ export const DiscordCallback: React.FC = () => {
                     if (!token) {
                         throw new Error("You must be logged in to link an account.");
                     }
-                    const res = await fetch("/api/discord/link-oauth", {
+                    const res = await fetch(`${API_BASE_URL}/api/discord/link-oauth`, {
                         method: "POST",
                         headers: {
                             "Content-Type": "application/json",
@@ -44,7 +46,7 @@ export const DiscordCallback: React.FC = () => {
                     navigate("/profile");
                 } else {
                     // Login flow (default)
-                    const res = await fetch("/api/auth/discord/login", {
+                    const res = await fetch(`${API_BASE_URL}/api/auth/discord/login`, {
                         method: "POST",
                         headers: { "Content-Type": "application/json" },
                         body: JSON.stringify({ code })

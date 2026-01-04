@@ -15,6 +15,8 @@ interface Watch {
 
 const REDIRECT_URI = window.location.origin + "/auth/discord/callback";
 
+import { API_BASE_URL } from "../config";
+
 export const Profile: React.FC = () => {
     const { user, token, logout, fetchWithAuth } = useAuth();
     const navigate = useNavigate();
@@ -37,7 +39,7 @@ export const Profile: React.FC = () => {
     const fetchSettings = async () => {
         try {
             setLoading(true);
-            const res = await fetchWithAuth("/api/discord/settings");
+            const res = await fetchWithAuth(`${API_BASE_URL}/api/discord/settings`);
             if (!res.ok) throw new Error("Failed to fetch settings");
 
             const data = await res.json();
@@ -59,7 +61,7 @@ export const Profile: React.FC = () => {
     };
 
     const handleConnectDiscord = () => {
-        fetch("/api/discord/config") // Public endpoint, no auth needed
+        fetch(`${API_BASE_URL}/api/discord/config`) // Public endpoint, no auth needed
             .then(res => res.json())
             .then(data => {
                 const clientId = data.clientId;
@@ -82,7 +84,7 @@ export const Profile: React.FC = () => {
         const newState = !notificationsEnabled;
         try {
             setNotificationsEnabled(newState);
-            const res = await fetchWithAuth("/api/discord/settings", {
+            const res = await fetchWithAuth(`${API_BASE_URL}/api/discord/settings`, {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json"
@@ -101,7 +103,7 @@ export const Profile: React.FC = () => {
         if (!confirm("Are you sure you want to stop watching this item?")) return;
         try {
             setWatches(prev => prev.filter(w => w.item_id !== itemId));
-            const res = await fetchWithAuth(`/api/discord/watch/${itemId}`, {
+            const res = await fetchWithAuth(`${API_BASE_URL}/api/discord/watch/${itemId}`, {
                 method: "DELETE"
             });
 
@@ -136,7 +138,7 @@ export const Profile: React.FC = () => {
             ));
             setEditingWatchId(null);
 
-            const res = await fetchWithAuth(`/api/discord/watch/${itemId}`, {
+            const res = await fetchWithAuth(`${API_BASE_URL}/api/discord/watch/${itemId}`, {
                 method: "PUT",
                 headers: {
                     "Content-Type": "application/json"
@@ -302,7 +304,7 @@ export const Profile: React.FC = () => {
                         if (!doubleCheck) return;
 
                         try {
-                            const res = await fetchWithAuth("/api/auth/account", {
+                            const res = await fetchWithAuth(`${API_BASE_URL}/api/auth/account`, {
                                 method: "DELETE"
                             });
 
