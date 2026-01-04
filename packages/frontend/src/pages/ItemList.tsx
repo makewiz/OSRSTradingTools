@@ -15,6 +15,7 @@ interface Item {
     volume: number | null;
     dayChange: number | null;
     marginVolume: number | null;
+    limit: number | null;
 }
 
 type SortKey =
@@ -24,7 +25,8 @@ type SortKey =
     | "margin"
     | "volume"
     | "dayChange"
-    | "marginVolume";
+    | "marginVolume"
+    | "limit";
 
 const FAVORITES_KEY = "osrs_trading_favorites";
 
@@ -230,6 +232,8 @@ export const ItemList: React.FC = () => {
                         return item.dayChange ?? -Infinity;
                     case "marginVolume":
                         return item.marginVolume ?? -Infinity;
+                    case "limit":
+                        return item.limit ?? -Infinity;
                 }
             };
 
@@ -349,6 +353,9 @@ export const ItemList: React.FC = () => {
                                     Margin×Vol {sortKey === "marginVolume" ? (sortDir === "asc" ? "▲" : "▼") : ""}
                                 </th>
                                 <th>Wiki</th>
+                                <th onClick={() => handleSortChange("limit")}>
+                                    Limit {sortKey === "limit" ? (sortDir === "asc" ? "▲" : "▼") : ""}
+                                </th>
                                 <th>Watch</th>
                             </tr>
                         </thead>
@@ -409,6 +416,9 @@ export const ItemList: React.FC = () => {
                                             <a href={item.wikiUrl} target="_blank" rel="noreferrer">
                                                 Wiki
                                             </a>
+                                        </td>
+                                        <td>
+                                            {item.limit?.toLocaleString() ?? "-"}
                                         </td>
                                         <td>
                                             {discordLinked ? (

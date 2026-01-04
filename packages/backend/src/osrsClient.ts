@@ -12,6 +12,7 @@ export interface OsrsItemMapping {
   members: boolean;
   wiki_url: string;
   icon: string;
+  limit?: number;
 }
 
 export interface OsrsLatestItem {
@@ -40,6 +41,7 @@ export interface CombinedItem {
   volume: number | null;
   dayChange: number | null; // 24h price change percentage
   marginVolume: number | null; // margin * volume
+  limit: number | null;
 }
 
 interface CacheEntry<T> {
@@ -136,7 +138,8 @@ export async function getCombinedItems(): Promise<CombinedItem[]> {
       margin,
       volume: typeof volume === "number" ? volume : null,
       dayChange,
-      marginVolume
+      marginVolume,
+      limit: m.limit ?? null
     };
   }));
 
