@@ -42,13 +42,18 @@ export interface CombinedItem {
   marginVolume: number | null; // margin * volume
 }
 
-interface CacheEntry {
-  items: CombinedItem[];
+interface CacheEntry<T> {
+  data: T;
   fetchedAt: number;
 }
 
-const CACHE_TTL_MS = 60 * 1000; // 1 minute hobby cache
-let cache: CacheEntry | null = null;
+const MAPPING_TTL = 24 * 60 * 60 * 1000; // 24 hours
+const LATEST_TTL = 60 * 1000; // 1 minute
+const VOLUMES_TTL = 10 * 60 * 1000; // 10 minutes
+
+let mappingCache: CacheEntry<OsrsItemMapping[]> | null = null;
+let latestCache: CacheEntry<OsrsLatestResponse> | null = null;
+let volumesCache: CacheEntry<OsrsVolumesResponse> | null = null;
 
 async function fetchJson<T>(url: string): Promise<T> {
   const res = await fetch(url, {
@@ -64,16 +69,41 @@ async function fetchJson<T>(url: string): Promise<T> {
   return (await res.json()) as T;
 }
 
-export async function getCombinedItems(): Promise<CombinedItem[]> {
+async function getMapping(): Promise<OsrsItemMapping[]> {
   const now = Date.now();
-  if (cache && now - cache.fetchedAt < CACHE_TTL_MS) {
-    return cache.items;
+  if (mappingCache && now - mappingCache.fetchedAt < MAPPING_TTL) {
+    return mappingCache.data;
   }
+  const data = await fetchJson<OsrsItemMapping[]>(MAPPING_URL);
+  mappingCache = { data, fetchedAt: now };
+  return data;
+}
 
+async function getLatest(): Promise<OsrsLatestResponse> {
+  const now = Date.now();
+  if (latestCache && now - latestCache.fetchedAt < LATEST_TTL) {
+    return latestCache.data;
+  }
+  const data = await fetchJson<OsrsLatestResponse>(LATEST_URL);
+  latestCache = { data, fetchedAt: now };
+  return data;
+}
+
+async function getVolumes(): Promise<OsrsVolumesResponse> {
+  const now = Date.now();
+  if (volumesCache && now - volumesCache.fetchedAt < VOLUMES_TTL) {
+    return volumesCache.data;
+  }
+  const data = await fetchJson<OsrsVolumesResponse>(VOLUMES_URL);
+  volumesCache = { data, fetchedAt: now };
+  return data;
+}
+
+export async function getCombinedItems(): Promise<CombinedItem[]> {
   const [mapping, latest, volumes] = await Promise.all([
-    fetchJson<OsrsItemMapping[]>(MAPPING_URL),
-    fetchJson<OsrsLatestResponse>(LATEST_URL),
-    fetchJson<OsrsVolumesResponse>(VOLUMES_URL)
+    getMapping(),
+    getLatest(),
+    getVolumes()
   ]);
 
   const items = await Promise.all(mapping.map(async (m) => {
@@ -110,6 +140,5 @@ export async function getCombinedItems(): Promise<CombinedItem[]> {
     };
   }));
 
-  cache = { items, fetchedAt: now };
   return items;
 }
