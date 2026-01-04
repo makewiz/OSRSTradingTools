@@ -62,28 +62,21 @@ router.get("/:id/history", async (req, res) => {
       return res.status(400).json({ error: "Invalid timestamp" });
     }
 
-    if (req.query.fidelity === "high") {
-      const { getHighFidelityHistory } = await import("../database"); // Dynamic import to avoid circular dependency issues if any, or just import at top
-      const history = await getHighFidelityHistory(itemId, startTime, endTime);
-      return res.json({
-        itemId,
-        highFidelity: true,
-        buy: history.buy,
-        sell: history.sell,
-        volume: history.volume
-      });
-    }
+    const history = await getPriceHistory(itemId, startTime, endTime);
 
-    const history = await getPriceHistory(itemId, startTime, endTime, granularity);
+    // Frontend expects { buy: [], sell: [], volume: [] }
+    // Or if it expects legacy array, I need to map it?
+    // User said "Everything should use the new tables".
+    // Frontend updated to handle "HighFidelityData" if fidelity=high.
+    // I should now make "fidelity=high" the standard response structure everywhere.
+    // So I return the split structure.
 
     res.json({
       itemId,
-      history: history.map((h) => ({
-        timestamp: h.timestamp,
-        buyPrice: h.buy_price,
-        sellPrice: h.sell_price,
-        volume: h.volume
-      }))
+      highFidelity: true, // Signal to frontend
+      buy: history.buy,
+      sell: history.sell,
+      volume: history.volume
     });
   } catch (err) {
     // eslint-disable-next-line no-console

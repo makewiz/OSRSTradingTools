@@ -119,35 +119,27 @@ export const ItemDetail: React.FC = () => {
 
       try {
         const now = Math.floor(Date.now() / 1000);
-        let startTime: number;
-        let granularity: "minute" | "hour" | "day" = "hour";
 
-        switch (timeRange) {
-          case "24h":
-            startTime = now - 24 * 60 * 60;
-            granularity = "minute";
-            break;
-          case "7d":
-            startTime = now - 7 * 24 * 60 * 60;
-            granularity = "hour";
-            break;
-          case "30d":
-            startTime = now - 30 * 24 * 60 * 60;
-            granularity = "day";
-            break;
-        }
+        const timeRanges: Record<string, number> = {
+          "24h": 24 * 60 * 60,
+          "7d": 7 * 24 * 60 * 60,
+          "30d": 30 * 24 * 60 * 60,
+        };
+        const rangeSeconds = timeRanges[timeRange] || timeRanges["7d"];
+        const startTime = now - rangeSeconds;
 
-        const res = await fetchWithAuth(
-          `${API_BASE_URL}/api/items/${id}/history?startTime=${startTime}&endTime=${now}&granularity=${granularity}&fidelity=high`
-        );
+        const url = `${API_BASE_URL}/api/items/${id}/history?startTime=${startTime}&endTime=${now}`;
+        const res = await fetchWithAuth(url);
         if (!res.ok) {
           throw new Error(`HTTP ${res.status}`);
         }
         const data = await res.json();
 
+        // Always expect high fidelity format (split arrays)
         if (data.highFidelity) {
           setPriceHistory(data);
         } else {
+          // Fallback for any legacy cached responses
           setPriceHistory(data.history || []);
         }
       } catch (err) {

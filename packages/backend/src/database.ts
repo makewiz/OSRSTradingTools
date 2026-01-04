@@ -55,7 +55,7 @@ export interface NotificationSetting {
 export async function initializeDatabase(): Promise<void> {
   const client = await pool.connect();
   try {
-    // Item buy prices table (high fidelity)
+    // Item buy prices table
     await client.query(`
       CREATE TABLE IF NOT EXISTS item_buy_prices (
         item_id INTEGER NOT NULL,
@@ -70,7 +70,7 @@ export async function initializeDatabase(): Promise<void> {
       ON item_buy_prices(item_id, timestamp DESC)
     `);
 
-    // Item sell prices table (high fidelity)
+    // Item sell prices table
     await client.query(`
       CREATE TABLE IF NOT EXISTS item_sell_prices (
         item_id INTEGER NOT NULL,
@@ -85,9 +85,9 @@ export async function initializeDatabase(): Promise<void> {
       ON item_sell_prices(item_id, timestamp DESC)
     `);
 
-    // Item 5m volumes table
+    // Item volumes table (5m raw or 1h aggregated)
     await client.query(`
-      CREATE TABLE IF NOT EXISTS item_volumes_5m (
+      CREATE TABLE IF NOT EXISTS item_volumes (
         item_id INTEGER NOT NULL,
         timestamp BIGINT NOT NULL,
         buy_volume INTEGER,
@@ -97,34 +97,8 @@ export async function initializeDatabase(): Promise<void> {
     `);
 
     await client.query(`
-      CREATE INDEX IF NOT EXISTS idx_item_volumes_5m_time 
-      ON item_volumes_5m(item_id, timestamp DESC)
-    `);
-
-    // Existing legacy table...
-    // Item price history table
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS item_price_history (
-        id SERIAL PRIMARY KEY,
-        item_id INTEGER NOT NULL,
-        timestamp BIGINT NOT NULL,
-        buy_price INTEGER,
-        sell_price INTEGER,
-        volume INTEGER,
-        granularity TEXT NOT NULL DEFAULT 'minute',
-        UNIQUE(item_id, timestamp, granularity)
-      )
-    `);
-
-    // ... indexes ...
-    await client.query(`
-      CREATE INDEX IF NOT EXISTS idx_item_price_history_item_timestamp 
-      ON item_price_history(item_id, timestamp DESC)
-    `);
-
-    await client.query(`
-      CREATE INDEX IF NOT EXISTS idx_item_price_history_timestamp 
-      ON item_price_history(timestamp DESC)
+      CREATE INDEX IF NOT EXISTS idx_item_volumes_time 
+      ON item_volumes(item_id, timestamp DESC)
     `);
 
     // Users table
@@ -138,6 +112,7 @@ export async function initializeDatabase(): Promise<void> {
       )
     `);
 
+    // ... rest of tables (favorites, discord, notifications) ...
     // User favorites table
     await client.query(`
       CREATE TABLE IF NOT EXISTS user_favorites (
@@ -193,27 +168,6 @@ export async function initializeDatabase(): Promise<void> {
   }
 }
 
-export async function insertPriceHistory(
-  itemId: number,
-  timestamp: number,
-  buyPrice: number | null,
-  sellPrice: number | null,
-  volume: number | null,
-  granularity: "minute" | "hour" | "day" = "minute"
-): Promise<void> {
-  const query = `
-    INSERT INTO item_price_history 
-    (item_id, timestamp, buy_price, sell_price, volume, granularity)
-    VALUES ($1, $2, $3, $4, $5, $6)
-    ON CONFLICT (item_id, timestamp, granularity) DO UPDATE SET
-      buy_price = EXCLUDED.buy_price,
-      sell_price = EXCLUDED.sell_price,
-      volume = EXCLUDED.volume
-  `;
-
-  await pool.query(query, [itemId, timestamp, buyPrice, sellPrice, volume, granularity]);
-}
-
 export async function insertBuyPrice(itemId: number, timestamp: number, price: number): Promise<void> {
   const query = `
     INSERT INTO item_buy_prices (item_id, timestamp, price)
@@ -232,21 +186,23 @@ export async function insertSellPrice(itemId: number, timestamp: number, price: 
   await pool.query(query, [itemId, timestamp, price]);
 }
 
-export async function insertVolume5m(
+export async function insertVolume(
   itemId: number,
   timestamp: number,
   buyVolume: number | null,
   sellVolume: number | null
 ): Promise<void> {
   const query = `
-    INSERT INTO item_volumes_5m (item_id, timestamp, buy_volume, sell_volume)
+    INSERT INTO item_volumes (item_id, timestamp, buy_volume, sell_volume)
     VALUES ($1, $2, $3, $4)
-    ON CONFLICT (item_id, timestamp) DO NOTHING
+    ON CONFLICT (item_id, timestamp) DO UPDATE SET
+        buy_volume = EXCLUDED.buy_volume,
+        sell_volume = EXCLUDED.sell_volume
   `;
   await pool.query(query, [itemId, timestamp, buyVolume, sellVolume]);
 }
 
-export async function getHighFidelityHistory(
+export async function getPriceHistory(
   itemId: number,
   startTime: number,
   endTime: number
@@ -266,7 +222,7 @@ export async function getHighFidelityHistory(
     ORDER BY timestamp ASC
   `;
   const volumeQuery = `
-    SELECT timestamp, buy_volume, sell_volume FROM item_volumes_5m
+    SELECT timestamp, buy_volume, sell_volume FROM item_volumes
     WHERE item_id = $1 AND timestamp >= $2 AND timestamp <= $3
     ORDER BY timestamp ASC
   `;
@@ -288,53 +244,25 @@ export async function getHighFidelityHistory(
   };
 }
 
-export async function getLatestPrice(itemId: number): Promise<ItemPriceHistory | null> {
-  const query = `
-    SELECT * FROM item_price_history
-    WHERE item_id = $1 AND granularity = 'minute'
-    ORDER BY timestamp DESC
-    LIMIT 1
-  `;
+export async function getLatestPrice(itemId: number): Promise<{ buyPrice: number | null; sellPrice: number | null }> {
+  const buyQuery = `SELECT price FROM item_buy_prices WHERE item_id = $1 ORDER BY timestamp DESC LIMIT 1`;
+  const sellQuery = `SELECT price FROM item_sell_prices WHERE item_id = $1 ORDER BY timestamp DESC LIMIT 1`;
 
-  const result = await pool.query(query, [itemId]);
-  return result.rows[0] ? (result.rows[0] as ItemPriceHistory) : null;
+  const [buyRes, sellRes] = await Promise.all([
+    pool.query(buyQuery, [itemId]),
+    pool.query(sellQuery, [itemId])
+  ]);
+
+  return {
+    buyPrice: buyRes.rows[0]?.price ?? null,
+    sellPrice: sellRes.rows[0]?.price ?? null
+  };
 }
 
 
 
-export async function getPriceAtTime(
-  itemId: number,
-  targetTimestamp: number
-): Promise<ItemPriceHistory | null> {
-  const query = `
-    SELECT * FROM item_price_history
-    WHERE item_id = $1 AND timestamp <= $2
-    ORDER BY timestamp DESC
-    LIMIT 1
-  `;
-
-  const result = await pool.query(query, [itemId, targetTimestamp]);
-  return result.rows[0] ? (result.rows[0] as ItemPriceHistory) : null;
-}
-
-export async function getPriceHistory(
-  itemId: number,
-  startTime: number,
-  endTime: number,
-  granularity: "minute" | "hour" | "day" = "minute"
-): Promise<ItemPriceHistory[]> {
-  const query = `
-    SELECT * FROM item_price_history
-    WHERE item_id = $1 
-      AND timestamp >= $2 
-      AND timestamp <= $3
-      AND granularity = $4
-    ORDER BY timestamp ASC
-  `;
-
-  const result = await pool.query(query, [itemId, startTime, endTime, granularity]);
-  return result.rows as ItemPriceHistory[];
-}
+// Obsolete legacy helpers (remove if unused, or keep empty if exported and used elsewhere)
+// For now, I've replaced getPriceHistory with the new implementation above.
 
 export async function calculateDayChange(
   itemId: number,
@@ -347,49 +275,38 @@ export async function calculateDayChange(
 }> {
   const now = Math.floor(Date.now() / 1000);
   const oneDayAgo = now - 24 * 60 * 60;
-  const tolerance = 60 * 60;
 
-  const query = `
-    SELECT buy_price, sell_price
-    FROM item_price_history
-    WHERE item_id = $1
-      AND timestamp >= $2
-      AND timestamp <= $3
-    ORDER BY ABS(timestamp - $4) ASC
-    LIMIT 1
+  // Find price closest to 24h ago
+  // We search for the latest price that is BEFORE (oneDayAgo + some tolerance)
+  // Actually, easiest is `ORDER BY ABS(timestamp - target) LIMIT 1`
+
+  const buyQuery = `
+    SELECT price FROM item_buy_prices 
+    WHERE item_id = $1 AND timestamp <= $2
+    ORDER BY timestamp DESC LIMIT 1
+  `;
+  const sellQuery = `
+    SELECT price FROM item_sell_prices 
+    WHERE item_id = $1 AND timestamp <= $2
+    ORDER BY timestamp DESC LIMIT 1
   `;
 
-  const result = await pool.query(query, [
-    itemId,
-    oneDayAgo - tolerance,
-    oneDayAgo + tolerance,
-    oneDayAgo
+  const [buyRes, sellRes] = await Promise.all([
+    pool.query(buyQuery, [itemId, oneDayAgo]),
+    pool.query(sellQuery, [itemId, oneDayAgo])
   ]);
 
-  const oldPrice = result.rows[0] as { buy_price: number | null; sell_price: number | null } | undefined;
-
-  if (!oldPrice) {
-    return { buyDayChange: null, sellDayChange: null, dayChange: null };
-  }
+  const oldBuyPrice = buyRes.rows[0]?.price;
+  const oldSellPrice = sellRes.rows[0]?.price;
 
   let buyDayChange: number | null = null;
-  if (
-    currentBuyPrice !== null &&
-    oldPrice.buy_price !== null &&
-    oldPrice.buy_price > 0
-  ) {
-    buyDayChange =
-      ((currentBuyPrice - oldPrice.buy_price) / oldPrice.buy_price) * 100;
+  if (currentBuyPrice !== null && oldBuyPrice) {
+    buyDayChange = ((currentBuyPrice - oldBuyPrice) / oldBuyPrice) * 100;
   }
 
   let sellDayChange: number | null = null;
-  if (
-    currentSellPrice !== null &&
-    oldPrice.sell_price !== null &&
-    oldPrice.sell_price > 0
-  ) {
-    sellDayChange =
-      ((currentSellPrice - oldPrice.sell_price) / oldPrice.sell_price) * 100;
+  if (currentSellPrice !== null && oldSellPrice) {
+    sellDayChange = ((currentSellPrice - oldSellPrice) / oldSellPrice) * 100;
   }
 
   let dayChange: number | null = null;
