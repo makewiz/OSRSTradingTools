@@ -6,8 +6,23 @@ Hobby web app to help Old School RuneScape traders browse items, inspect GE marg
 
 - **Frontend**: React + Vite + TypeScript (`packages/frontend`)
 - **Backend**: Node + Express + TypeScript (`packages/backend`)
-- **Database**: SQLite (`better-sqlite3`) for price history and user data
+- **Database**: PostgreSQL (`pg`) for price history and user data
 - **Discord bot**: `discord.js` + TypeScript (`packages/discord-bot`)
+
+### Deployment
+
+Ready to deploy to production? See our comprehensive deployment guides:
+
+- **📘 [Railway Deployment Guide](.agent/workflows/deploy-to-railway.md)** - Full step-by-step guide
+- **📋 [Deployment Checklist](RAILWAY_CHECKLIST.md)** - Track your deployment progress
+- **📖 [Quick Deployment Reference](DEPLOYMENT.md)** - Quick reference and troubleshooting
+
+**Quick Start Deployment:**
+1. Push your code to GitHub
+2. Sign up at [Railway](https://railway.app)
+3. Follow the [Railway deployment workflow](.agent/workflows/deploy-to-railway.md)
+4. Your app will be live in ~15 minutes! 🚀
+
 
 ### Prerequisites
 
@@ -29,8 +44,14 @@ This will install dependencies for all workspaces.
 
 ```bash
 PORT=4000
-DATABASE_PATH=./data/osrs_trading.db
+DATABASE_URL=postgresql://user:password@localhost:5432/osrs_trading_tools
+JWT_SECRET=your-secret-key-here
+DISCORD_CLIENT_ID=your-discord-client-id
+DISCORD_CLIENT_SECRET=your-discord-client-secret
+DISCORD_REDIRECT_URI=http://localhost:5173/auth/callback
 ```
+
+See [`.env.example`](.env.example) for a complete template.
 
 Then start the backend:
 
@@ -45,9 +66,11 @@ The backend starts on `http://localhost:4000` and exposes:
   - name, examine, members flag
   - wiki URL, icon URL
   - buy price, sell price, margin, daily volume
+- `POST /api/auth/*` - Authentication endpoints (register, login, Discord OAuth)
+- `GET/POST /api/watch` - Item watch management
 
 **Database & Scheduled Fetching**:
-- SQLite database automatically created at `packages/backend/data/osrs_trading.db`
+- PostgreSQL database stores price history and user data
 - Price data is fetched from OSRS Wiki APIs **every minute** and stored in the database
 - Data retention strategy:
   - **Last 24 hours**: Minute-level accuracy
@@ -72,22 +95,23 @@ The UI lets you:
 - Mark items as **favourites** (stored in `localStorage`)
 - Copy a simple `/watch <id> // <name>` command for Discord to your clipboard
 
-### Running the Discord bot (skeleton)
+### Running the Discord bot
 
 Create a `.env` file in `packages/discord-bot` (do **not** commit it) with:
 
 ```bash
 DISCORD_BOT_TOKEN=your_discord_bot_token_here
+DISCORD_CLIENT_ID=your_discord_client_id
+DATABASE_URL=postgresql://user:password@localhost:5432/osrs_trading_tools
 ```
 
 Then:
 
 ```bash
-cd packages/discord-bot
-npm run dev
+npm run dev:bot
 ```
 
-The bot currently just logs in and is ready for future commands / alerts that will integrate with the backend.
+The bot logs in and watches for price alerts, sends notifications to users based on their watched items.
 
 ### Security and secrets
 

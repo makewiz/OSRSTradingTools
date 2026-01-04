@@ -8,6 +8,10 @@ export default defineConfig({
     proxy: {
       "/api": "http://localhost:4000"
     }
+  },
+  preview: {
+    port: Number(process.env.PORT) || 5173,
+    host: "0.0.0.0"
   }
 });
 
