@@ -1,6 +1,8 @@
 :root {
-  --primary-color: #d7b066; /* OSRS Gold/Yellow */
-  --secondary-color: #5d4037; /* OSRS Brown */
+  --primary-color: #d7b066;
+  /* OSRS Gold/Yellow */
+  --secondary-color: #5d4037;
+  /* OSRS Brown */
   --bg-color: #1e1e1e;
   --text-color: #e0e0e0;
   --table-bg: #2d2d2d;
@@ -468,4 +470,16 @@ a:hover {
   padding: 20px;
   background: rgba(0, 0, 0, 0.2);
   border-radius: 6px;
+}
+
+@media (max-width: 768px) {
+  .user-nav {
+    position: static;
+    justify-content: center;
+    margin-bottom: 15px;
+  }
+
+  .app-header h1 {
+    margin-top: 10px;
+  }
 }
