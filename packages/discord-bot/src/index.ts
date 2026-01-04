@@ -1,4 +1,4 @@
-import { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder } from "discord.js";
+import { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder, EmbedBuilder } from "discord.js";
 import dotenv from "dotenv";
 import path from "path";
 import { addWatch, removeWatch, getWatches, setNotificationsEnabled, closeDatabase } from "./database";
@@ -57,6 +57,9 @@ const commands = [
   new SlashCommandBuilder()
     .setName("help")
     .setDescription("Show available commands"),
+  new SlashCommandBuilder()
+    .setName("highlights")
+    .setDescription("Get daily market highlights"),
 ].map(command => command.toJSON());
 
 // Register Commands
@@ -121,14 +124,41 @@ client.on("interactionCreate", async (interaction) => {
       await interaction.reply({ content: enabled ? "🔔 Notifications enabled" : "🔕 Notifications disabled", ephemeral: true });
 
     } else if (commandName === "help") {
+
       const helpText = `
 **OSRS Trading Tools Bot Commands**
 \`/watch <id> [threshold]\` - Watch item by ID
 \`/unwatch <id>\` - Stop watching item
 \`/listwatches\` - See your watches
 \`/notifications <on/off>\` - Toggle global notifications
+\`/highlights\` - Get daily market highlights
       `;
       await interaction.reply({ content: helpText, ephemeral: true });
+
+    } else if (commandName === "highlights") {
+      await interaction.deferReply(); // Fetch might take a moment
+      try {
+        const res = await fetch("http://localhost:4000/api/highlights");
+        if (!res.ok) throw new Error("API Error");
+        const data = await res.json();
+
+        const embed = new EmbedBuilder()
+          .setTitle("📊 Daily Market Analysis")
+          .setDescription(data.summary || "No summary available.")
+          .setColor(0x0099ff)
+          .setTimestamp(data.timestamp)
+          .addFields(
+            { name: "💰 High Margin", value: data.highMargin.map((i: any) => `• **${i.name}**: ${i.reason}`).join("\n") || "None", inline: false },
+            { name: "📈 Top Spikes", value: data.priceSpikes.map((i: any) => `• **${i.name}**: ${i.reason}`).join("\n") || "None", inline: true },
+            { name: "📉 Top Drops", value: data.priceDrops.map((i: any) => `• **${i.name}**: ${i.reason}`).join("\n") || "None", inline: true }
+          )
+          .setFooter({ text: "OSRS Trading Tools AI" });
+
+        await interaction.editReply({ embeds: [embed] });
+      } catch (err) {
+        console.error(err);
+        await interaction.editReply({ content: "Failed to fetch highlights. Is the backend running?" });
+      }
     }
   } catch (err) {
     // eslint-disable-next-line no-console

@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { API_BASE_URL } from "../config";
+import { Highlights } from "../components/Highlights";
 
 interface Item {
     id: number;
@@ -333,6 +334,7 @@ export const ItemList: React.FC = () => {
 
     return (
         <main className="app-main">
+            <Highlights />
             <section className="controls">
                 <input
                     className="search-input"

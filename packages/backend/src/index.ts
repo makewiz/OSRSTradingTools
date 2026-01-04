@@ -11,6 +11,7 @@ import itemsRouter from "./routes/items";
 import authRouter from "./routes/auth";
 import favoritesRouter from "./routes/favorites";
 import discordRouter from "./routes/discord";
+import highlightsRouter from "./routes/highlights";
 
 // Initialize database
 // Initialize database
@@ -41,6 +42,8 @@ app.use("/api/auth", authRouter);
 app.use("/api/favorites", favoritesRouter);
 // Discord routes
 app.use("/api/discord", discordRouter);
+// Highlights routes
+app.use("/api/highlights", highlightsRouter);
 
 import { authenticateToken } from "./auth";
 

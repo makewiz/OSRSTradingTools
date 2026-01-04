@@ -1,4 +1,5 @@
 import { calculateDayChange } from "./database";
+import { calculateTax, calculateProfit, calculateROI } from "./tax";
 
 const MAPPING_URL = "https://prices.runescape.wiki/api/v1/osrs/mapping";
 const LATEST_URL = "https://prices.runescape.wiki/api/v1/osrs/latest";
@@ -40,8 +41,12 @@ export interface CombinedItem {
   margin: number | null;
   volume: number | null;
   dayChange: number | null; // 24h price change percentage
-  marginVolume: number | null; // margin * volume
+  marginVolume: number | null; // margin * volume (Gross)
   limit: number | null;
+  tax: number | null; // Tax per item
+  profit: number | null; // Net margin per item (Sell - Tax - Buy)
+  roi: number | null; // Return on Investment percentage
+  potentialProfit: number | null; // Net Profit * Volume
 }
 
 interface CacheEntry<T> {
@@ -120,11 +125,27 @@ export async function getCombinedItems(): Promise<CombinedItem[]> {
     // Calculate day change from database
     const { dayChange } = await calculateDayChange(m.id, buyPrice, sellPrice);
 
-    // Calculate margin * volume
+    // Calculate margin * volume (Gross)
     const marginVolume =
       margin !== null && typeof volume === "number" && volume > 0
         ? margin * volume
         : null;
+
+    // Calculate Tax Metrics
+    let tax: number | null = null;
+    let profit: number | null = null;
+    let roi: number | null = null;
+    let potentialProfit: number | null = null;
+
+    if (buyPrice !== null && sellPrice !== null) {
+      tax = calculateTax(sellPrice, m.name);
+      profit = calculateProfit(buyPrice, sellPrice, m.name);
+      roi = calculateROI(buyPrice, sellPrice, m.name);
+
+      if (typeof volume === "number" && volume > 0) {
+        potentialProfit = profit * volume;
+      }
+    }
 
     return {
       id: m.id,
@@ -139,7 +160,11 @@ export async function getCombinedItems(): Promise<CombinedItem[]> {
       volume: typeof volume === "number" ? volume : null,
       dayChange,
       marginVolume,
-      limit: m.limit ?? null
+      limit: m.limit ?? null,
+      tax,
+      profit,
+      roi,
+      potentialProfit
     };
   }));
 

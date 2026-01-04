@@ -18,6 +18,10 @@ interface Item {
   volume: number | null;
   dayChange: number | null;
   marginVolume: number | null;
+  roi: number | null;
+  profit: number | null;
+  tax: number | null;
+  potentialProfit: number | null;
 }
 
 interface PriceHistoryPoint {
@@ -294,6 +298,34 @@ export const ItemDetail: React.FC = () => {
             <div className="stat-label">Margin × Volume</div>
             <div className="stat-value">
               {item.marginVolume?.toLocaleString() ?? "-"}
+            </div>
+          </div>
+
+          <div className="stat-card">
+            <div className="stat-label">Tax (2%)</div>
+            <div className="stat-value text-muted">
+              {item.tax !== null ? `-${item.tax.toLocaleString()}` : "-"}
+            </div>
+          </div>
+
+          <div className="stat-card highlight-card">
+            <div className="stat-label">Net Profit</div>
+            <div className="stat-value" style={{ color: (item.profit || 0) > 0 ? '#4caf50' : '#f44336' }}>
+              {item.profit?.toLocaleString() ?? "-"}
+            </div>
+          </div>
+
+          <div className="stat-card highlight-card">
+            <div className="stat-label">ROI</div>
+            <div className="stat-value" style={{ color: (item.roi || 0) > 5 ? '#4caf50' : (item.roi || 0) > 0 ? '#ff9800' : '#f44336' }}>
+              {item.roi?.toFixed(2)}%
+            </div>
+          </div>
+
+          <div className="stat-card">
+            <div className="stat-label">Daily Potential</div>
+            <div className="stat-value text-gold">
+              {item.potentialProfit?.toLocaleString() ?? "-"}
             </div>
           </div>
         </div>

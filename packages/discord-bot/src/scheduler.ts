@@ -1,5 +1,5 @@
 import cron from "node-cron";
-import { Client } from "discord.js";
+import { Client, EmbedBuilder, TextChannel } from "discord.js";
 import { getAllActiveWatches, getLatestPrice, updateLastNotified, getDayChange } from "./database";
 
 const COOLDOWN_SECONDS = 60 * 60; // 1 hour cooldown per item per user
@@ -16,6 +16,47 @@ export function startNotificationScheduler(client: Client) {
             console.error("[Scheduler] Error checking notifications:", err);
         }
     });
+
+    // Run daily at 10:00 AM UTC
+    cron.schedule("0 10 * * *", async () => {
+        try {
+            console.log("[Scheduler] Broadcasting daily highlights...");
+            await broadcastHighlights(client);
+        } catch (err) {
+            console.error("[Scheduler] Error broadcasting highlights:", err);
+        }
+    });
+}
+
+async function broadcastHighlights(client: Client) {
+    const channelId = process.env.DISCORD_HIGHLIGHTS_CHANNEL_ID;
+    if (!channelId) return;
+
+    try {
+        const channel = await client.channels.fetch(channelId);
+        if (!channel || !(channel instanceof TextChannel)) return;
+
+        const res = await fetch("http://localhost:4000/api/highlights");
+        if (!res.ok) throw new Error("API Error");
+        const data = await res.json();
+
+        const embed = new EmbedBuilder()
+            .setTitle("📊 Daily Market Analysis")
+            .setDescription(data.summary || "No summary available.")
+            .setColor(0x0099ff)
+            .setTimestamp(data.timestamp)
+            .addFields(
+                { name: "💰 High Margin", value: data.highMargin.map((i: any) => `• **${i.name}**: ${i.reason}`).join("\n") || "None", inline: false },
+                { name: "📈 Top Spikes", value: data.priceSpikes.map((i: any) => `• **${i.name}**: ${i.reason}`).join("\n") || "None", inline: true },
+                { name: "📉 Top Drops", value: data.priceDrops.map((i: any) => `• **${i.name}**: ${i.reason}`).join("\n") || "None", inline: true }
+            )
+            .setFooter({ text: "OSRS Trading Tools AI" });
+
+        await channel.send({ embeds: [embed] });
+        console.log("[Scheduler] Broadcasted highlights to channel " + channelId);
+    } catch (err) {
+        console.error("[Scheduler] Failed to broadcast highlights:", err);
+    }
 }
 
 async function checkNotifications(client: Client) {
