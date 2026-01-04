@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
+import { API_BASE_URL } from "../config";
 
 interface Item {
     id: number;
@@ -69,7 +70,7 @@ export const ItemList: React.FC = () => {
             if (user && token) {
                 // Fetch from API
                 try {
-                    const res = await fetchWithAuth("/api/favorites");
+                    const res = await fetchWithAuth(`${API_BASE_URL}/api/favorites`);
                     if (res.ok) {
                         const data = await res.json();
                         setFavorites(data.favorites);
@@ -98,7 +99,7 @@ export const ItemList: React.FC = () => {
         const loadWatches = async () => {
             if (user && token) {
                 try {
-                    const res = await fetchWithAuth("/api/discord/settings");
+                    const res = await fetchWithAuth(`${API_BASE_URL}/api/discord/settings`);
                     if (res.ok) {
                         const data = await res.json();
                         if (data.linked) {
@@ -132,7 +133,7 @@ export const ItemList: React.FC = () => {
             setLoading(true);
             setError(null);
             try {
-                const res = await fetchWithAuth("/api/items");
+                const res = await fetchWithAuth(`${API_BASE_URL}/api/items`);
                 if (!res.ok) {
                     throw new Error(`HTTP ${res.status}`);
                 }
@@ -161,7 +162,7 @@ export const ItemList: React.FC = () => {
         if (user && token) {
             try {
                 const method = isFav ? "DELETE" : "POST";
-                const url = isFav ? `/api/favorites/${id}` : "/api/favorites";
+                const url = isFav ? `${API_BASE_URL}/api/favorites/${id}` : `${API_BASE_URL}/api/favorites`;
                 const body = isFav ? undefined : JSON.stringify({ itemId: id });
 
                 await fetchWithAuth(url, {
@@ -191,7 +192,7 @@ export const ItemList: React.FC = () => {
 
         try {
             const method = isWatched ? "DELETE" : "POST";
-            const url = isWatched ? `/api/discord/watch/${id}` : "/api/discord/watch";
+            const url = isWatched ? `${API_BASE_URL}/api/discord/watch/${id}` : `${API_BASE_URL}/api/discord/watch`;
             const body = isWatched ? undefined : JSON.stringify({ itemId: id, threshold: 5.0 });
 
             await fetchWithAuth(url, {

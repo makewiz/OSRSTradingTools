@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { PriceChart } from "../components/PriceChart";
 import { useAuth } from "../contexts/AuthContext";
+import { API_BASE_URL } from "../config";
 // Header import removed as it is handled by App.tsx
 
 interface Item {
@@ -46,7 +47,7 @@ export const ItemDetail: React.FC = () => {
     const loadWatches = async () => {
       if (user && token && id) {
         try {
-          const res = await fetchWithAuth("/api/discord/settings");
+          const res = await fetchWithAuth(`${API_BASE_URL}/api/discord/settings`);
           if (res.ok) {
             const data = await res.json();
             if (data.linked) {
@@ -73,7 +74,7 @@ export const ItemDetail: React.FC = () => {
       setError(null);
 
       try {
-        const res = await fetchWithAuth(`/api/items/${id}`);
+        const res = await fetchWithAuth(`${API_BASE_URL}/api/items/${id}`);
         if (!res.ok) {
           throw new Error(`HTTP ${res.status}`);
         }
@@ -116,7 +117,7 @@ export const ItemDetail: React.FC = () => {
         }
 
         const res = await fetchWithAuth(
-          `/api/items/${id}/history?startTime=${startTime}&endTime=${now}&granularity=${granularity}`
+          `${API_BASE_URL}/api/items/${id}/history?startTime=${startTime}&endTime=${now}&granularity=${granularity}`
         );
         if (!res.ok) {
           throw new Error(`HTTP ${res.status}`);
@@ -149,7 +150,7 @@ export const ItemDetail: React.FC = () => {
 
     try {
       const method = isWatched ? "DELETE" : "POST";
-      const url = isWatched ? `/api/discord/watch/${itemId}` : "/api/discord/watch";
+      const url = isWatched ? `${API_BASE_URL}/api/discord/watch/${itemId}` : `${API_BASE_URL}/api/discord/watch`;
       const body = isWatched ? undefined : JSON.stringify({ itemId: itemId, threshold: 5.0 });
 
       await fetchWithAuth(url, {
