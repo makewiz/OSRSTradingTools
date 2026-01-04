@@ -45,6 +45,24 @@ export const ItemList: React.FC = () => {
     const [page, setPage] = useState(1);
     const [discordLinked, setDiscordLinked] = useState(false);
 
+    // Filter states
+    const [showFilters, setShowFilters] = useState(false);
+    const [minBuy, setMinBuy] = useState<number | "">("");
+    const [maxBuy, setMaxBuy] = useState<number | "">("");
+    const [minSell, setMinSell] = useState<number | "">("");
+    const [maxSell, setMaxSell] = useState<number | "">("");
+    const [minMargin, setMinMargin] = useState<number | "">("");
+    const [maxMargin, setMaxMargin] = useState<number | "">("");
+    const [minVolume, setMinVolume] = useState<number | "">("");
+    const [maxVolume, setMaxVolume] = useState<number | "">("");
+    const [minDayChange, setMinDayChange] = useState<number | "">("");
+    const [maxDayChange, setMaxDayChange] = useState<number | "">("");
+    const [minMarginVolume, setMinMarginVolume] = useState<number | "">("");
+    const [maxMarginVolume, setMaxMarginVolume] = useState<number | "">("");
+    const [minLimit, setMinLimit] = useState<number | "">("");
+    const [maxLimit, setMaxLimit] = useState<number | "">("");
+    const [membersFilter, setMembersFilter] = useState<"all" | "members" | "f2p">("all");
+
     // Load favorites logic
     useEffect(() => {
         const loadFavorites = async () => {
@@ -197,7 +215,13 @@ export const ItemList: React.FC = () => {
     // Reset page when filters change
     useEffect(() => {
         setPage(1);
-    }, [search, sortKey, sortDir, onlyFavorites, pageSize]);
+    }, [
+        search, sortKey, sortDir, onlyFavorites, pageSize,
+        minBuy, maxBuy, minSell, maxSell, minMargin, maxMargin,
+        minVolume, maxVolume, minDayChange, maxDayChange,
+        minMarginVolume, maxMarginVolume, minLimit, maxLimit,
+        membersFilter
+    ]);
 
     const filteredAndSorted = useMemo(() => {
         let list = items;
@@ -212,6 +236,39 @@ export const ItemList: React.FC = () => {
 
         if (onlyFavorites) {
             list = list.filter((i) => favorites.includes(i.id));
+        }
+
+        const checkRange = (val: number | null, min: number | "", max: number | "") => {
+            if (val === null) return false;
+            if (min !== "" && val < min) return false;
+            if (max !== "" && val > max) return false;
+            return true;
+        };
+
+        if (membersFilter !== "all") {
+            list = list.filter((i) => membersFilter === "members" ? i.members : !i.members);
+        }
+
+        if (minBuy !== "" || maxBuy !== "") {
+            list = list.filter((i) => checkRange(i.buyPrice, minBuy, maxBuy));
+        }
+        if (minSell !== "" || maxSell !== "") {
+            list = list.filter((i) => checkRange(i.sellPrice, minSell, maxSell));
+        }
+        if (minMargin !== "" || maxMargin !== "") {
+            list = list.filter((i) => checkRange(i.margin, minMargin, maxMargin));
+        }
+        if (minVolume !== "" || maxVolume !== "") {
+            list = list.filter((i) => checkRange(i.volume, minVolume, maxVolume));
+        }
+        if (minDayChange !== "" || maxDayChange !== "") {
+            list = list.filter((i) => checkRange(i.dayChange, minDayChange, maxDayChange));
+        }
+        if (minMarginVolume !== "" || maxMarginVolume !== "") {
+            list = list.filter((i) => checkRange(i.marginVolume, minMarginVolume, maxMarginVolume));
+        }
+        if (minLimit !== "" || maxLimit !== "") {
+            list = list.filter((i) => checkRange(i.limit, minLimit, maxLimit));
         }
 
         list = [...list].sort((a, b) => {
@@ -248,7 +305,7 @@ export const ItemList: React.FC = () => {
         });
 
         return list;
-    }, [items, search, sortKey, sortDir, favorites, onlyFavorites]);
+    }, [items, search, sortKey, sortDir, favorites, onlyFavorites, minBuy, maxBuy, minSell, maxSell, minMargin, maxMargin, minVolume, maxVolume, minDayChange, maxDayChange, minMarginVolume, maxMarginVolume, minLimit, maxLimit, membersFilter]);
 
     const totalItems = filteredAndSorted.length;
     const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
@@ -266,6 +323,17 @@ export const ItemList: React.FC = () => {
             setSortKey(key);
             setSortDir(key === "name" ? "asc" : "desc");
         }
+    };
+
+    const clearFilters = () => {
+        setMinBuy(""); setMaxBuy("");
+        setMinSell(""); setMaxSell("");
+        setMinMargin(""); setMaxMargin("");
+        setMinVolume(""); setMaxVolume("");
+        setMinDayChange(""); setMaxDayChange("");
+        setMinMarginVolume(""); setMaxMarginVolume("");
+        setMinLimit(""); setMaxLimit("");
+        setMembersFilter("all");
     };
 
     return (
@@ -286,7 +354,78 @@ export const ItemList: React.FC = () => {
                     />
                     Show favourites only
                 </label>
+            </section>
 
+            <section className="filters-section">
+                <div className="filters-header" onClick={() => setShowFilters(!showFilters)}>
+                    <h3>Advanced Filters {showFilters ? "▼" : "▶"}</h3>
+                    {showFilters && <button className="clear-filters" onClick={(e) => { e.stopPropagation(); clearFilters(); }}>Clear Filters</button>}
+                </div>
+
+                {showFilters && (
+                    <div className="filters-grid">
+                        <div className="filter-group">
+                            <label>Buy Price</label>
+                            <div className="filter-inputs">
+                                <input type="number" className="filter-input" placeholder="Min" value={minBuy} onChange={e => setMinBuy(e.target.value ? Number(e.target.value) : "")} />
+                                <input type="number" className="filter-input" placeholder="Max" value={maxBuy} onChange={e => setMaxBuy(e.target.value ? Number(e.target.value) : "")} />
+                            </div>
+                        </div>
+                        <div className="filter-group">
+                            <label>Sell Price</label>
+                            <div className="filter-inputs">
+                                <input type="number" className="filter-input" placeholder="Min" value={minSell} onChange={e => setMinSell(e.target.value ? Number(e.target.value) : "")} />
+                                <input type="number" className="filter-input" placeholder="Max" value={maxSell} onChange={e => setMaxSell(e.target.value ? Number(e.target.value) : "")} />
+                            </div>
+                        </div>
+                        <div className="filter-group">
+                            <label>Margin</label>
+                            <div className="filter-inputs">
+                                <input type="number" className="filter-input" placeholder="Min" value={minMargin} onChange={e => setMinMargin(e.target.value ? Number(e.target.value) : "")} />
+                                <input type="number" className="filter-input" placeholder="Max" value={maxMargin} onChange={e => setMaxMargin(e.target.value ? Number(e.target.value) : "")} />
+                            </div>
+                        </div>
+                        <div className="filter-group">
+                            <label>Volume</label>
+                            <div className="filter-inputs">
+                                <input type="number" className="filter-input" placeholder="Min" value={minVolume} onChange={e => setMinVolume(e.target.value ? Number(e.target.value) : "")} />
+                                <input type="number" className="filter-input" placeholder="Max" value={maxVolume} onChange={e => setMaxVolume(e.target.value ? Number(e.target.value) : "")} />
+                            </div>
+                        </div>
+                        <div className="filter-group">
+                            <label>24h Change (%)</label>
+                            <div className="filter-inputs">
+                                <input type="number" className="filter-input" placeholder="Min" value={minDayChange} onChange={e => setMinDayChange(e.target.value ? Number(e.target.value) : "")} />
+                                <input type="number" className="filter-input" placeholder="Max" value={maxDayChange} onChange={e => setMaxDayChange(e.target.value ? Number(e.target.value) : "")} />
+                            </div>
+                        </div>
+                        <div className="filter-group">
+                            <label>Margin × Volume</label>
+                            <div className="filter-inputs">
+                                <input type="number" className="filter-input" placeholder="Min" value={minMarginVolume} onChange={e => setMinMarginVolume(e.target.value ? Number(e.target.value) : "")} />
+                                <input type="number" className="filter-input" placeholder="Max" value={maxMarginVolume} onChange={e => setMaxMarginVolume(e.target.value ? Number(e.target.value) : "")} />
+                            </div>
+                        </div>
+                        <div className="filter-group">
+                            <label>Limit</label>
+                            <div className="filter-inputs">
+                                <input type="number" className="filter-input" placeholder="Min" value={minLimit} onChange={e => setMinLimit(e.target.value ? Number(e.target.value) : "")} />
+                                <input type="number" className="filter-input" placeholder="Max" value={maxLimit} onChange={e => setMaxLimit(e.target.value ? Number(e.target.value) : "")} />
+                            </div>
+                        </div>
+                        <div className="filter-group">
+                            <label>Members</label>
+                            <select className="filter-select" value={membersFilter} onChange={(e) => setMembersFilter(e.target.value as any)}>
+                                <option value="all">All</option>
+                                <option value="members">Members</option>
+                                <option value="f2p">Free to Play</option>
+                            </select>
+                        </div>
+                    </div>
+                )}
+            </section>
+
+            <section className="controls">
                 <div className="pagination-controls">
                     <span className="pagination-info">
                         Showing {totalItems === 0 ? 0 : startIndex + 1}-
