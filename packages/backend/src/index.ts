@@ -42,7 +42,15 @@ app.use("/api/favorites", favoritesRouter);
 // Discord routes
 app.use("/api/discord", discordRouter);
 
-app.get("/api/items", async (_req, res) => {
+import { authenticateToken } from "./auth";
+
+app.get("/api/items", async (req, res, next) => {
+  if (process.env.REQUIRE_AUTH === "true") {
+    await authenticateToken(req, res, next);
+  } else {
+    next();
+  }
+}, async (_req, res) => {
   try {
     const items = await getCombinedItems();
     res.json({ items });

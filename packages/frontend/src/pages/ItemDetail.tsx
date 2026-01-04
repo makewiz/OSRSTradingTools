@@ -29,7 +29,7 @@ interface PriceHistoryPoint {
 export const ItemDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { user, token } = useAuth();
+  const { user, token, fetchWithAuth } = useAuth();
 
   const [item, setItem] = useState<Item | null>(null);
   const [priceHistory, setPriceHistory] = useState<PriceHistoryPoint[]>([]);
@@ -46,9 +46,7 @@ export const ItemDetail: React.FC = () => {
     const loadWatches = async () => {
       if (user && token && id) {
         try {
-          const res = await fetch("/api/discord/settings", {
-            headers: { Authorization: `Bearer ${token}` }
-          });
+          const res = await fetchWithAuth("/api/discord/settings");
           if (res.ok) {
             const data = await res.json();
             if (data.linked) {
@@ -75,7 +73,7 @@ export const ItemDetail: React.FC = () => {
       setError(null);
 
       try {
-        const res = await fetch(`/api/items/${id}`);
+        const res = await fetchWithAuth(`/api/items/${id}`);
         if (!res.ok) {
           throw new Error(`HTTP ${res.status}`);
         }
@@ -117,7 +115,7 @@ export const ItemDetail: React.FC = () => {
             break;
         }
 
-        const res = await fetch(
+        const res = await fetchWithAuth(
           `/api/items/${id}/history?startTime=${startTime}&endTime=${now}&granularity=${granularity}`
         );
         if (!res.ok) {
@@ -154,11 +152,10 @@ export const ItemDetail: React.FC = () => {
       const url = isWatched ? `/api/discord/watch/${itemId}` : "/api/discord/watch";
       const body = isWatched ? undefined : JSON.stringify({ itemId: itemId, threshold: 5.0 });
 
-      await fetch(url, {
+      await fetchWithAuth(url, {
         method,
         headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`
+          "Content-Type": "application/json"
         },
         body
       });

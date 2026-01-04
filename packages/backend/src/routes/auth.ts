@@ -20,6 +20,10 @@ const router = express.Router();
 // Register
 router.post("/register", async (req, res) => {
     try {
+        if (process.env.DISABLE_REGISTRATION === "true") {
+            return res.status(403).json({ error: "Registration is currently disabled" });
+        }
+
         const { username, password, email } = req.body;
 
         if (!username || !password || !password.trim()) {
@@ -98,6 +102,10 @@ router.post("/discord/login", async (req, res) => {
         let user = await getUserByDiscordId(discordProfile.id);
 
         if (!user) {
+            if (process.env.DISABLE_REGISTRATION === "true") {
+                return res.status(403).json({ error: "Registration is currently disabled" });
+            }
+
             // 3. If not, treat as "Register via Discord"
             // We need to create a new user. We'll generate a random username if collision, or random password.
             // NOTE: In a real app, might ask user to choose username. For now, auto-create.

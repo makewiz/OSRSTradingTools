@@ -16,7 +16,7 @@ interface Watch {
 const REDIRECT_URI = window.location.origin + "/auth/discord/callback";
 
 export const Profile: React.FC = () => {
-    const { user, token, logout } = useAuth();
+    const { user, token, logout, fetchWithAuth } = useAuth();
     const navigate = useNavigate();
     const [discordId, setDiscordId] = useState("");
     const [isLinked, setIsLinked] = useState(false);
@@ -37,9 +37,7 @@ export const Profile: React.FC = () => {
     const fetchSettings = async () => {
         try {
             setLoading(true);
-            const res = await fetch("/api/discord/settings", {
-                headers: { Authorization: `Bearer ${token}` }
-            });
+            const res = await fetchWithAuth("/api/discord/settings");
             if (!res.ok) throw new Error("Failed to fetch settings");
 
             const data = await res.json();
@@ -61,7 +59,7 @@ export const Profile: React.FC = () => {
     };
 
     const handleConnectDiscord = () => {
-        fetch("/api/discord/config")
+        fetch("/api/discord/config") // Public endpoint, no auth needed
             .then(res => res.json())
             .then(data => {
                 const clientId = data.clientId;
@@ -84,11 +82,10 @@ export const Profile: React.FC = () => {
         const newState = !notificationsEnabled;
         try {
             setNotificationsEnabled(newState);
-            const res = await fetch("/api/discord/settings", {
+            const res = await fetchWithAuth("/api/discord/settings", {
                 method: "POST",
                 headers: {
-                    "Content-Type": "application/json",
-                    Authorization: `Bearer ${token}`
+                    "Content-Type": "application/json"
                 },
                 body: JSON.stringify({ enabled: newState })
             });
@@ -104,9 +101,8 @@ export const Profile: React.FC = () => {
         if (!confirm("Are you sure you want to stop watching this item?")) return;
         try {
             setWatches(prev => prev.filter(w => w.item_id !== itemId));
-            const res = await fetch(`/api/discord/watch/${itemId}`, {
-                method: "DELETE",
-                headers: { Authorization: `Bearer ${token}` }
+            const res = await fetchWithAuth(`/api/discord/watch/${itemId}`, {
+                method: "DELETE"
             });
 
             if (!res.ok) throw new Error("Failed to remove watch");
@@ -140,11 +136,10 @@ export const Profile: React.FC = () => {
             ));
             setEditingWatchId(null);
 
-            const res = await fetch(`/api/discord/watch/${itemId}`, {
+            const res = await fetchWithAuth(`/api/discord/watch/${itemId}`, {
                 method: "PUT",
                 headers: {
-                    "Content-Type": "application/json",
-                    Authorization: `Bearer ${token}`
+                    "Content-Type": "application/json"
                 },
                 body: JSON.stringify({ threshold: newThreshold })
             });
@@ -307,9 +302,8 @@ export const Profile: React.FC = () => {
                         if (!doubleCheck) return;
 
                         try {
-                            const res = await fetch("/api/auth/account", {
-                                method: "DELETE",
-                                headers: { Authorization: `Bearer ${token}` }
+                            const res = await fetchWithAuth("/api/auth/account", {
+                                method: "DELETE"
                             });
 
                             if (!res.ok) throw new Error("Failed to delete account");

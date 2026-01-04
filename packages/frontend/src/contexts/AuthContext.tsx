@@ -14,14 +14,18 @@ interface AuthContextType {
     isLoading: boolean;
     login: (token: string, user: User) => void;
     logout: () => void;
+    fetchWithAuth: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+import { useNavigate } from "react-router-dom";
 
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
     const [user, setUser] = useState<User | null>(null);
     const [token, setToken] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState(true);
+    const navigate = useNavigate();
 
     useEffect(() => {
         // Check localStorage for token on boot
@@ -47,6 +51,28 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setUser(null);
         localStorage.removeItem("auth_token");
         localStorage.removeItem("auth_user");
+        navigate("/login");
+    };
+
+    const fetchWithAuth = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+        const headers = new Headers(init?.headers);
+
+        if (token) {
+            headers.set("Authorization", `Bearer ${token}`);
+        }
+
+        const config: RequestInit = {
+            ...init,
+            headers
+        };
+
+        const response = await fetch(input, config);
+
+        if (response.status === 401) {
+            logout();
+        }
+
+        return response;
     };
 
     return (
@@ -57,7 +83,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 isAuthenticated: !!user,
                 isLoading,
                 login,
-                logout
+                logout,
+                fetchWithAuth
             }}
         >
             {children}

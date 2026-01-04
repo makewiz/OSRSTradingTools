@@ -1,8 +1,12 @@
 import express from "express";
 import { getCombinedItems } from "../osrsClient";
 import { getPriceHistory, getLatestPrice } from "../database";
+import { authenticateToken } from "../auth";
 
 const router = express.Router();
+if (process.env.REQUIRE_AUTH === "true") {
+  router.use(authenticateToken);
+}
 
 /**
  * Get single item details

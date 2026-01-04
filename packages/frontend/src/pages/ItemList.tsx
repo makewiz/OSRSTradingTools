@@ -31,7 +31,7 @@ type SortKey =
 const FAVORITES_KEY = "osrs_trading_favorites";
 
 export const ItemList: React.FC = () => {
-    const { user, token } = useAuth();
+    const { user, token, fetchWithAuth } = useAuth();
     const [items, setItems] = useState<Item[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -69,9 +69,7 @@ export const ItemList: React.FC = () => {
             if (user && token) {
                 // Fetch from API
                 try {
-                    const res = await fetch("/api/favorites", {
-                        headers: { Authorization: `Bearer ${token}` }
-                    });
+                    const res = await fetchWithAuth("/api/favorites");
                     if (res.ok) {
                         const data = await res.json();
                         setFavorites(data.favorites);
@@ -100,9 +98,7 @@ export const ItemList: React.FC = () => {
         const loadWatches = async () => {
             if (user && token) {
                 try {
-                    const res = await fetch("/api/discord/settings", {
-                        headers: { Authorization: `Bearer ${token}` }
-                    });
+                    const res = await fetchWithAuth("/api/discord/settings");
                     if (res.ok) {
                         const data = await res.json();
                         if (data.linked) {
@@ -136,7 +132,7 @@ export const ItemList: React.FC = () => {
             setLoading(true);
             setError(null);
             try {
-                const res = await fetch("/api/items");
+                const res = await fetchWithAuth("/api/items");
                 if (!res.ok) {
                     throw new Error(`HTTP ${res.status}`);
                 }
@@ -168,11 +164,10 @@ export const ItemList: React.FC = () => {
                 const url = isFav ? `/api/favorites/${id}` : "/api/favorites";
                 const body = isFav ? undefined : JSON.stringify({ itemId: id });
 
-                await fetch(url, {
+                await fetchWithAuth(url, {
                     method,
                     headers: {
-                        "Content-Type": "application/json",
-                        Authorization: `Bearer ${token}`
+                        "Content-Type": "application/json"
                     },
                     body
                 });
@@ -199,11 +194,10 @@ export const ItemList: React.FC = () => {
             const url = isWatched ? `/api/discord/watch/${id}` : "/api/discord/watch";
             const body = isWatched ? undefined : JSON.stringify({ itemId: id, threshold: 5.0 });
 
-            await fetch(url, {
+            await fetchWithAuth(url, {
                 method,
                 headers: {
-                    "Content-Type": "application/json",
-                    Authorization: `Bearer ${token}`
+                    "Content-Type": "application/json"
                 },
                 body
             });
