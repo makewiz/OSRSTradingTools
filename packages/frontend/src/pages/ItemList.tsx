@@ -491,7 +491,7 @@ export const ItemList: React.FC = () => {
                                 <th onClick={() => handleSortChange("marginVolume")}>
                                     Margin×Vol {sortKey === "marginVolume" ? (sortDir === "asc" ? "▲" : "▼") : ""}
                                 </th>
-                                <th>Wiki</th>
+
                                 <th onClick={() => handleSortChange("limit")}>
                                     Limit {sortKey === "limit" ? (sortDir === "asc" ? "▲" : "▼") : ""}
                                 </th>
@@ -551,11 +551,7 @@ export const ItemList: React.FC = () => {
                                                 ? item.marginVolume.toLocaleString()
                                                 : "-"}
                                         </td>
-                                        <td>
-                                            <a href={item.wikiUrl} target="_blank" rel="noreferrer">
-                                                Wiki
-                                            </a>
-                                        </td>
+
                                         <td>
                                             {item.limit?.toLocaleString() ?? "-"}
                                         </td>

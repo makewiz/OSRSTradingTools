@@ -483,3 +483,21 @@ a:hover {
     margin-top: 10px;
   }
 }
+
+.wiki-link {
+  display: inline-block;
+  padding: 6px 12px;
+  background: #2d2d2d;
+  color: var(--primary-color);
+  border: 1px solid var(--primary-color);
+  border-radius: 4px;
+  margin-left: 10px;
+  font-size: 0.9rem;
+  transition: all 0.2s;
+}
+
+.wiki-link:hover {
+  background: var(--primary-color);
+  color: #000;
+  text-decoration: none;
+}

@@ -131,7 +131,7 @@ export async function getCombinedItems(): Promise<CombinedItem[]> {
       name: m.name,
       examine: m.examine,
       members: m.members,
-      wikiUrl: m.wiki_url,
+      wikiUrl: m.wiki_url || `https://oldschool.runescape.wiki/w/${m.name.replace(/ /g, '_')}`,
       iconUrl: m.icon,
       buyPrice,
       sellPrice,
