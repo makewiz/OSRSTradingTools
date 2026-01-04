@@ -132,7 +132,7 @@ export async function getCombinedItems(): Promise<CombinedItem[]> {
       examine: m.examine,
       members: m.members,
       wikiUrl: m.wiki_url || `https://oldschool.runescape.wiki/w/${m.name.replace(/ /g, '_')}`,
-      iconUrl: m.icon,
+      iconUrl: `https://static.runelite.net/cache/item/icon/${m.id}.png`,
       buyPrice,
       sellPrice,
       margin,
