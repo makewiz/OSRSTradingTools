@@ -22,22 +22,13 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 import { useNavigate } from "react-router-dom";
 
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-    const [user, setUser] = useState<User | null>(null);
-    const [token, setToken] = useState<string | null>(null);
-    const [isLoading, setIsLoading] = useState(true);
-    const navigate = useNavigate();
-
-    useEffect(() => {
-        // Check localStorage for token on boot
-        const storedToken = localStorage.getItem("auth_token");
+    const [user, setUser] = useState<User | null>(() => {
         const storedUser = localStorage.getItem("auth_user");
-
-        if (storedToken && storedUser) {
-            setToken(storedToken);
-            setUser(JSON.parse(storedUser));
-        }
-        setIsLoading(false);
-    }, []);
+        return storedUser ? JSON.parse(storedUser) : null;
+    });
+    const [token, setToken] = useState<string | null>(() => localStorage.getItem("auth_token"));
+    const [isLoading, setIsLoading] = useState(false);
+    const navigate = useNavigate();
 
     const login = (newToken: string, newUser: User) => {
         setToken(newToken);
