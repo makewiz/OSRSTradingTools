@@ -27,6 +27,8 @@ export const DiscordCallback: React.FC = () => {
 
         const handleCallback = async () => {
             try {
+                const redirectUri = window.location.origin + "/auth/discord/callback";
+
                 if (state === "link") {
                     // Linking flow
                     if (!token) {
@@ -38,7 +40,7 @@ export const DiscordCallback: React.FC = () => {
                             "Content-Type": "application/json",
                             Authorization: `Bearer ${token}`
                         },
-                        body: JSON.stringify({ code })
+                        body: JSON.stringify({ code, redirectUri })
                     });
 
                     if (!res.ok) throw new Error("Failed to link account.");
@@ -49,7 +51,7 @@ export const DiscordCallback: React.FC = () => {
                     const res = await fetch(`${API_BASE_URL}/api/auth/discord/login`, {
                         method: "POST",
                         headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ code })
+                        body: JSON.stringify({ code, redirectUri })
                     });
 
                     if (!res.ok) throw new Error("Failed to login with Discord.");

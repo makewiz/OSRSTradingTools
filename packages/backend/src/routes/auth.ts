@@ -87,7 +87,7 @@ router.post("/login", async (req, res) => {
 
 // Discord Login
 router.post("/discord/login", async (req, res) => {
-    const { code } = req.body;
+    const { code, redirectUri } = req.body;
 
     if (!code) {
         return res.status(400).json({ error: "Authorization code is required" });
@@ -95,7 +95,7 @@ router.post("/discord/login", async (req, res) => {
 
     try {
         // 1. Exchange code for token
-        const tokenData = await exchangeCodeForToken(code as string);
+        const tokenData = await exchangeCodeForToken(code as string, redirectUri);
         const discordProfile = await getDiscordUser(tokenData.access_token);
 
         // 2. Check if user exists with this Discord ID
