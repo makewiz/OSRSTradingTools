@@ -22,7 +22,7 @@ router.post("/register", async (req, res) => {
     try {
         const { username, password, email } = req.body;
 
-        if (!username || !password) {
+        if (!username || !password || !password.trim()) {
             return res.status(400).json({ error: "Username and password are required" });
         }
 
@@ -55,7 +55,7 @@ router.post("/login", async (req, res) => {
     try {
         const { username, password } = req.body;
 
-        if (!username || !password) {
+        if (!username || !password || !password.trim()) {
             return res.status(400).json({ error: "Username and password are required" });
         }
 
