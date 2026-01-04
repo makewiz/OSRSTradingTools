@@ -52,14 +52,14 @@ router.post("/link", async (req, res) => {
  */
 router.post("/link-oauth", async (req, res) => {
     const userId = req.user!.id;
-    const { code, redirectUri } = req.body;
+    const { code } = req.body;
 
     if (!code) {
         return res.status(400).json({ error: "Authorization code is required" });
     }
 
     try {
-        const tokenData = await exchangeCodeForToken(code, redirectUri);
+        const tokenData = await exchangeCodeForToken(code);
         const discordProfile = await getDiscordUser(tokenData.access_token);
 
         await linkDiscordUser(userId, discordProfile.id);

@@ -18,13 +18,13 @@ export interface DiscordUser {
     email?: string;
 }
 
-export async function exchangeCodeForToken(code: string, redirectUri?: string): Promise<DiscordTokenResponse> {
+export async function exchangeCodeForToken(code: string): Promise<DiscordTokenResponse> {
     const params = new URLSearchParams();
     params.append("client_id", process.env.DISCORD_CLIENT_ID!);
     params.append("client_secret", process.env.DISCORD_CLIENT_SECRET!);
     params.append("grant_type", "authorization_code");
     params.append("code", code);
-    params.append("redirect_uri", redirectUri || process.env.DISCORD_REDIRECT_URI!);
+    params.append("redirect_uri", process.env.DISCORD_REDIRECT_URI!);
 
     try {
         const response = await axios.post(`${DISCORD_API_URL}/oauth2/token`, params, {
