@@ -85,8 +85,8 @@ export async function runRetentionPolicy(): Promise<void> {
       await client.query(`
         DELETE FROM ${table}
         WHERE timestamp < $1 AND timestamp >= $2
-        AND timestamp NOT IN (
-          SELECT MAX(timestamp)
+        AND (item_id, timestamp) NOT IN (
+          SELECT item_id, MAX(timestamp)
           FROM ${table}
           WHERE timestamp < $1 AND timestamp >= $2
           GROUP BY item_id, FLOOR(timestamp / $3)
