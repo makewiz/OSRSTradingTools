@@ -73,7 +73,7 @@ DATABASE_URL=${{Postgres.DATABASE_URL}}
 JWT_SECRET=your-super-secret-jwt-key-change-this
 DISCORD_CLIENT_ID=your-discord-client-id
 DISCORD_CLIENT_SECRET=your-discord-client-secret
-DISCORD_REDIRECT_URI=https://your-frontend-domain.railway.app/auth/callback
+DISCORD_REDIRECT_URI=https://your-frontend-domain.railway.app/auth/discord/callback
 PORT=4000
 ```
 
