@@ -10,9 +10,8 @@ export default defineConfig({
     }
   },
   preview: {
-    port: Number(process.env.PORT) || 5173,
-    host: "0.0.0.0",
-    allowedHosts: ["osrs-trading.up.railway.app"]
+    port: 5173,
+    host: "0.0.0.0"
   }
 });
 

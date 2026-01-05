@@ -138,7 +138,7 @@ DISCORD_CLIENT_ID=your-discord-client-id
 1. Click on the service → "Settings"
 2. Set **Root Directory**: `/` (leave empty or set to root)
 3. Set **Build Command**: `npm install && npm run build:frontend`
-4. Set **Start Command**: `npm run preview --workspace frontend -- --port $PORT --host 0.0.0.0`
+4. Set **Start Command**: `npm start --workspace frontend`
 5. Under "Networking", click "Generate Domain"
 
 ### 3. Update Vite Config for Production
@@ -158,7 +158,7 @@ export default defineConfig({
     }
   },
   preview: {
-    port: Number(process.env.PORT) || 5173,
+    port: 5173,
     host: "0.0.0.0"
   }
 });
