@@ -12,6 +12,7 @@
   "workspaces": [
     "packages/backend",
     "packages/frontend",
-    "packages/discord-bot"
+    "packages/discord-bot",
+    "packages/shared"
   ]
 }

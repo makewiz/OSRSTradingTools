@@ -23,7 +23,8 @@
     "node-cron": "^4.2.1",
     "node-fetch": "^3.3.2",
     "pg": "^8.16.3",
-    "zod": "^4.3.5"
+    "zod": "^4.3.5",
+    "@osrstradingtools/shared": "*"
   },
   "devDependencies": {
     "@types/bcrypt": "^6.0.0",

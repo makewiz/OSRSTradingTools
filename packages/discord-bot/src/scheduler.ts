@@ -1,6 +1,7 @@
 import cron from "node-cron";
 import { Client, EmbedBuilder, TextChannel } from "discord.js";
 import { getAllActiveWatches, getLatestPrice, updateLastNotified, getDayChange } from "./database";
+import { logger } from "@osrstradingtools/shared";
 
 const COOLDOWN_SECONDS = 60 * 60; // 1 hour cooldown per item per user
 
@@ -8,22 +9,20 @@ export function startNotificationScheduler(client: Client) {
     // Run every minute
     cron.schedule("* * * * *", async () => {
         try {
-            // eslint-disable-next-line no-console
-            console.log("[Scheduler] Checking notifications...");
+            logger.debug("[Scheduler] Checking notifications...");
             await checkNotifications(client);
         } catch (err) {
-            // eslint-disable-next-line no-console
-            console.error("[Scheduler] Error checking notifications:", err);
+            logger.error("[Scheduler] Error checking notifications:", err);
         }
     });
 
     // Run daily at 10:00 AM UTC
     cron.schedule("0 10 * * *", async () => {
         try {
-            console.log("[Scheduler] Broadcasting daily highlights...");
+            logger.info("[Scheduler] Broadcasting daily highlights...");
             await broadcastHighlights(client);
         } catch (err) {
-            console.error("[Scheduler] Error broadcasting highlights:", err);
+            logger.error("[Scheduler] Error broadcasting highlights:", err);
         }
     });
 }
@@ -53,9 +52,9 @@ async function broadcastHighlights(client: Client) {
             .setFooter({ text: "OSRS Trading Tools AI" });
 
         await channel.send({ embeds: [embed] });
-        console.log("[Scheduler] Broadcasted highlights to channel " + channelId);
+        logger.info("[Scheduler] Broadcasted highlights to channel " + channelId);
     } catch (err) {
-        console.error("[Scheduler] Failed to broadcast highlights:", err);
+        logger.error("[Scheduler] Failed to broadcast highlights:", err);
     }
 }
 
@@ -109,12 +108,10 @@ async function checkNotifications(client: Client) {
             const user = await client.users.fetch(batch.discordId);
             if (user) {
                 await user.send(`🚨 **OSRS Price Alerts**\n${batch.messages.join("\n")}`);
-                // eslint-disable-next-line no-console
-                console.log(`[Notifier] Sent alert to ${batch.discordId} for ${batch.messages.length} items`);
+                logger.info(`[Notifier] Sent alert to ${batch.discordId} for ${batch.messages.length} items`);
             }
         } catch (err) {
-            // eslint-disable-next-line no-console
-            console.error(`[Notifier] Failed to dm ${batch.discordId}`, err);
+            logger.error(`[Notifier] Failed to dm ${batch.discordId}`, err);
         }
     }
 }

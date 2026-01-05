@@ -1,6 +1,7 @@
 import cron from "node-cron";
 import { getCombinedItems } from "./osrsClient";
 import { insertBuyPrice, insertSellPrice, insertVolume, pool } from "./database";
+import { logger } from "@osrstradingtools/shared";
 
 let isRunning = false;
 
@@ -9,17 +10,14 @@ let isRunning = false;
  */
 async function fetchAndStorePrices(): Promise<void> {
   if (isRunning) {
-    // eslint-disable-next-line no-console
-    console.log("[Scheduler] Previous fetch still running, skipping...");
+    logger.debug("[Scheduler] Previous fetch still running, skipping...");
     return;
   }
 
   isRunning = true;
-  const timestamp = Math.floor(Date.now() / 1000); // Unix timestamp in seconds
 
   try {
-    // eslint-disable-next-line no-console
-    console.log(`[Scheduler] Fetching prices at ${new Date().toISOString()}...`);
+    logger.debug(`[Scheduler] Fetching prices...`);
 
     const items = await getCombinedItems();
 
@@ -53,11 +51,9 @@ async function fetchAndStorePrices(): Promise<void> {
       await Promise.all(promises);
     }
 
-    // eslint-disable-next-line no-console
-    console.log(`[Scheduler] Stored ${items.length} item prices successfully`);
+    logger.debug(`[Scheduler] Stored ${items.length} item prices successfully`);
   } catch (error) {
-    // eslint-disable-next-line no-console
-    console.error("[Scheduler] Error fetching/storing prices:", error);
+    logger.error("[Scheduler] Error fetching/storing prices:", error);
   } finally {
     isRunning = false;
   }
@@ -69,8 +65,7 @@ async function fetchAndStorePrices(): Promise<void> {
  * 2. Delete data > 1 year
  */
 export async function runRetentionPolicy(): Promise<void> {
-  // eslint-disable-next-line no-console
-  console.log("[Scheduler] Running retention policy...");
+  logger.info("[Scheduler] Running retention policy...");
   const client = await pool.connect();
   try {
     const now = Math.floor(Date.now() / 1000);
@@ -146,11 +141,9 @@ export async function runRetentionPolicy(): Promise<void> {
     await processPriceRetention('item_buy_prices', now, oneDayAgo, 300);
     await processPriceRetention('item_sell_prices', now, oneDayAgo, 300);
 
-    // eslint-disable-next-line no-console
-    console.log("[Scheduler] Retention policy completed.");
+    logger.info("[Scheduler] Retention policy completed.");
   } catch (err) {
-    // eslint-disable-next-line no-console
-    console.error("[Scheduler] Retention policy failed:", err);
+    logger.error("[Scheduler] Retention policy failed:", err);
   } finally {
     client.release();
   }
@@ -162,34 +155,29 @@ export async function runRetentionPolicy(): Promise<void> {
 export function startPriceScheduler(): void {
   // Run immediately on startup
   fetchAndStorePrices().catch((err) => {
-    // eslint-disable-next-line no-console
-    console.error("[Scheduler] Initial fetch failed:", err);
+    logger.error("[Scheduler] Initial fetch failed:", err);
   });
 
   // Run every minute
   cron.schedule("* * * * *", () => {
     fetchAndStorePrices().catch((err) => {
-      // eslint-disable-next-line no-console
-      console.error("[Scheduler] Scheduled fetch failed:", err);
+      logger.error("[Scheduler] Scheduled fetch failed:", err);
     });
   });
 
   // Schedule retention policy to run once every hour
   cron.schedule("0 * * * *", () => {
     runRetentionPolicy().catch((err) => {
-      // eslint-disable-next-line no-console
-      console.error("[Scheduler] Scheduled retention policy failed:", err);
+      logger.error("[Scheduler] Scheduled retention policy failed:", err);
     });
   });
 
   // Run retention policy immediately on startup
   runRetentionPolicy().catch((err) => {
-    // eslint-disable-next-line no-console
-    console.error("[Scheduler] Initial retention policy failed:", err);
+    logger.error("[Scheduler] Initial retention policy failed:", err);
   });
 
-  // eslint-disable-next-line no-console
-  console.log("[Scheduler] Price fetcher started (runs every minute)");
-  // eslint-disable-next-line no-console
-  console.log("[Scheduler] Retention policy started (runs every hour)");
+  logger.info("[Scheduler] Price fetcher started (runs every minute)");
+  logger.info("[Scheduler] Retention policy started (runs every hour)");
 }
+
