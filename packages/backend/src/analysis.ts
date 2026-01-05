@@ -1,5 +1,6 @@
 
 import { getCombinedItems, CombinedItem } from "./osrsClient";
+import { getLatestItems } from "./scheduler";
 import dotenv from "dotenv";
 
 dotenv.config();
@@ -40,7 +41,10 @@ export class AnalysisService {
             return this.lastAnalysis;
         }
 
-        const items = await getCombinedItems();
+        let items = getLatestItems();
+        if (!items || items.length === 0) {
+            items = await getCombinedItems();
+        }
 
         // Sort logic can be improved, for now just filtering
         const highMargin = items

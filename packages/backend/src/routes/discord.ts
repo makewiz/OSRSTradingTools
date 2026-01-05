@@ -10,6 +10,7 @@ import {
 } from "../database";
 import { exchangeCodeForToken, getDiscordUser } from "../oauth";
 import { getCombinedItems } from "../osrsClient";
+import { getLatestItems } from "../scheduler";
 
 const router = express.Router();
 
@@ -92,7 +93,11 @@ router.get("/settings", async (req, res) => {
         // Enrich with item names
         // Note: In a production app with DB "items" table, we would JOIN. 
         // Here we fetch from cache.
-        const allItems = await getCombinedItems();
+        // Here we fetch from cache.
+        let allItems = getLatestItems();
+        if (!allItems || allItems.length === 0) {
+            allItems = await getCombinedItems();
+        }
         const enrichedWatches = watches.map(w => {
             const item = allItems.find(i => i.id === w.item_id);
             return {
