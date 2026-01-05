@@ -5,7 +5,7 @@
   "main": "dist/index.js",
   "scripts": {
     "dev": "nodemon --watch src --exec ts-node src/index.ts",
-    "build": "tsc -p ../shared/tsconfig.json && tsc",
+    "build": "tsc",
     "start": "node dist/index.js"
   },
   "keywords": [],
@@ -24,7 +24,7 @@
     "node-fetch": "^3.3.2",
     "pg": "^8.16.3",
     "zod": "^4.3.5",
-    "@osrstradingtools/shared": "file:../shared"
+    "@osrstradingtools/shared": "*"
   },
   "devDependencies": {
     "@types/bcrypt": "^6.0.0",
