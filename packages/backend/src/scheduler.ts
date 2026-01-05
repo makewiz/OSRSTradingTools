@@ -68,60 +68,83 @@ async function fetchAndStorePrices(): Promise<void> {
  * 1. Downsample data > 24h to hourly resolution
  * 2. Delete data > 1 year
  */
-async function runRetentionPolicy(): Promise<void> {
+export async function runRetentionPolicy(): Promise<void> {
   // eslint-disable-next-line no-console
   console.log("[Scheduler] Running retention policy...");
   const client = await pool.connect();
   try {
     const now = Math.floor(Date.now() / 1000);
     const oneDayAgo = now - 24 * 60 * 60;
+    const sevenDaysAgo = now - 7 * 24 * 60 * 60;
+    const thirtyDaysAgo = now - 30 * 24 * 60 * 60;
     const oneYearAgo = now - 365 * 24 * 60 * 60;
 
-    // 1. Downsample Prices > 24h: Keep only the latest price per hour
-    // Delete rows where timestamp is NOT the max timestamp of that hour
-    const downsamplePricesQuery = (table: string) => `
-      DELETE FROM ${table} t1
-      WHERE timestamp < $1
-      AND timestamp NOT IN (
-        SELECT MAX(timestamp)
-        FROM ${table}
-        WHERE timestamp < $1
-        GROUP BY item_id, FLOOR(timestamp / 3600)
-      )
-    `;
+    // Helper: Downsample prices (keep max timestamp per interval)
+    const processPriceRetention = async (table: string, endTs: number, startTs: number, interval: number) => {
+      // Delete rows in range [startTs, endTs) that are NOT the max timestamp in their bucket
+      await client.query(`
+        DELETE FROM ${table}
+        WHERE timestamp < $1 AND timestamp >= $2
+        AND timestamp NOT IN (
+          SELECT MAX(timestamp)
+          FROM ${table}
+          WHERE timestamp < $1 AND timestamp >= $2
+          GROUP BY item_id, FLOOR(timestamp / $3)
+        )
+      `, [endTs, startTs, interval]);
+    };
 
-    await client.query(downsamplePricesQuery('item_buy_prices'), [oneDayAgo]);
-    await client.query(downsamplePricesQuery('item_sell_prices'), [oneDayAgo]);
+    // Helper: Downsample volumes (sum volumes per interval)
+    const processVolumeRetention = async (endTs: number, startTs: number, interval: number) => {
+      // 1. Upsert aggregated volumes
+      await client.query(`
+        INSERT INTO item_volumes (item_id, timestamp, buy_volume, sell_volume)
+        SELECT 
+          item_id, 
+          CAST(FLOOR(timestamp / $3) * $3 AS BIGINT) as bucket_ts, 
+          SUM(buy_volume), 
+          SUM(sell_volume)
+        FROM item_volumes
+        WHERE timestamp < $1 AND timestamp >= $2
+        GROUP BY item_id, bucket_ts
+        ON CONFLICT (item_id, timestamp) DO UPDATE SET
+          buy_volume = EXCLUDED.buy_volume,
+          sell_volume = EXCLUDED.sell_volume
+      `, [endTs, startTs, interval]);
 
-    // 2. Downsample Volumes > 24h: Sum volumes per hour, save at :00, delete others
-    // Step A: Upsert aggregated hourly volumes
-    // Note: We use (timestamp / 3600) * 3600 to floor to hour
-    await client.query(`
-      INSERT INTO item_volumes (item_id, timestamp, buy_volume, sell_volume)
-      SELECT 
-        item_id, 
-        CAST(FLOOR(timestamp / 3600) * 3600 AS BIGINT) as hour_ts, 
-        SUM(buy_volume), 
-        SUM(sell_volume)
-      FROM item_volumes
-      WHERE timestamp < $1
-      GROUP BY item_id, hour_ts
-      ON CONFLICT (item_id, timestamp) DO UPDATE SET
-        buy_volume = EXCLUDED.buy_volume,
-        sell_volume = EXCLUDED.sell_volume
-    `, [oneDayAgo]);
+      // 2. Delete non-aligned timestamps in this range
+      await client.query(`
+        DELETE FROM item_volumes 
+        WHERE timestamp < $1 AND timestamp >= $2
+        AND timestamp % $3 != 0
+      `, [endTs, startTs, interval]);
+    };
 
-    // Step B: Delete non-hourly rows older than 24h
-    await client.query(`
-      DELETE FROM item_volumes 
-      WHERE timestamp < $1 
-      AND timestamp % 3600 != 0
-    `, [oneDayAgo]);
-
-    // 3. Prune Data > 1 Year
+    // 1. Delete Data > 1 Year
     await client.query("DELETE FROM item_buy_prices WHERE timestamp < $1", [oneYearAgo]);
     await client.query("DELETE FROM item_sell_prices WHERE timestamp < $1", [oneYearAgo]);
     await client.query("DELETE FROM item_volumes WHERE timestamp < $1", [oneYearAgo]);
+
+    // 2. Tier: 30 days to 1 year -> 24h resolution (86400s)
+    await processPriceRetention('item_buy_prices', thirtyDaysAgo, oneYearAgo, 86400);
+    await processPriceRetention('item_sell_prices', thirtyDaysAgo, oneYearAgo, 86400);
+    await processVolumeRetention(thirtyDaysAgo, oneYearAgo, 86400);
+
+    // 3. Tier: 7 days to 30 days -> 6h resolution (21600s)
+    await processPriceRetention('item_buy_prices', sevenDaysAgo, thirtyDaysAgo, 21600);
+    await processPriceRetention('item_sell_prices', sevenDaysAgo, thirtyDaysAgo, 21600);
+    await processVolumeRetention(sevenDaysAgo, thirtyDaysAgo, 21600);
+
+    // 4. Tier: 24 hours to 7 days -> 1h resolution (3600s)
+    await processPriceRetention('item_buy_prices', oneDayAgo, sevenDaysAgo, 3600);
+    await processPriceRetention('item_sell_prices', oneDayAgo, sevenDaysAgo, 3600);
+    await processVolumeRetention(oneDayAgo, sevenDaysAgo, 3600);
+
+    // 5. Tier: < 24 hours -> 5m resolution (300s)
+    // Only for prices. Volumes are naturally 5m resolution.
+    // Note: We scan from 'now' back to 'oneDayAgo'
+    await processPriceRetention('item_buy_prices', now, oneDayAgo, 300);
+    await processPriceRetention('item_sell_prices', now, oneDayAgo, 300);
 
     // eslint-disable-next-line no-console
     console.log("[Scheduler] Retention policy completed.");
