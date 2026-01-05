@@ -59,9 +59,9 @@ This guide walks you through deploying your application (frontend, backend, Disc
 ### 2. Configure Backend Settings
 
 1. Click on the service → "Settings"
-2. Set **Root Directory**: `packages/backend`
-3. Set **Build Command**: `npm install && npm run build`
-4. Set **Start Command**: `npm start`
+2. Set **Root Directory**: `/` (leave empty or set to root)
+3. Set **Build Command**: `npm install && npm run build:backend`
+4. Set **Start Command**: `npm start --workspace backend`
 5. Under "Networking", click "Generate Domain" (this gives you a public URL)
 
 ### 3. Add Environment Variables
@@ -101,9 +101,9 @@ PORT=4000
 ### 2. Configure Bot Settings
 
 1. Click on the service → "Settings"
-2. Set **Root Directory**: `packages/discord-bot`
-3. Set **Build Command**: `npm install && npm run build`
-4. Set **Start Command**: `npm start`
+2. Set **Root Directory**: `/` (leave empty or set to root)
+3. Set **Build Command**: `npm install && npm run build:bot`
+4. Set **Start Command**: `npm start --workspace discord-bot`
 5. **Do NOT** generate a domain (the bot doesn't need a public URL)
 
 ### 3. Add Environment Variables
@@ -136,9 +136,9 @@ DISCORD_CLIENT_ID=your-discord-client-id
 ### 2. Configure Frontend Settings
 
 1. Click on the service → "Settings"
-2. Set **Root Directory**: `packages/frontend`
-3. Set **Build Command**: `npm install && npm run build`
-4. Set **Start Command**: `npx vite preview --port $PORT --host 0.0.0.0`
+2. Set **Root Directory**: `/` (leave empty or set to root)
+3. Set **Build Command**: `npm install && npm run build:frontend`
+4. Set **Start Command**: `npm run preview --workspace frontend -- --port $PORT --host 0.0.0.0`
 5. Under "Networking", click "Generate Domain"
 
 ### 3. Update Vite Config for Production
