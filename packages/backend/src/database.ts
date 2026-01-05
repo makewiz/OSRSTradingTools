@@ -25,7 +25,7 @@ export interface ItemPriceHistory {
 export interface User {
   id: number;
   username: string;
-  password_hash: string;
+  password_hash: string | null;
   email: string | null;
   created_at: number;
 }
@@ -106,10 +106,15 @@ export async function initializeDatabase(): Promise<void> {
       CREATE TABLE IF NOT EXISTS users (
         id SERIAL PRIMARY KEY,
         username TEXT UNIQUE NOT NULL,
-        password_hash TEXT NOT NULL,
+        password_hash TEXT,
         email TEXT,
         created_at BIGINT NOT NULL DEFAULT (CAST(EXTRACT(EPOCH FROM NOW()) AS BIGINT))
       )
+    `);
+
+    // Migration: Ensure password_hash is nullable (for existing databases)
+    await client.query(`
+      ALTER TABLE users ALTER COLUMN password_hash DROP NOT NULL
     `);
 
     // ... rest of tables (favorites, discord, notifications) ...
@@ -328,7 +333,7 @@ export async function calculateDayChange(
 // Create new user
 export async function createUser(
   username: string,
-  passwordHash: string,
+  passwordHash: string | null,
   email: string | null = null
 ): Promise<User> {
   const query = `
@@ -344,6 +349,13 @@ export async function createUser(
     ...user,
     created_at: parseInt(user.created_at) // Ensure bigint is parsed to number if needed
   } as User;
+}
+
+export async function updateUserPassword(userId: number, passwordHash: string): Promise<void> {
+  const query = `
+    UPDATE users SET password_hash = $1 WHERE id = $2
+  `;
+  await pool.query(query, [passwordHash, userId]);
 }
 
 // Get active watches for a discord user

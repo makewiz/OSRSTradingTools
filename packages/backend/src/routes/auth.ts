@@ -34,6 +34,11 @@ const discordLoginSchema = z.object({
     code: z.string().min(1, "Authorization code is required"),
 });
 
+const changePasswordSchema = z.object({
+    currentPassword: z.string().min(1, "Current password is required"),
+    newPassword: z.string().min(6, "New password must be at least 6 characters long"),
+});
+
 // Register
 router.post("/register", authLimiter, async (req, res) => {
     try {
@@ -142,10 +147,10 @@ router.post("/discord/login", authLimiter, async (req, res) => {
             }
 
             // Generate random password (they login via Discord anyway)
-            const randomPw = crypto.randomBytes(16).toString("hex");
-            const pwHash = await hashPassword(randomPw);
+            // const randomPw = crypto.randomBytes(16).toString("hex");
+            // const pwHash = await hashPassword(randomPw);
 
-            user = await createUser(username, pwHash, discordProfile.email || null);
+            user = await createUser(username, null, discordProfile.email || null);
 
             // Link Immediately
             await linkDiscordUser(user.id, discordProfile.id);
@@ -170,7 +175,42 @@ router.get("/me", authenticateToken, (req, res) => {
     const user = req.user!;
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { password_hash, ...userSafe } = user;
-    res.json({ user: userSafe });
+    res.json({ user: { ...userSafe, has_password: !!user.password_hash } });
+});
+
+// Change Password
+router.post("/change-password", authLimiter, authenticateToken, async (req, res) => {
+    try {
+        const user = req.user!;
+        if (!user.password_hash) {
+            return res.status(400).json({ error: "Cannot change password for passwordless account" });
+        }
+
+        // Validate input
+        const result = changePasswordSchema.safeParse(req.body);
+        if (!result.success) {
+            return res.status(400).json({ error: result.error.issues[0].message });
+        }
+
+        const { currentPassword, newPassword } = result.data;
+
+        // Verify current password
+        const valid = await verifyPassword(currentPassword, user.password_hash);
+        if (!valid) {
+            return res.status(403).json({ error: "Invalid current password" });
+        }
+
+        // Update password
+        const newHash = await hashPassword(newPassword);
+        const { updateUserPassword } = await import("../database");
+        await updateUserPassword(user.id, newHash);
+
+        res.json({ success: true, message: "Password updated successfully" });
+    } catch (err) {
+        // eslint-disable-next-line no-console
+        console.error(err);
+        res.status(500).json({ error: "Failed to update password" });
+    }
 });
 
 // Delete Account

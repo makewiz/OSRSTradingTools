@@ -30,11 +30,19 @@ export const Login: React.FC = () => {
                 body: JSON.stringify({ username, password })
             });
 
-            const data = await res.json();
-
             if (!res.ok) {
-                throw new Error(data.error || "Login failed");
+                let errorMessage = "Login failed";
+                try {
+                    const data = await res.json();
+                    errorMessage = data.error || errorMessage;
+                } catch (e) {
+                    // Start of response might be text
+                    // errorMessage = await res.text(); // Optional: read text if needed, but might correspond to the Unexpected token T issue directly
+                }
+                throw new Error(errorMessage);
             }
+
+            const data = await res.json();
 
             login(data.token, data.user);
             navigate(from, { replace: true });

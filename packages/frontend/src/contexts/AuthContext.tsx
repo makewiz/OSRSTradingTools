@@ -5,6 +5,7 @@ interface User {
     username: string;
     email: string | null;
     created_at: number;
+    has_password?: boolean;
 }
 
 interface AuthContextType {
