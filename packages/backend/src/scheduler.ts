@@ -1,9 +1,17 @@
 import cron from "node-cron";
-import { getCombinedItems } from "./osrsClient";
+import { getCombinedItems, CombinedItem } from "./osrsClient";
 import { insertBuyPrice, insertSellPrice, insertVolume, pool } from "./database";
 import { logger } from "@osrstradingtools/shared";
 
 let isRunning = false;
+let latestItemsCache: CombinedItem[] = [];
+
+/**
+ * Get the latest cached items
+ */
+export function getLatestItems(): CombinedItem[] {
+  return latestItemsCache;
+}
 
 /**
  * Fetch and store current prices in the database
@@ -20,6 +28,7 @@ async function fetchAndStorePrices(): Promise<void> {
     logger.debug(`[Scheduler] Fetching prices...`);
 
     const items = await getCombinedItems();
+    latestItemsCache = items;
 
     // Store each item's price and volume data
     for (const item of items) {

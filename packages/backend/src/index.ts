@@ -5,7 +5,7 @@ import express from "express";
 import cors from "cors";
 import { getCombinedItems } from "./osrsClient";
 import { initializeDatabase, closeDatabase } from "./database";
-import { startPriceScheduler } from "./scheduler";
+import { startPriceScheduler, getLatestItems } from "./scheduler";
 import { startAggregationScheduler } from "./aggregator";
 import itemsRouter from "./routes/items";
 import authRouter from "./routes/auth";
@@ -55,8 +55,14 @@ app.get("/api/items", async (req, res, next) => {
   }
 }, async (_req, res) => {
   try {
-    const items = await getCombinedItems();
-    res.json({ items });
+    const cached = getLatestItems();
+    if (cached && cached.length > 0) {
+      res.json({ items: cached });
+    } else {
+      // Fallback if cache is empty (e.g. startup)
+      const items = await getCombinedItems();
+      res.json({ items });
+    }
   } catch (err) {
     // eslint-disable-next-line no-console
     console.error(err);
