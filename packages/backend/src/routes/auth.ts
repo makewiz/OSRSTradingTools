@@ -1,10 +1,10 @@
 import express from "express";
+import { z } from "zod";
 import {
     createUser,
     getUserByUsername,
     getUserByDiscordId,
-    linkDiscordUser,
-    User
+    linkDiscordUser
 } from "../database";
 import {
     hashPassword,
@@ -14,21 +14,40 @@ import {
 } from "../auth";
 import { exchangeCodeForToken, getDiscordUser } from "../oauth";
 import crypto from "crypto";
+import { authLimiter } from "../middleware/rateLimiter";
 
 const router = express.Router();
 
+// Validation Schemas
+const registerSchema = z.object({
+    username: z.string().min(3, "Username must be at least 3 characters long"),
+    password: z.string().min(6, "Password must be at least 6 characters long"),
+    email: z.string().email().optional().or(z.literal("")),
+});
+
+const loginSchema = z.object({
+    username: z.string().min(1, "Username is required"),
+    password: z.string().min(1, "Password is required"),
+});
+
+const discordLoginSchema = z.object({
+    code: z.string().min(1, "Authorization code is required"),
+});
+
 // Register
-router.post("/register", async (req, res) => {
+router.post("/register", authLimiter, async (req, res) => {
     try {
         if (process.env.DISABLE_REGISTRATION === "true") {
             return res.status(403).json({ error: "Registration is currently disabled" });
         }
 
-        const { username, password, email } = req.body;
-
-        if (!username || !password || !password.trim()) {
-            return res.status(400).json({ error: "Username and password are required" });
+        // Validate input
+        const result = registerSchema.safeParse(req.body);
+        if (!result.success) {
+            return res.status(400).json({ error: result.error.issues[0].message });
         }
+
+        const { username, password, email } = result.data;
 
         // Check if user already exists
         const existingUser = await getUserByUsername(username);
@@ -55,13 +74,15 @@ router.post("/register", async (req, res) => {
 });
 
 // Login
-router.post("/login", async (req, res) => {
+router.post("/login", authLimiter, async (req, res) => {
     try {
-        const { username, password } = req.body;
-
-        if (!username || !password || !password.trim()) {
-            return res.status(400).json({ error: "Username and password are required" });
+        // Validate input
+        const result = loginSchema.safeParse(req.body);
+        if (!result.success) {
+            return res.status(400).json({ error: result.error.issues[0].message });
         }
+
+        const { username, password } = result.data;
 
         const user = await getUserByUsername(username);
         if (!user) {
@@ -86,16 +107,18 @@ router.post("/login", async (req, res) => {
 });
 
 // Discord Login
-router.post("/discord/login", async (req, res) => {
-    const { code } = req.body;
-
-    if (!code) {
-        return res.status(400).json({ error: "Authorization code is required" });
+router.post("/discord/login", authLimiter, async (req, res) => {
+    // Validate input
+    const result = discordLoginSchema.safeParse(req.body);
+    if (!result.success) {
+        return res.status(400).json({ error: result.error.issues[0].message });
     }
+
+    const { code } = result.data;
 
     try {
         // 1. Exchange code for token
-        const tokenData = await exchangeCodeForToken(code as string);
+        const tokenData = await exchangeCodeForToken(code);
         const discordProfile = await getDiscordUser(tokenData.access_token);
 
         // 2. Check if user exists with this Discord ID
