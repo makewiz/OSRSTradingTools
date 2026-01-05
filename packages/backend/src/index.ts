@@ -6,7 +6,7 @@ import cors from "cors";
 import { getCombinedItems } from "./osrsClient";
 import { initializeDatabase, closeDatabase } from "./database";
 import { startPriceScheduler, getLatestItems } from "./scheduler";
-import { startAggregationScheduler } from "./aggregator";
+
 import itemsRouter from "./routes/items";
 import authRouter from "./routes/auth";
 import favoritesRouter from "./routes/favorites";
@@ -75,7 +75,7 @@ app.use("/api/items", itemsRouter);
 
 // Start schedulers
 startPriceScheduler();
-startAggregationScheduler();
+
 
 const server = app.listen(port, () => {
   // eslint-disable-next-line no-console
