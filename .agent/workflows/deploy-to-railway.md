@@ -194,7 +194,7 @@ Update your frontend code to use the environment variable for API calls. If you'
 1. Go to https://discord.com/developers/applications
 2. Select your application
 3. Go to "OAuth2" → "Redirects"
-4. Add your frontend URL: `https://your-frontend-domain.railway.app/auth/callback`
+4. Add your frontend URL: `https://your-frontend-domain.railway.app/auth/discord/callback
 5. Save changes
 
 ### 2. Update Backend Environment Variable
