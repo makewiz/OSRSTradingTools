@@ -26,7 +26,7 @@ Use this checklist to ensure all environment variables are configured:
 - [ ] `JWT_SECRET` (generate with: `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`)
 - [ ] `DISCORD_CLIENT_ID`
 - [ ] `DISCORD_CLIENT_SECRET`
-- [ ] `DISCORD_REDIRECT_URI` (your frontend URL + `/auth/callback`)
+- [ ] `DISCORD_REDIRECT_URI` (your frontend URL + `/auth/discord/callback`)
 - [ ] `PORT` (usually 4000)
 
 ### Discord Bot Service
