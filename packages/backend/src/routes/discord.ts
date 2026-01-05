@@ -25,27 +25,7 @@ router.get("/config", (req, res) => {
 // --- Protected Routes ---
 router.use(authenticateToken);
 
-/**
- * Link Discord Account
- * POST /api/discord/link
- */
-router.post("/link", async (req, res) => {
-    const userId = req.user!.id;
-    const { discordId } = req.body;
 
-    if (!discordId || typeof discordId !== "string") {
-        return res.status(400).json({ error: "Invalid Discord ID" });
-    }
-
-    try {
-        await linkDiscordUser(userId, discordId);
-        res.json({ success: true, discordId });
-    } catch (err) {
-        // eslint-disable-next-line no-console
-        console.error(err);
-        res.status(500).json({ error: "Failed to link Discord account" });
-    }
-});
 
 /**
  * Link Discord Account (OAuth)
@@ -64,7 +44,7 @@ router.post("/link-oauth", async (req, res) => {
         const discordProfile = await getDiscordUser(tokenData.access_token);
 
         await linkDiscordUser(userId, discordProfile.id);
-        res.json({ success: true, discordId: discordProfile.id });
+        res.json({ success: true });
     } catch (err: any) {
         // eslint-disable-next-line no-console
         console.error("Link OAuth Error:", err.message);
@@ -108,7 +88,6 @@ router.get("/settings", async (req, res) => {
 
         res.json({
             linked: true,
-            discordId: discordUser.discord_id,
             notificationsEnabled: discordUser.notifications_enabled,
             watches: enrichedWatches
         });

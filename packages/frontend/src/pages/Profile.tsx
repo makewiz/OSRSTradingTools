@@ -117,7 +117,7 @@ export const ChangePasswordForm: React.FC = () => {
 export const Profile: React.FC = () => {
     const { user, token, logout, login, fetchWithAuth } = useAuth();
     const navigate = useNavigate();
-    const [discordId, setDiscordId] = useState("");
+    // const [discordId, setDiscordId] = useState("");
     const [isLinked, setIsLinked] = useState(false);
     const [notificationsEnabled, setNotificationsEnabled] = useState(true);
     const [watches, setWatches] = useState<Watch[]>([]);
@@ -158,7 +158,7 @@ export const Profile: React.FC = () => {
             const data = await res.json();
             if (data.linked) {
                 setIsLinked(true);
-                setDiscordId(data.discordId);
+                // setDiscordId(data.discordId);
                 setNotificationsEnabled(!!data.notificationsEnabled);
                 setWatches(data.watches || []);
             } else {
@@ -287,7 +287,7 @@ export const Profile: React.FC = () => {
                     <div>
                         <div className="status-row" style={{ display: 'flex', alignItems: 'center', gap: '15px', marginBottom: '20px' }}>
                             <span style={{ color: '#4caf50', fontWeight: 'bold' }}>✓ Linked</span>
-                            <span>Discord ID: <code>{discordId}</code></span>
+                            {/* <span>Discord ID: <code>{discordId}</code></span> */}
                         </div>
 
                         <div className="form-group chain-notifications" style={{ marginBottom: '20px' }}>
