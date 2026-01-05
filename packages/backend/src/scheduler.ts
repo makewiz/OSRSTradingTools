@@ -182,6 +182,12 @@ export function startPriceScheduler(): void {
     });
   });
 
+  // Run retention policy immediately on startup
+  runRetentionPolicy().catch((err) => {
+    // eslint-disable-next-line no-console
+    console.error("[Scheduler] Initial retention policy failed:", err);
+  });
+
   // eslint-disable-next-line no-console
   console.log("[Scheduler] Price fetcher started (runs every minute)");
   // eslint-disable-next-line no-console
