@@ -74,12 +74,14 @@ JWT_SECRET=your-super-secret-jwt-key-change-this
 DISCORD_CLIENT_ID=your-discord-client-id
 DISCORD_CLIENT_SECRET=your-discord-client-secret
 DISCORD_REDIRECT_URI=https://your-frontend-domain.railway.app/auth/discord/callback
+BOT_API_KEY=your-secure-random-api-key
 PORT=4000
 ```
 
 **Important Notes:**
 - `DATABASE_URL` references the PostgreSQL service automatically
 - Generate a strong random `JWT_SECRET` (use: `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`)
+- Generate a strong random `BOT_API_KEY` and keep it safe (you'll need it for the bot service)
 - Get Discord credentials from https://discord.com/developers/applications
 - Update `DISCORD_REDIRECT_URI` once you have your frontend URL
 
@@ -114,10 +116,16 @@ In the service's "Variables" tab, add:
 DATABASE_URL=${{Postgres.DATABASE_URL}}
 DISCORD_BOT_TOKEN=your-discord-bot-token
 DISCORD_CLIENT_ID=your-discord-client-id
+BOT_API_KEY=your-secure-random-api-key
+BACKEND_URL=http://${{Backend.RAILWAY_PRIVATE_DOMAIN}}:${{Backend.PORT}}
 ```
 
 **Notes:**
 - Get `DISCORD_BOT_TOKEN` from Discord Developer Portal
+- `BOT_API_KEY` must match the one set in the Backend service
+- `BACKEND_URL`: Use the private network URL to avoid egress fees.
+  - Format: `http://<service-name>.railway.internal:<port>` (e.g., `http://backend.railway.internal:4000` if your service is named "backend")
+  - You can check your service name in Railway settings.
 - The bot service will run as a background process
 
 ### 4. Deploy
@@ -350,6 +358,7 @@ JWT_SECRET=<random-secret>
 DISCORD_CLIENT_ID=<discord-app-client-id>
 DISCORD_CLIENT_SECRET=<discord-app-client-secret>
 DISCORD_REDIRECT_URI=https://<frontend-domain>/auth/callback
+BOT_API_KEY=<random-api-key>
 PORT=4000
 ```
 
@@ -358,6 +367,8 @@ PORT=4000
 DATABASE_URL=${{Postgres.DATABASE_URL}}
 DISCORD_BOT_TOKEN=<discord-bot-token>
 DISCORD_CLIENT_ID=<discord-app-client-id>
+BOT_API_KEY=<random-api-key>
+BACKEND_URL=http://<backend-service-name>.railway.internal:4000
 ```
 
 ### Frontend
