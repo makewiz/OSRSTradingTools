@@ -63,6 +63,72 @@ export const ItemDetail: React.FC = () => {
   const [watches, setWatches] = useState<number[]>([]);
   const [discordLinked, setDiscordLinked] = useState(false);
 
+  // Favorites logic
+  const [favorites, setFavorites] = useState<number[]>([]);
+
+  useEffect(() => {
+    const loadFavorites = async () => {
+      if (user && token) {
+        // Fetch from API
+        try {
+          const res = await fetchWithAuth(`${API_BASE_URL}/api/favorites`);
+          if (res.ok) {
+            const data = await res.json();
+            setFavorites(data.favorites);
+          }
+        } catch (err) {
+          // console.error("Failed to fetch favorites", err);
+        }
+      } else {
+        // Load from localStorage
+        const saved = localStorage.getItem("favorites");
+        if (saved) {
+          setFavorites(JSON.parse(saved));
+        }
+      }
+    };
+    loadFavorites();
+  }, [user, token]);
+
+  // Sync favorites to localStorage only if NOT logged in
+  useEffect(() => {
+    if (!user) {
+      localStorage.setItem("favorites", JSON.stringify(favorites));
+    }
+  }, [favorites, user]);
+
+  const toggleFavorite = async () => {
+    if (!item) return;
+
+    const isFav = favorites.includes(item.id);
+
+    // Optimistic update
+    const newFavs = isFav
+      ? favorites.filter((id) => id !== item.id)
+      : [...favorites, item.id];
+    setFavorites(newFavs);
+
+    if (user && token) {
+      try {
+        const method = isFav ? "DELETE" : "POST";
+        const url = isFav ? `${API_BASE_URL}/api/favorites/${item.id}` : `${API_BASE_URL}/api/favorites`;
+        const body = isFav ? undefined : JSON.stringify({ itemId: item.id });
+
+        await fetchWithAuth(url, {
+          method,
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body
+        });
+      } catch (err) {
+        // console.error("Failed to sync favorite", err);
+      }
+    } else {
+      localStorage.setItem("favorites", JSON.stringify(newFavs));
+    }
+  };
+
   // Load watches
   useEffect(() => {
     const loadWatches = async () => {
@@ -204,6 +270,7 @@ export const ItemDetail: React.FC = () => {
   }
 
   const isWatched = watches.includes(item.id);
+  const isFavorite = favorites.includes(item.id);
 
   return (
     <main className="app-main">
@@ -221,6 +288,14 @@ export const ItemDetail: React.FC = () => {
           <div className="item-header-info">
             <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
               <h2>{item.name}</h2>
+              <button
+                className="fav-button"
+                onClick={toggleFavorite}
+                style={{ fontSize: '1.5rem' }}
+                title={isFavorite ? "Remove from favorites" : "Add to favorites"}
+              >
+                {isFavorite ? "♥" : "♡"}
+              </button>
               {discordLinked ? (
                 <button
                   className="watch-button"
