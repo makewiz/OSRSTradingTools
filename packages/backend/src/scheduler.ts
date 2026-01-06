@@ -1,6 +1,6 @@
 import cron from "node-cron";
 import { getCombinedItems, CombinedItem } from "./osrsClient";
-import { insertBuyPrice, insertSellPrice, insertVolume, pool } from "./database";
+import { insertItemHistory, pool } from "./database";
 import { logger } from "@osrstradingtools/shared";
 
 let isRunning = false;
@@ -14,7 +14,7 @@ export function getLatestItems(): CombinedItem[] {
 }
 
 /**
- * Fetch and store current prices in the database
+ * Fetch and store current prices in the database (5m resolution)
  */
 async function fetchAndStorePrices(): Promise<void> {
   if (isRunning) {
@@ -30,37 +30,32 @@ async function fetchAndStorePrices(): Promise<void> {
     const items = await getCombinedItems();
     latestItemsCache = items;
 
-    // Store each item's price and volume data
+    // Store each item's price and volume data into the 5m history table
     for (const item of items) {
-      const promises = [];
-
-      // 1. High Fidelity Buy Price
-      if (item.lastBuyTime && item.buyPrice !== null) {
-        promises.push(insertBuyPrice(item.id, item.lastBuyTime, item.buyPrice));
-      }
-
-      // 2. High Fidelity Sell Price
-      if (item.lastSellTime && item.sellPrice !== null) {
-        promises.push(insertSellPrice(item.id, item.lastSellTime, item.sellPrice));
-      }
-
-      // 3. High Fidelity Volume (using the 5m timestamp)
       if (item.fiveMinTimestamp) {
-        // Only insert if we have actual volume data
-        if (item.lastBuyVolume !== null || item.lastSellVolume !== null) {
-          promises.push(insertVolume(
+        // We insert into the 5m table.
+        // We use avgHighPrice/avgLowPrice if available.
+        // If not available (null), we might still want to store volume if it exists.
+        if (
+          item.avgHighPrice !== null ||
+          item.avgLowPrice !== null ||
+          item.highPriceVolume !== null ||
+          item.lowPriceVolume !== null
+        ) {
+          await insertItemHistory(
+            "item_history_5m",
             item.id,
             item.fiveMinTimestamp,
-            item.lastBuyVolume,
-            item.lastSellVolume
-          ));
+            item.avgHighPrice,
+            item.avgLowPrice,
+            item.highPriceVolume,
+            item.lowPriceVolume
+          );
         }
       }
-
-      await Promise.all(promises);
     }
 
-    logger.debug(`[Scheduler] Stored ${items.length} item prices successfully`);
+    logger.debug(`[Scheduler] Stored ${items.length} item prices successfully (5m resolution)`);
   } catch (error) {
     logger.error("[Scheduler] Error fetching/storing prices:", error);
   } finally {
@@ -70,102 +65,91 @@ async function fetchAndStorePrices(): Promise<void> {
 
 /**
  * Run data retention and downsampling policies
- * 1. Downsample data > 24h to hourly resolution
- * 2. Delete data > 1 year
+ * Downsample: 5m -> 1h -> 6h -> 24h
  */
 export async function runRetentionPolicy(): Promise<void> {
   logger.info("[Scheduler] Running retention policy...");
   const client = await pool.connect();
   try {
     const now = Math.floor(Date.now() / 1000);
-    const oneDayAgo = now - 24 * 60 * 60;
-    const sevenDaysAgo = now - 7 * 24 * 60 * 60;
-    const thirtyDaysAgo = now - 30 * 24 * 60 * 60;
-    const oneYearAgo = now - 365 * 24 * 60 * 60;
+    const oneHour = 3600;
+    const sixHours = 6 * 3600;
+    const twentyFourHours = 24 * 3600;
 
-    // Helper: Downsample prices (keep max timestamp per interval)
-    // OPTIMIZED: Uses DELETE ... USING for better performance on large sets
-    const processPriceRetention = async (table: string, endTs: number, startTs: number, interval: number) => {
-      await client.query(`
-        DELETE FROM ${table} p
-        USING (
-          SELECT item_id, MAX(timestamp) AS keep_ts
-          FROM ${table}
-          WHERE timestamp < $1 AND timestamp >= $2
-          GROUP BY item_id, FLOOR(timestamp / $3)
-        ) k
-        WHERE p.item_id = k.item_id
-        AND FLOOR(p.timestamp / $3) = FLOOR(k.keep_ts / $3)
-        AND p.timestamp <> k.keep_ts
-      `, [endTs, startTs, interval]);
-    };
+    const oneDayAgo = now - 24 * 3600;
+    const sevenDaysAgo = now - 7 * 24 * 3600;
+    const thirtyDaysAgo = now - 30 * 24 * 3600;
+    const oneYearAgo = now - 365 * 24 * 3600;
 
-    // Helper: Downsample volumes (sum volumes per interval)
-    // OPTIMIZED: Only updates rows if values actually changed
-    const processVolumeRetention = async (endTs: number, startTs: number, interval: number) => {
-      // 1. Upsert aggregated volumes
+    /**
+     * Helper to downsample from Source Table -> Target Table
+     * Aggregation:
+     * - Prices: Average of non-null values
+     * - Volumes: Sum
+     */
+    const downsample = async (
+      sourceTable: string,
+      targetTable: string,
+      targetResolution: number,
+      startTime: number,
+      endTime: number
+    ) => {
+      // Upsert aggregated data
       await client.query(`
-        INSERT INTO item_volumes (item_id, timestamp, buy_volume, sell_volume)
+        INSERT INTO ${targetTable} (item_id, timestamp, avg_high_price, avg_low_price, high_price_volume, low_price_volume)
         SELECT 
-          item_id, 
-          CAST(FLOOR(timestamp / $3) * $3 AS BIGINT) as bucket_ts, 
-          SUM(buy_volume), 
-          SUM(sell_volume)
-        FROM item_volumes
-        WHERE timestamp < $1 AND timestamp >= $2
+          item_id,
+          CAST(FLOOR(timestamp / $3) * $3 AS BIGINT) as bucket_ts,
+          CAST(AVG(avg_high_price) AS INTEGER) as avg_high,
+          CAST(AVG(avg_low_price) AS INTEGER) as avg_low,
+          SUM(high_price_volume) as sum_high_vol,
+          SUM(low_price_volume) as sum_low_vol
+        FROM ${sourceTable}
+        WHERE timestamp >= $1 AND timestamp < $2
         GROUP BY item_id, bucket_ts
         ON CONFLICT (item_id, timestamp) DO UPDATE SET
-          buy_volume = EXCLUDED.buy_volume,
-          sell_volume = EXCLUDED.sell_volume
-        WHERE item_volumes.buy_volume IS DISTINCT FROM EXCLUDED.buy_volume
-           OR item_volumes.sell_volume IS DISTINCT FROM EXCLUDED.sell_volume
-      `, [endTs, startTs, interval]);
-
-      // 2. Delete non-aligned timestamps in this range
-      await client.query(`
-        DELETE FROM item_volumes 
-        WHERE timestamp < $1 AND timestamp >= $2
-        AND timestamp % $3 != 0
-      `, [endTs, startTs, interval]);
+          avg_high_price = EXCLUDED.avg_high_price,
+          avg_low_price = EXCLUDED.avg_low_price,
+          high_price_volume = EXCLUDED.high_price_volume,
+          low_price_volume = EXCLUDED.low_price_volume
+      `, [startTime, endTime, targetResolution]);
     };
 
-    // 1. Delete Data > 1 Year (Hard delete, no downsampling)
-    await client.query("DELETE FROM item_buy_prices WHERE timestamp < $1", [oneYearAgo]);
-    await client.query("DELETE FROM item_sell_prices WHERE timestamp < $1", [oneYearAgo]);
-    await client.query("DELETE FROM item_volumes WHERE timestamp < $1", [oneYearAgo]);
+    /**
+     * Helper to clean up old data from a table
+     */
+    const cleanup = async (table: string, olderThan: number) => {
+      await client.query(`DELETE FROM ${table} WHERE timestamp < $1`, [olderThan]);
+    };
 
-    // Optimization: Define a "processing window" for historical tiers.
-    // Instead of scanning the full historical range every hour (which re-processes static data),
-    // we only scan the "entry" zone where data moves from one tier to another.
-    // 2 days (172800s) is a safe overlap to catch any data transition.
+    // Optimization: Overlap windows to ensure boundary conditions are handled.
+    // We process "finished" buckets.
+    // E.g. for 1h resolution, we process data older than 1h (so the bucket is potentially complete).
 
-    const TWO_DAYS = 2 * 24 * 60 * 60;
+    // 1. Downsample 5m -> 1h
+    // Range: [2 hours ago, 1 hour ago) - process the hour that just finished (+ overlap)
+    // Actually, let's process the last 24h to be safe and ensure updates? 
+    // Or just process "since last run"? Scheduler runs hourly.
+    // Let's re-process the last 4 hours to be safe against downtime/delays.
+    await downsample('item_history_5m', 'item_history_1h', oneHour, now - 4 * oneHour, now);
 
-    // 2. Tier: 30 days to 1 year -> 24h resolution (86400s)
-    // Scan window: [30 days ago - 2 days, 30 days ago)
-    const tier2Start = thirtyDaysAgo - TWO_DAYS;
-    await processPriceRetention('item_buy_prices', thirtyDaysAgo, tier2Start, 86400);
-    await processPriceRetention('item_sell_prices', thirtyDaysAgo, tier2Start, 86400);
-    await processVolumeRetention(thirtyDaysAgo, tier2Start, 86400);
+    // 2. Downsample 1h -> 6h
+    // Process last 24h
+    await downsample('item_history_1h', 'item_history_6h', sixHours, now - 24 * oneHour, now);
 
-    // 3. Tier: 7 days to 30 days -> 6h resolution (21600s)
-    // Scan window: [7 days ago - 2 days, 7 days ago)
-    const tier3Start = sevenDaysAgo - TWO_DAYS;
-    await processPriceRetention('item_buy_prices', sevenDaysAgo, tier3Start, 21600);
-    await processPriceRetention('item_sell_prices', sevenDaysAgo, tier3Start, 21600);
-    await processVolumeRetention(sevenDaysAgo, tier3Start, 21600);
+    // 3. Downsample 6h -> 24h
+    // Process last 3 days
+    await downsample('item_history_6h', 'item_history_24h', twentyFourHours, now - 3 * 24 * oneHour, now);
 
-    // 4. Tier: 24 hours to 7 days -> 1h resolution (3600s)
-    // Scan window: [1 day ago - 2 days, 1 day ago)
-    const tier4Start = oneDayAgo - TWO_DAYS;
-    await processPriceRetention('item_buy_prices', oneDayAgo, tier4Start, 3600);
-    await processPriceRetention('item_sell_prices', oneDayAgo, tier4Start, 3600);
-    await processVolumeRetention(oneDayAgo, tier4Start, 3600);
-
-    // 5. Tier: < 24 hours -> 5m resolution (300s)
-    // This is the active tier, keep scanning full last 24h to ensure consistency.
-    await processPriceRetention('item_buy_prices', now, oneDayAgo, 300);
-    await processPriceRetention('item_sell_prices', now, oneDayAgo, 300);
+    // 4. Cleanup old data
+    // 5m: keep 24h
+    await cleanup('item_history_5m', oneDayAgo);
+    // 1h: keep 7 days
+    await cleanup('item_history_1h', sevenDaysAgo);
+    // 6h: keep 30 days
+    await cleanup('item_history_6h', thirtyDaysAgo);
+    // 24h: keep 1 year
+    await cleanup('item_history_24h', oneYearAgo);
 
     logger.info("[Scheduler] Retention policy completed.");
   } catch (err) {

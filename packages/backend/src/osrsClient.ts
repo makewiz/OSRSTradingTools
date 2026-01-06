@@ -60,6 +60,10 @@ export interface CombinedItem {
   lastBuyVolume: number | null; // volume at low price (5m)
   lastSellVolume: number | null; // volume at high price (5m)
   fiveMinTimestamp: number | null; // Timestamp from the 5m API Response
+  avgHighPrice: number | null; // 5m average high price
+  avgLowPrice: number | null; // 5m average low price
+  highPriceVolume: number | null; // 5m high price volume
+  lowPriceVolume: number | null; // 5m low price volume
   marginVolume: number | null; // margin * volume (Gross)
   limit: number | null;
   tax: number | null; // Tax per item
@@ -198,6 +202,10 @@ export async function getCombinedItems(): Promise<CombinedItem[]> {
       lastBuyVolume: fiveMinEntry?.lowPriceVolume ?? null,
       lastSellVolume: fiveMinEntry?.highPriceVolume ?? null,
       fiveMinTimestamp: fiveMin.timestamp ?? null,
+      avgHighPrice: fiveMinEntry?.avgHighPrice ?? null,
+      avgLowPrice: fiveMinEntry?.avgLowPrice ?? null,
+      highPriceVolume: fiveMinEntry?.highPriceVolume ?? null,
+      lowPriceVolume: fiveMinEntry?.lowPriceVolume ?? null,
       marginVolume,
       limit: m.limit ?? null,
       tax,

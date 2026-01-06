@@ -55,51 +55,6 @@ export interface NotificationSetting {
 export async function initializeDatabase(): Promise<void> {
   const client = await pool.connect();
   try {
-    // Item buy prices table
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS item_buy_prices (
-        item_id INTEGER NOT NULL,
-        timestamp BIGINT NOT NULL,
-        price INTEGER NOT NULL,
-        PRIMARY KEY (item_id, timestamp)
-      )
-    `);
-
-    await client.query(`
-      CREATE INDEX IF NOT EXISTS idx_item_buy_prices_time 
-      ON item_buy_prices(item_id, timestamp DESC)
-    `);
-
-    // Item sell prices table
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS item_sell_prices (
-        item_id INTEGER NOT NULL,
-        timestamp BIGINT NOT NULL,
-        price INTEGER NOT NULL,
-        PRIMARY KEY (item_id, timestamp)
-      )
-    `);
-
-    await client.query(`
-      CREATE INDEX IF NOT EXISTS idx_item_sell_prices_time 
-      ON item_sell_prices(item_id, timestamp DESC)
-    `);
-
-    // Item volumes table (5m raw or 1h aggregated)
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS item_volumes (
-        item_id INTEGER NOT NULL,
-        timestamp BIGINT NOT NULL,
-        buy_volume INTEGER,
-        sell_volume INTEGER,
-        PRIMARY KEY (item_id, timestamp)
-      )
-    `);
-
-    await client.query(`
-      CREATE INDEX IF NOT EXISTS idx_item_volumes_time 
-      ON item_volumes(item_id, timestamp DESC)
-    `);
 
     // Users table
     await client.query(`
@@ -176,44 +131,98 @@ export async function initializeDatabase(): Promise<void> {
       ADD COLUMN IF NOT EXISTS last_notified_1h_at BIGINT,
       ADD COLUMN IF NOT EXISTS cooldown_seconds INTEGER DEFAULT 3600
     `);
+
+    // --- NEW HISTORY TABLES ---
+
+    // 5 Minute History (Base resolution)
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS item_history_5m (
+        item_id INTEGER NOT NULL,
+        timestamp BIGINT NOT NULL,
+        avg_high_price INTEGER,
+        avg_low_price INTEGER,
+        high_price_volume INTEGER,
+        low_price_volume INTEGER,
+        PRIMARY KEY (item_id, timestamp)
+      )
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_item_history_5m_time ON item_history_5m(item_id, timestamp DESC)`);
+
+    // 1 Hour History
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS item_history_1h (
+        item_id INTEGER NOT NULL,
+        timestamp BIGINT NOT NULL,
+        avg_high_price INTEGER,
+        avg_low_price INTEGER,
+        high_price_volume INTEGER,
+        low_price_volume INTEGER,
+        PRIMARY KEY (item_id, timestamp)
+      )
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_item_history_1h_time ON item_history_1h(item_id, timestamp DESC)`);
+
+    // 6 Hour History
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS item_history_6h (
+        item_id INTEGER NOT NULL,
+        timestamp BIGINT NOT NULL,
+        avg_high_price INTEGER,
+        avg_low_price INTEGER,
+        high_price_volume INTEGER,
+        low_price_volume INTEGER,
+        PRIMARY KEY (item_id, timestamp)
+      )
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_item_history_6h_time ON item_history_6h(item_id, timestamp DESC)`);
+
+    // 24 Hour History
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS item_history_24h (
+        item_id INTEGER NOT NULL,
+        timestamp BIGINT NOT NULL,
+        avg_high_price INTEGER,
+        avg_low_price INTEGER,
+        high_price_volume INTEGER,
+        low_price_volume INTEGER,
+        PRIMARY KEY (item_id, timestamp)
+      )
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_item_history_24h_time ON item_history_24h(item_id, timestamp DESC)`);
+
   } finally {
     client.release();
   }
 }
 
-export async function insertBuyPrice(itemId: number, timestamp: number, price: number): Promise<void> {
-  const query = `
-    INSERT INTO item_buy_prices (item_id, timestamp, price)
-    VALUES ($1, $2, $3)
-    ON CONFLICT (item_id, timestamp) DO NOTHING
-  `;
-  await pool.query(query, [itemId, timestamp, price]);
-}
-
-export async function insertSellPrice(itemId: number, timestamp: number, price: number): Promise<void> {
-  const query = `
-    INSERT INTO item_sell_prices (item_id, timestamp, price)
-    VALUES ($1, $2, $3)
-    ON CONFLICT (item_id, timestamp) DO NOTHING
-  `;
-  await pool.query(query, [itemId, timestamp, price]);
-}
-
-export async function insertVolume(
+export async function insertItemHistory(
+  table: string,
   itemId: number,
   timestamp: number,
-  buyVolume: number | null,
-  sellVolume: number | null
+  avgHighPrice: number | null,
+  avgLowPrice: number | null,
+  highPriceVolume: number | null,
+  lowPriceVolume: number | null
 ): Promise<void> {
+  // Validate table name to prevent SQL injection (though this is internal use)
+  const validTables = ['item_history_5m', 'item_history_1h', 'item_history_6h', 'item_history_24h'];
+  if (!validTables.includes(table)) {
+    throw new Error(`Invalid table name: ${table}`);
+  }
+
   const query = `
-    INSERT INTO item_volumes (item_id, timestamp, buy_volume, sell_volume)
-    VALUES ($1, $2, $3, $4)
+    INSERT INTO ${table} (item_id, timestamp, avg_high_price, avg_low_price, high_price_volume, low_price_volume)
+    VALUES ($1, $2, $3, $4, $5, $6)
     ON CONFLICT (item_id, timestamp) DO UPDATE SET
-        buy_volume = EXCLUDED.buy_volume,
-        sell_volume = EXCLUDED.sell_volume
-  `;
-  await pool.query(query, [itemId, timestamp, buyVolume, sellVolume]);
+      avg_high_price = COALESCE(EXCLUDED.avg_high_price, item_history_5m.avg_high_price),
+      avg_low_price = COALESCE(EXCLUDED.avg_low_price, item_history_5m.avg_low_price),
+      high_price_volume = COALESCE(EXCLUDED.high_price_volume, item_history_5m.high_price_volume),
+      low_price_volume = COALESCE(EXCLUDED.low_price_volume, item_history_5m.low_price_volume)
+  `.replace(/item_history_5m/g, table); // Dynamic table name in update clause
+
+  await pool.query(query, [itemId, timestamp, avgHighPrice, avgLowPrice, highPriceVolume, lowPriceVolume]);
 }
+
 
 export async function getPriceHistory(
   itemId: number,
@@ -224,51 +233,74 @@ export async function getPriceHistory(
   sell: { timestamp: number; price: number }[];
   volume: { timestamp: number; buy_volume: number | null; sell_volume: number | null }[];
 }> {
-  const buyQuery = `
-    SELECT timestamp, price FROM item_buy_prices
-    WHERE item_id = $1 AND timestamp >= $2 AND timestamp <= $3
-    ORDER BY timestamp ASC
-  `;
-  const sellQuery = `
-    SELECT timestamp, price FROM item_sell_prices
-    WHERE item_id = $1 AND timestamp >= $2 AND timestamp <= $3
-    ORDER BY timestamp ASC
-  `;
-  const volumeQuery = `
-    SELECT timestamp, buy_volume, sell_volume FROM item_volumes
+  const duration = endTime - startTime;
+
+  // Determine table based on duration
+  // < 24h -> 5m
+  // < 7d -> 1h
+  // < 30d -> 6h
+  // > 30d -> 24h
+  let table = 'item_history_5m';
+  if (duration > 30 * 24 * 3600) {
+    table = 'item_history_24h';
+  } else if (duration > 7 * 24 * 3600) {
+    table = 'item_history_6h';
+  } else if (duration > 24 * 3600) {
+    table = 'item_history_1h'; // corrected to 1h
+  }
+
+  // If fetching very recent data (e.g. last hour), default to 5m
+  if (duration < 24 * 3600) {
+    table = 'item_history_5m';
+  }
+
+  const query = `
+    SELECT timestamp, avg_high_price, avg_low_price, high_price_volume, low_price_volume
+    FROM ${table}
     WHERE item_id = $1 AND timestamp >= $2 AND timestamp <= $3
     ORDER BY timestamp ASC
   `;
 
-  const [buyRes, sellRes, volRes] = await Promise.all([
-    pool.query(buyQuery, [itemId, startTime, endTime]),
-    pool.query(sellQuery, [itemId, startTime, endTime]),
-    pool.query(volumeQuery, [itemId, startTime, endTime])
-  ]);
+  const result = await pool.query(query, [itemId, startTime, endTime]);
 
-  return {
-    buy: buyRes.rows.map(r => ({ timestamp: parseInt(r.timestamp), price: r.price })),
-    sell: sellRes.rows.map(r => ({ timestamp: parseInt(r.timestamp), price: r.price })),
-    volume: volRes.rows.map(r => ({
-      timestamp: parseInt(r.timestamp),
-      buy_volume: r.buy_volume,
-      sell_volume: r.sell_volume
-    }))
-  };
+  const buy = [];
+  const sell = [];
+  const volume = [];
+
+  for (const row of result.rows) {
+    const ts = parseInt(row.timestamp);
+    if (row.avg_low_price !== null) {
+      buy.push({ timestamp: ts, price: row.avg_low_price });
+    }
+    if (row.avg_high_price !== null) {
+      sell.push({ timestamp: ts, price: row.avg_high_price });
+    }
+    if (row.high_price_volume !== null || row.low_price_volume !== null) {
+      volume.push({
+        timestamp: ts,
+        buy_volume: row.low_price_volume,
+        sell_volume: row.high_price_volume
+      });
+    }
+  }
+
+  return { buy, sell, volume };
 }
 
 export async function getLatestPrice(itemId: number): Promise<{ buyPrice: number | null; sellPrice: number | null }> {
-  const buyQuery = `SELECT price FROM item_buy_prices WHERE item_id = $1 ORDER BY timestamp DESC LIMIT 1`;
-  const sellQuery = `SELECT price FROM item_sell_prices WHERE item_id = $1 ORDER BY timestamp DESC LIMIT 1`;
+  // Use 5m history table for latest known price
+  const query = `
+    SELECT avg_high_price, avg_low_price 
+    FROM item_history_5m 
+    WHERE item_id = $1 
+    ORDER BY timestamp DESC LIMIT 1
+  `;
 
-  const [buyRes, sellRes] = await Promise.all([
-    pool.query(buyQuery, [itemId]),
-    pool.query(sellQuery, [itemId])
-  ]);
+  const result = await pool.query(query, [itemId]);
 
   return {
-    buyPrice: buyRes.rows[0]?.price ?? null,
-    sellPrice: sellRes.rows[0]?.price ?? null
+    buyPrice: result.rows[0]?.avg_low_price ?? null,
+    sellPrice: result.rows[0]?.avg_high_price ?? null
   };
 }
 
@@ -291,24 +323,25 @@ async function calculatePriceChange(
   const now = Math.floor(Date.now() / 1000);
   const timeAgo = now - lookbackSeconds;
 
-  const buyQuery = `
-    SELECT price FROM item_buy_prices 
-    WHERE item_id = $1 AND timestamp <= $2
-    ORDER BY timestamp DESC LIMIT 1
-  `;
-  const sellQuery = `
-    SELECT price FROM item_sell_prices 
+  // Choose table based on lookback
+  // For 1h/24h lookbacks, 5m or 1h table is sufficient
+  let table = 'item_history_5m';
+  if (lookbackSeconds > 24 * 3600) {
+    table = 'item_history_1h';
+  }
+
+  // We want the price AT or BEFORE timeAgo
+  const query = `
+    SELECT avg_high_price, avg_low_price 
+    FROM ${table}
     WHERE item_id = $1 AND timestamp <= $2
     ORDER BY timestamp DESC LIMIT 1
   `;
 
-  const [buyRes, sellRes] = await Promise.all([
-    pool.query(buyQuery, [itemId, timeAgo]),
-    pool.query(sellQuery, [itemId, timeAgo])
-  ]);
+  const result = await pool.query(query, [itemId, timeAgo]);
 
-  const oldBuyPrice = buyRes.rows[0]?.price;
-  const oldSellPrice = sellRes.rows[0]?.price;
+  const oldBuyPrice = result.rows[0]?.avg_low_price;
+  const oldSellPrice = result.rows[0]?.avg_high_price;
 
   let buyChange: number | null = null;
   if (currentBuyPrice !== null && oldBuyPrice) {
