@@ -54,7 +54,7 @@ export const Login: React.FC = () => {
     };
 
     const handleDiscordLogin = () => {
-        fetch("/api/discord/config")
+        fetch(`${API_BASE_URL}/api/discord/config`)
             .then(res => res.json())
             .then(data => {
                 const clientId = data.clientId;
