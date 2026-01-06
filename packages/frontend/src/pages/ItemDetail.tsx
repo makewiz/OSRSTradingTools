@@ -58,7 +58,7 @@ export const ItemDetail: React.FC = () => {
   const [priceHistory, setPriceHistory] = useState<any>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [timeRange, setTimeRange] = useState<"24h" | "7d" | "30d">("7d");
+  const [timeRange, setTimeRange] = useState<"24h" | "7d" | "30d" | "1y">("24h");
 
   // Watch logic
   const [watches, setWatches] = useState<number[]>([]);
@@ -191,8 +191,9 @@ export const ItemDetail: React.FC = () => {
           "24h": 24 * 60 * 60,
           "7d": 7 * 24 * 60 * 60,
           "30d": 30 * 24 * 60 * 60,
+          "1y": 365 * 24 * 60 * 60,
         };
-        const rangeSeconds = timeRanges[timeRange] || timeRanges["7d"];
+        const rangeSeconds = timeRanges[timeRange] || timeRanges["24h"];
         const startTime = now - rangeSeconds;
 
         const url = `${API_BASE_URL}/api/items/${id}/history?startTime=${startTime}&endTime=${now}`;
@@ -475,10 +476,29 @@ export const ItemDetail: React.FC = () => {
               >
                 30d
               </button>
+              <button
+                className={`time-range-btn ${timeRange === "1y" ? "active" : ""}`}
+                onClick={() => setTimeRange("1y")}
+              >
+                1y
+              </button>
             </div>
           </div>
+          <div className="chart-container" style={{ marginBottom: '20px' }}>
+            <h3 style={{ marginTop: 0, marginBottom: '15px', color: '#d0d7e2', fontSize: '1.2rem' }}>Price Trends</h3>
+            <PriceChart
+              data={priceHistory}
+              isHighFidelity={!(Array.isArray(priceHistory) && priceHistory.length > 0 && 'buyPrice' in priceHistory[0])}
+              graphType="price"
+            />
+          </div>
           <div className="chart-container">
-            <PriceChart data={priceHistory} isHighFidelity={!(Array.isArray(priceHistory) && priceHistory.length > 0 && 'buyPrice' in priceHistory[0])} />
+            <h3 style={{ marginTop: 0, marginBottom: '15px', color: '#d0d7e2', fontSize: '1.2rem' }}>Volume Trends</h3>
+            <PriceChart
+              data={priceHistory}
+              isHighFidelity={!(Array.isArray(priceHistory) && priceHistory.length > 0 && 'buyPrice' in priceHistory[0])}
+              graphType="volume"
+            />
           </div>
         </div>
       </div>

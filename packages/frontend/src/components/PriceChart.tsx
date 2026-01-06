@@ -27,9 +27,10 @@ interface HighFidelityData {
 interface PriceChartProps {
   data: PriceDataPoint[] | HighFidelityData;
   isHighFidelity?: boolean;
+  graphType?: 'price' | 'volume';
 }
 
-export const PriceChart: React.FC<PriceChartProps> = ({ data, isHighFidelity }) => {
+export const PriceChart: React.FC<PriceChartProps> = ({ data, isHighFidelity, graphType = 'price' }) => {
   let chartData: any[] = [];
 
   if (isHighFidelity && data) {
@@ -75,8 +76,8 @@ export const PriceChart: React.FC<PriceChartProps> = ({ data, isHighFidelity }) 
   }
 
   return (
-    <ResponsiveContainer width="100%" height={400}>
-      <ComposedChart data={chartData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+    <ResponsiveContainer width="100%" height={300}>
+      <ComposedChart data={chartData} syncId="priceChart" margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
         <CartesianGrid strokeDasharray="3 3" stroke="rgba(255, 255, 255, 0.1)" />
         <XAxis
           dataKey="time"
@@ -84,21 +85,20 @@ export const PriceChart: React.FC<PriceChartProps> = ({ data, isHighFidelity }) 
           tick={{ fill: "#d0d7e2", fontSize: 12 }}
           angle={-45}
           textAnchor="end"
-          height={80}
+          height={60}
+          minTickGap={30}
         />
         <YAxis
           yAxisId="left"
           stroke="#d0d7e2"
           tick={{ fill: "#d0d7e2", fontSize: 12 }}
-          tickFormatter={(value) => value.toLocaleString()}
+          tickFormatter={(value) =>
+            graphType === 'volume'
+              ? (value >= 1000000 ? `${(value / 1000000).toFixed(1)}M` : value >= 1000 ? `${(value / 1000).toFixed(1)}k` : value)
+              : value.toLocaleString()
+          }
           domain={['auto', 'auto']}
-        />
-        <YAxis
-          yAxisId="right"
-          orientation="right"
-          stroke="#8884d8"
-          tick={{ fill: "#8884d8", fontSize: 12 }}
-          tickFormatter={(value) => value.toLocaleString()}
+          orientation="left"
         />
         <Tooltip
           contentStyle={{
@@ -109,41 +109,42 @@ export const PriceChart: React.FC<PriceChartProps> = ({ data, isHighFidelity }) 
           }}
           formatter={(value: any) => (typeof value === 'number' ? value.toLocaleString() : value) ?? "N/A"}
         />
-        <Legend
-          wrapperStyle={{ color: "#d0d7e2" }}
-          iconType="rect"
-        />
+        <Legend verticalAlign="top" height={36} />
 
-        {/* Market Prices */}
-        <Line
-          yAxisId="left"
-          type="monotone"
-          dataKey="buyPrice"
-          stroke="#f87171"
-          strokeWidth={2}
-          dot={{ r: 2 }}
-          name="Buy Price"
-          connectNulls
-        />
-        <Line
-          yAxisId="left"
-          type="monotone"
-          dataKey="sellPrice"
-          stroke="#4ade80"
-          strokeWidth={2}
-          dot={{ r: 2 }}
-          name="Sell Price"
-          connectNulls
-        />
-
-        {/* Volume Bars */}
-        {isHighFidelity ? (
+        {graphType === 'price' && (
           <>
-            <Bar yAxisId="right" dataKey="buyVolume" name="Buy Volume" fill="#f87171" opacity={0.3} barSize={20} />
-            <Bar yAxisId="right" dataKey="sellVolume" name="Sell Volume" fill="#4ade80" opacity={0.3} barSize={20} />
+            <Line
+              yAxisId="left"
+              type="monotone"
+              dataKey="buyPrice"
+              stroke="#f87171"
+              strokeWidth={2}
+              dot={false}
+              name="Buy Price"
+              connectNulls
+            />
+            <Line
+              yAxisId="left"
+              type="monotone"
+              dataKey="sellPrice"
+              stroke="#4ade80"
+              strokeWidth={2}
+              dot={false}
+              name="Sell Price"
+              connectNulls
+            />
           </>
-        ) : (
-          <Bar yAxisId="right" dataKey="volume" name="Volume" fill="#8884d8" opacity={0.3} />
+        )}
+
+        {graphType === 'volume' && (
+          isHighFidelity ? (
+            <>
+              <Bar yAxisId="left" dataKey="buyVolume" name="Buy Volume" fill="#f87171" opacity={0.5} barSize={20} stackId="a" />
+              <Bar yAxisId="left" dataKey="sellVolume" name="Sell Volume" fill="#4ade80" opacity={0.5} barSize={20} stackId="a" />
+            </>
+          ) : (
+            <Bar yAxisId="left" dataKey="volume" name="Volume" fill="#8884d8" opacity={0.5} />
+          )
         )}
 
       </ComposedChart>
