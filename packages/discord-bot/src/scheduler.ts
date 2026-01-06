@@ -3,7 +3,8 @@ import { Client, EmbedBuilder, TextChannel } from "discord.js";
 import { getAllActiveWatches, updateLastNotified } from "./database";
 import { logger } from "@osrstradingtools/shared";
 
-const COOLDOWN_SECONDS = 60 * 60; // 1 hour cooldown per item per user
+const COOLDOWN_1H_SECONDS = 60 * 60; // 1 hour cooldown for 1h change
+const COOLDOWN_24H_SECONDS = 24 * 60 * 60; // 24 hour cooldown for 24h change
 
 export function startNotificationScheduler(client: Client) {
     // Run every minute
@@ -96,34 +97,64 @@ async function checkNotifications(client: Client) {
     // Group by user to batch messages
     const notificationsToSend: { discordId: string; messages: string[] }[] = [];
 
-    for (const watch of watches) {
-        // Check cooldown
-        if (watch.last_notified_at && (now - watch.last_notified_at) < COOLDOWN_SECONDS) {
-            continue;
+    // Helper to add to batch
+    const addToBatch = (discordId: string, msg: string) => {
+        let userBatch = notificationsToSend.find(n => n.discordId === discordId);
+        if (!userBatch) {
+            userBatch = { discordId, messages: [] };
+            notificationsToSend.push(userBatch);
         }
+        userBatch.messages.push(msg);
+    };
 
+    for (const watch of watches) {
         const item = itemMap.get(watch.item_id);
         if (!item) continue;
 
-        // Check threshold
-        // item.dayChange is already calculated by backend
-        const dayChange = item.dayChange;
+        // Determine cooldown
+        const cooldown = watch.cooldown_seconds || COOLDOWN_1H_SECONDS;
 
-        if (dayChange !== null && Math.abs(dayChange) >= (watch.day_change_threshold || 5.0)) {
-            // Trigger notification
-            const direction = dayChange > 0 ? "📈 UP" : "📉 DOWN";
-            const msg = `**${item.name}**: ${direction} ${dayChange.toFixed(2)}% (Buy: ${item.buyPrice}, Sell: ${item.sellPrice})`;
+        // Check 1h Change
+        if (watch.one_hour_change_threshold !== null && watch.one_hour_change_threshold !== undefined) {
+            const canNotify1h = !watch.last_notified_1h_at || (now - watch.last_notified_1h_at) >= cooldown;
+            if (canNotify1h) {
+                const hourChange = item.oneHourChange;
+                if (hourChange !== null && Math.abs(hourChange) >= watch.one_hour_change_threshold) {
+                    const direction = hourChange > 0 ? "📈 UP" : "📉 DOWN";
+                    const msg = `**${item.name}** (1H): ${direction} ${hourChange.toFixed(2)}% (Buy: ${item.buyPrice}, Sell: ${item.sellPrice})`;
 
-            // Update DB
-            await updateLastNotified(watch.id);
-
-            // Add to send list
-            let userBatch = notificationsToSend.find(n => n.discordId === watch.discord_id);
-            if (!userBatch) {
-                userBatch = { discordId: watch.discord_id, messages: [] };
-                notificationsToSend.push(userBatch);
+                    await updateLastNotified(watch.id, '1h');
+                    addToBatch(watch.discord_id, msg);
+                }
             }
-            userBatch.messages.push(msg);
+        }
+
+        // Check 24h Change
+        // For 24h change, we typically want 24h cooldown, but if user set a custom cooldown, 
+        // we might want to respect it? 
+        // Logic: if user sets custom cooldown, it applies to the watch rule they edited.
+        // Currently DB has single cooldown_seconds column.
+        // If they edit 1h watch, it sets cooldown_seconds.
+        // If they edit 24h watch, it sets cooldown_seconds.
+        // It's shared. So we use it for both.
+
+        const cooldown24h = watch.cooldown_seconds || COOLDOWN_24H_SECONDS;
+
+        if (watch.day_change_threshold !== null && watch.day_change_threshold !== undefined) {
+            const canNotify24h = !watch.last_notified_at || (now - watch.last_notified_at) >= cooldown24h;
+            if (canNotify24h) {
+                const dayChange = item.dayChange;
+                // Legacy fallback to 5.0
+                const threshold = watch.day_change_threshold;
+
+                if (dayChange !== null && Math.abs(dayChange) >= threshold) {
+                    const direction = dayChange > 0 ? "📈 UP" : "📉 DOWN";
+                    const msg = `**${item.name}** (24H): ${direction} ${dayChange.toFixed(2)}% (Buy: ${item.buyPrice}, Sell: ${item.sellPrice})`;
+
+                    await updateLastNotified(watch.id, '24h');
+                    addToBatch(watch.discord_id, msg);
+                }
+            }
         }
     }
 
@@ -140,3 +171,6 @@ async function checkNotifications(client: Client) {
         }
     }
 }
+
+
+

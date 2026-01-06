@@ -24,9 +24,12 @@ export interface NotificationSetting {
   discord_id: string;
   item_id: number;
   day_change_threshold: number | null;
+  one_hour_change_threshold: number | null;
   enabled: boolean;
   created_at: number;
   last_notified_at: number | null;
+  last_notified_1h_at: number | null;
+  cooldown_seconds: number | null;
 }
 
 /**
@@ -52,18 +55,39 @@ export async function getDiscordUser(discordId: string): Promise<DiscordUser | n
 /**
  * Add a watch for an item
  */
-export async function addWatch(discordId: string, itemId: number, threshold: number | null = 5.0): Promise<void> {
+// Add/Update Watch
+export async function addWatch(
+  discordId: string,
+  itemId: number,
+  threshold: number = 5.0,
+  period: '24h' | '1h' = '1h',
+  cooldownSeconds: number = 3600
+): Promise<void> {
   await ensureDiscordUser(discordId);
 
-  const query = `
-    INSERT INTO notification_settings (discord_id, item_id, day_change_threshold, enabled)
-    VALUES ($1, $2, $3, 1)
-    ON CONFLICT(discord_id, item_id) DO UPDATE SET
-      day_change_threshold = EXCLUDED.day_change_threshold,
-      enabled = 1
-  `;
-  await pool.query(query, [discordId, itemId, threshold]);
+  if (period === '24h') {
+    const query = `
+        INSERT INTO notification_settings (discord_id, item_id, day_change_threshold, cooldown_seconds, enabled)
+        VALUES ($1, $2, $3, $4, 1)
+        ON CONFLICT(discord_id, item_id) DO UPDATE SET
+          day_change_threshold = EXCLUDED.day_change_threshold,
+          cooldown_seconds = EXCLUDED.cooldown_seconds,
+          enabled = 1
+      `;
+    await pool.query(query, [discordId, itemId, threshold, cooldownSeconds]);
+  } else {
+    const query = `
+        INSERT INTO notification_settings (discord_id, item_id, one_hour_change_threshold, cooldown_seconds, enabled)
+        VALUES ($1, $2, $3, $4, 1)
+        ON CONFLICT(discord_id, item_id) DO UPDATE SET
+          one_hour_change_threshold = EXCLUDED.one_hour_change_threshold,
+          cooldown_seconds = EXCLUDED.cooldown_seconds,
+          enabled = 1
+      `;
+    await pool.query(query, [discordId, itemId, threshold, cooldownSeconds]);
+  }
 }
+
 
 /**
  * Remove a watch
@@ -116,9 +140,10 @@ export async function getAllActiveWatches(): Promise<(NotificationSetting & { no
 /**
  * Update last_notified_at
  */
-export async function updateLastNotified(id: number): Promise<void> {
+export async function updateLastNotified(id: number, period: '24h' | '1h'): Promise<void> {
+  const column = period === '24h' ? 'last_notified_at' : 'last_notified_1h_at';
   const query = `
-    UPDATE notification_settings SET last_notified_at = $1 WHERE id = $2
+    UPDATE notification_settings SET ${column} = $1 WHERE id = $2
   `;
   await pool.query(query, [Math.floor(Date.now() / 1000), id]);
 }

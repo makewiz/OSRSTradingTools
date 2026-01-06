@@ -169,7 +169,10 @@ router.post("/watch", async (req, res) => {
             return res.status(404).json({ error: "No Discord account linked" });
         }
 
-        await addBackendWatch(discordUser.discord_id, itemId, threshold || 5.0);
+        const period = req.body.period || '1h'; // Default to 1h
+        const cooldown = req.body.cooldown || 3600;
+
+        await addBackendWatch(discordUser.discord_id, itemId, threshold || 5.0, period, cooldown);
         res.status(201).json({ success: true, itemId });
     } catch (err) {
         // eslint-disable-next-line no-console
@@ -200,8 +203,11 @@ router.put("/watch/:itemId", async (req, res) => {
             return res.status(404).json({ error: "No Discord account linked" });
         }
 
-        await addBackendWatch(discordUser.discord_id, itemId, threshold);
-        res.json({ success: true, itemId, threshold });
+        const period = req.body.period || '1h';
+        const cooldown = req.body.cooldown || 3600;
+
+        await addBackendWatch(discordUser.discord_id, itemId, threshold, period, cooldown);
+        res.json({ success: true, itemId, threshold, period, cooldown });
     } catch (err) {
         // eslint-disable-next-line no-console
         console.error(err);

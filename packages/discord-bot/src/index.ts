@@ -36,7 +36,15 @@ const commands = [
     .addNumberOption(option =>
       option.setName("threshold")
         .setDescription("Day change percentage threshold (e.g. 5 for 5%)")
-        .setRequired(false)),
+        .setRequired(false))
+    .addStringOption(option =>
+      option.setName("period")
+        .setDescription("Time period to watch (1h or 24h)")
+        .setRequired(false)
+        .addChoices(
+          { name: '1 Hour', value: '1h' },
+          { name: '24 Hours', value: '24h' }
+        )),
   new SlashCommandBuilder()
     .setName("unwatch")
     .setDescription("Stop watching an item")
@@ -99,10 +107,11 @@ client.on("interactionCreate", async (interaction) => {
     if (commandName === "watch") {
       const itemId = interaction.options.getInteger("item_id", true);
       const threshold = interaction.options.getNumber("threshold") ?? 5.0;
+      const period = (interaction.options.getString("period") as '1h' | '24h') ?? '1h';
 
       // Used default item name for now, in a real app we'd fetch the name to confirm
-      await addWatch(discordId, itemId, threshold);
-      await interaction.reply({ content: `✅ Watching item ${itemId} with threshold ${threshold}%`, ephemeral: true });
+      await addWatch(discordId, itemId, threshold, period);
+      await interaction.reply({ content: `✅ Watching item ${itemId} with threshold ${threshold}% (${period} change)`, ephemeral: true });
 
     } else if (commandName === "unwatch") {
       const itemId = interaction.options.getInteger("item_id", true);

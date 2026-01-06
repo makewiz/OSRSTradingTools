@@ -4,13 +4,7 @@ import { useAuth } from "../contexts/AuthContext";
 
 interface Watch {
     id: number;
-    discord_id: string;
-    item_id: number;
-    itemName?: string; // Enriched from backend
-    day_change_threshold: number;
     enabled: boolean;
-    created_at: number;
-    last_notified_at: number | null;
 }
 
 const REDIRECT_URI = window.location.origin + "/auth/discord/callback";
@@ -125,9 +119,7 @@ export const Profile: React.FC = () => {
     const [error, setError] = useState<string | null>(null);
     const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
-    // Edit state
-    const [editingWatchId, setEditingWatchId] = useState<number | null>(null);
-    const [editThreshold, setEditThreshold] = useState<string>("");
+
 
     useEffect(() => {
         if (token) fetchSettings();
@@ -212,61 +204,6 @@ export const Profile: React.FC = () => {
         }
     };
 
-    const handleRemoveWatch = async (itemId: number) => {
-        if (!confirm("Are you sure you want to stop watching this item?")) return;
-        try {
-            setWatches(prev => prev.filter(w => w.item_id !== itemId));
-            const res = await fetchWithAuth(`${API_BASE_URL}/api/discord/watch/${itemId}`, {
-                method: "DELETE"
-            });
-
-            if (!res.ok) throw new Error("Failed to remove watch");
-        } catch (err) {
-            setError("Failed to remove watch");
-            fetchSettings();
-        }
-    };
-
-    const startEditing = (watch: Watch) => {
-        setEditingWatchId(watch.item_id);
-        setEditThreshold(watch.day_change_threshold.toString());
-    };
-
-    const cancelEditing = () => {
-        setEditingWatchId(null);
-        setEditThreshold("");
-    };
-
-    const saveThreshold = async (itemId: number) => {
-        const newThreshold = parseFloat(editThreshold);
-        if (isNaN(newThreshold) || newThreshold < 0) {
-            alert("Please enter a valid positive number.");
-            return;
-        }
-
-        try {
-            // Optimistic update
-            setWatches(prev => prev.map(w =>
-                w.item_id === itemId ? { ...w, day_change_threshold: newThreshold } : w
-            ));
-            setEditingWatchId(null);
-
-            const res = await fetchWithAuth(`${API_BASE_URL}/api/discord/watch/${itemId}`, {
-                method: "PUT",
-                headers: {
-                    "Content-Type": "application/json"
-                },
-                body: JSON.stringify({ threshold: newThreshold })
-            });
-
-            if (!res.ok) throw new Error("Failed to update threshold");
-            setSuccessMsg("Threshold updated!");
-            setTimeout(() => setSuccessMsg(null), 3000);
-        } catch (err) {
-            setError("Failed to update threshold");
-            fetchSettings();
-        }
-    };
 
     if (!user) {
         return <div className="profile-page"><p>Please log in.</p></div>;
@@ -302,83 +239,13 @@ export const Profile: React.FC = () => {
                         </div>
 
                         <h3>Active Watches ({watches.length})</h3>
-                        {watches.length === 0 ? (
-                            <p style={{ color: '#888' }}>No items are currently being watched.</p>
-                        ) : (
-                            <table className="items-table" style={{ marginTop: '10px', minWidth: 'auto', width: '100%' }}>
-                                <thead>
-                                    <tr>
-                                        <th>Item</th>
-                                        <th style={{ width: '160px' }}>Threshold</th>
-                                        <th style={{ width: '100px', textAlign: 'right' }}>Action</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {watches.map(w => (
-                                        <tr key={w.id}>
-                                            <td>
-                                                <Link to={`/item/${w.item_id}`} className="item-name-link">
-                                                    {w.itemName || `Item ${w.item_id}`}
-                                                </Link>
-                                            </td>
-                                            <td>
-                                                {editingWatchId === w.item_id ? (
-                                                    <div style={{ display: 'flex', gap: '5px', alignItems: 'center' }}>
-                                                        <input
-                                                            type="number"
-                                                            value={editThreshold}
-                                                            onChange={e => setEditThreshold(e.target.value)}
-                                                            style={{ width: '60px', padding: '4px' }}
-                                                            step="0.1"
-                                                        />
-                                                        <span>%</span>
-                                                        <button
-                                                            className="page-button"
-                                                            style={{ background: '#4caf50', padding: '4px 8px' }}
-                                                            onClick={() => saveThreshold(w.item_id)}
-                                                        >
-                                                            ✓
-                                                        </button>
-                                                        <button
-                                                            className="page-button"
-                                                            style={{ background: '#777', padding: '4px 8px' }}
-                                                            onClick={cancelEditing}
-                                                        >
-                                                            ✕
-                                                        </button>
-                                                    </div>
-                                                ) : (
-                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                                        <span>{w.day_change_threshold.toFixed(1)}%</span>
-                                                        <button
-                                                            className="page-button"
-                                                            style={{
-                                                                background: 'transparent',
-                                                                border: '1px solid #555',
-                                                                padding: '2px 6px',
-                                                                fontSize: '0.8rem'
-                                                            }}
-                                                            onClick={() => startEditing(w)}
-                                                        >
-                                                            Edit
-                                                        </button>
-                                                    </div>
-                                                )}
-                                            </td>
-                                            <td style={{ textAlign: 'right' }}>
-                                                <button
-                                                    className="page-button"
-                                                    style={{ background: '#f44336', border: 'none' }}
-                                                    onClick={() => handleRemoveWatch(w.item_id)}
-                                                >
-                                                    Remove
-                                                </button>
-                                            </td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
+                        <p>
+                            <Link to="/watches" className="page-button" style={{ background: '#2196f3', textDecoration: 'none' }}>Manage My Watches</Link>
+                        </p>
+                        {watches.length === 0 && (
+                            <p style={{ color: '#888', marginTop: '10px' }}>No items are currently being watched.</p>
                         )}
+
                     </div>
                 ) : (
                     <div>

@@ -11,6 +11,7 @@ import { Profile } from "./pages/Profile";
 import { DiscordCallback } from "./pages/DiscordCallback";
 import { Privacy } from "./pages/Privacy";
 import { Terms } from "./pages/Terms";
+import { Watches } from "./pages/Watches";
 
 export const App: React.FC = () => {
   return (
@@ -24,6 +25,7 @@ export const App: React.FC = () => {
           <Route path="/register" element={<Register />} />
           <Route path="/profile" element={<Profile />} />
           <Route path="/auth/discord/callback" element={<DiscordCallback />} />
+          <Route path="/watches" element={<Watches />} />
           <Route path="/privacy" element={<Privacy />} />
           <Route path="/terms" element={<Terms />} />
         </Routes>

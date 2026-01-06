@@ -168,6 +168,14 @@ export async function initializeDatabase(): Promise<void> {
       CREATE INDEX IF NOT EXISTS idx_notification_settings_item_id 
       ON notification_settings(item_id)
     `);
+
+    // Migration: Add 1h change columns if not exist
+    await client.query(`
+      ALTER TABLE notification_settings 
+      ADD COLUMN IF NOT EXISTS one_hour_change_threshold REAL,
+      ADD COLUMN IF NOT EXISTS last_notified_1h_at BIGINT,
+      ADD COLUMN IF NOT EXISTS cooldown_seconds INTEGER DEFAULT 3600
+    `);
   } finally {
     client.release();
   }
@@ -269,21 +277,19 @@ export async function getLatestPrice(itemId: number): Promise<{ buyPrice: number
 // Obsolete legacy helpers (remove if unused, or keep empty if exported and used elsewhere)
 // For now, I've replaced getPriceHistory with the new implementation above.
 
-export async function calculateDayChange(
+
+async function calculatePriceChange(
   itemId: number,
   currentBuyPrice: number | null,
-  currentSellPrice: number | null
+  currentSellPrice: number | null,
+  lookbackSeconds: number
 ): Promise<{
-  buyDayChange: number | null;
-  sellDayChange: number | null;
-  dayChange: number | null;
+  buyChange: number | null;
+  sellChange: number | null;
+  avgChange: number | null;
 }> {
   const now = Math.floor(Date.now() / 1000);
-  const oneDayAgo = now - 24 * 60 * 60;
-
-  // Find price closest to 24h ago
-  // We search for the latest price that is BEFORE (oneDayAgo + some tolerance)
-  // Actually, easiest is `ORDER BY ABS(timestamp - target) LIMIT 1`
+  const timeAgo = now - lookbackSeconds;
 
   const buyQuery = `
     SELECT price FROM item_buy_prices 
@@ -297,33 +303,69 @@ export async function calculateDayChange(
   `;
 
   const [buyRes, sellRes] = await Promise.all([
-    pool.query(buyQuery, [itemId, oneDayAgo]),
-    pool.query(sellQuery, [itemId, oneDayAgo])
+    pool.query(buyQuery, [itemId, timeAgo]),
+    pool.query(sellQuery, [itemId, timeAgo])
   ]);
 
   const oldBuyPrice = buyRes.rows[0]?.price;
   const oldSellPrice = sellRes.rows[0]?.price;
 
-  let buyDayChange: number | null = null;
+  let buyChange: number | null = null;
   if (currentBuyPrice !== null && oldBuyPrice) {
-    buyDayChange = ((currentBuyPrice - oldBuyPrice) / oldBuyPrice) * 100;
+    buyChange = ((currentBuyPrice - oldBuyPrice) / oldBuyPrice) * 100;
   }
 
-  let sellDayChange: number | null = null;
+  let sellChange: number | null = null;
   if (currentSellPrice !== null && oldSellPrice) {
-    sellDayChange = ((currentSellPrice - oldSellPrice) / oldSellPrice) * 100;
+    sellChange = ((currentSellPrice - oldSellPrice) / oldSellPrice) * 100;
   }
 
-  let dayChange: number | null = null;
-  if (buyDayChange !== null && sellDayChange !== null) {
-    dayChange = (buyDayChange + sellDayChange) / 2;
-  } else if (buyDayChange !== null) {
-    dayChange = buyDayChange;
-  } else if (sellDayChange !== null) {
-    dayChange = sellDayChange;
+  let avgChange: number | null = null;
+  if (buyChange !== null && sellChange !== null) {
+    avgChange = (buyChange + sellChange) / 2;
+  } else if (buyChange !== null) {
+    avgChange = buyChange;
+  } else if (sellChange !== null) {
+    avgChange = sellChange;
   }
 
-  return { buyDayChange, sellDayChange, dayChange };
+  return { buyChange, sellChange, avgChange };
+}
+
+export async function calculateDayChange(
+  itemId: number,
+  currentBuyPrice: number | null,
+  currentSellPrice: number | null
+): Promise<{
+  buyDayChange: number | null;
+  sellDayChange: number | null;
+  dayChange: number | null;
+}> {
+  const { buyChange, sellChange, avgChange } = await calculatePriceChange(
+    itemId,
+    currentBuyPrice,
+    currentSellPrice,
+    24 * 60 * 60
+  );
+  return { buyDayChange: buyChange, sellDayChange: sellChange, dayChange: avgChange };
+}
+
+export async function calculateHourChange(
+  itemId: number,
+  currentBuyPrice: number | null,
+  currentSellPrice: number | null
+): Promise<{
+  buyHourChange: number | null;
+  sellHourChange: number | null;
+  hourChange: number | null;
+}> {
+  const { buyChange, sellChange, avgChange } = await calculatePriceChange(
+    itemId,
+    currentBuyPrice,
+    currentSellPrice,
+    60 * 60
+  );
+  return { buyHourChange: buyChange, sellHourChange: sellChange, hourChange: avgChange };
 }
 
 /**
@@ -500,15 +542,41 @@ export async function updateDiscordSettings(discordId: string, enabled: boolean)
 }
 
 // Add/Update Watch
-export async function addBackendWatch(discordId: string, itemId: number, threshold: number): Promise<void> {
-  const query = `
-    INSERT INTO notification_settings (discord_id, item_id, day_change_threshold, enabled)
-    VALUES ($1, $2, $3, 1)
-    ON CONFLICT(discord_id, item_id) DO UPDATE SET
-      day_change_threshold = EXCLUDED.day_change_threshold,
-      enabled = 1
-  `;
-  await pool.query(query, [discordId, itemId, threshold]);
+export async function addBackendWatch(
+  discordId: string,
+  itemId: number,
+  threshold: number,
+  period: '24h' | '1h' = '1h',
+  cooldownSeconds: number = 3600
+): Promise<void> {
+  const is24h = period === '24h';
+
+  // We need to handle the upsert carefully to preserve other fields if they exist,
+  // or we can just set them. 
+  // If user sets 24h watch, we update day_change_threshold.
+  // We also update cooldown_seconds (global for the item watch).
+
+  if (is24h) {
+    const query = `
+        INSERT INTO notification_settings (discord_id, item_id, day_change_threshold, cooldown_seconds, enabled)
+        VALUES ($1, $2, $3, $4, 1)
+        ON CONFLICT(discord_id, item_id) DO UPDATE SET
+          day_change_threshold = EXCLUDED.day_change_threshold,
+          cooldown_seconds = EXCLUDED.cooldown_seconds,
+          enabled = 1
+      `;
+    await pool.query(query, [discordId, itemId, threshold, cooldownSeconds]);
+  } else {
+    const query = `
+        INSERT INTO notification_settings (discord_id, item_id, one_hour_change_threshold, cooldown_seconds, enabled)
+        VALUES ($1, $2, $3, $4, 1)
+        ON CONFLICT(discord_id, item_id) DO UPDATE SET
+          one_hour_change_threshold = EXCLUDED.one_hour_change_threshold,
+          cooldown_seconds = EXCLUDED.cooldown_seconds,
+          enabled = 1
+      `;
+    await pool.query(query, [discordId, itemId, threshold, cooldownSeconds]);
+  }
 }
 
 // Remove Watch

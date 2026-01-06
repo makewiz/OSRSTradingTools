@@ -1,4 +1,4 @@
-import { calculateDayChange } from "./database";
+import { calculateDayChange, calculateHourChange } from "./database";
 import { calculateTax, calculateProfit, calculateROI } from "./tax";
 
 const MAPPING_URL = "https://prices.runescape.wiki/api/v1/osrs/mapping";
@@ -54,6 +54,7 @@ export interface CombinedItem {
   margin: number | null;
   volume: number | null;
   dayChange: number | null; // 24h price change percentage
+  oneHourChange: number | null; // 1h price change percentage
   lastBuyTime: number | null; // Unix timestamp
   lastSellTime: number | null; // Unix timestamp
   lastBuyVolume: number | null; // volume at low price (5m)
@@ -155,6 +156,7 @@ export async function getCombinedItems(): Promise<CombinedItem[]> {
 
     // Calculate day change from database
     const { dayChange } = await calculateDayChange(m.id, buyPrice, sellPrice);
+    const { hourChange } = await calculateHourChange(m.id, buyPrice, sellPrice);
 
     // Calculate margin * volume (Gross)
     const marginVolume =
@@ -190,6 +192,7 @@ export async function getCombinedItems(): Promise<CombinedItem[]> {
       margin,
       volume: typeof volume === "number" ? volume : null,
       dayChange,
+      oneHourChange: hourChange,
       lastBuyTime: latestEntry?.lowTime ?? null,
       lastSellTime: latestEntry?.highTime ?? null,
       lastBuyVolume: fiveMinEntry?.lowPriceVolume ?? null,
