@@ -6,6 +6,8 @@ import { logger } from "@osrstradingtools/shared";
 const COOLDOWN_1H_SECONDS = 60 * 60; // 1 hour cooldown for 1h change
 const COOLDOWN_24H_SECONDS = 24 * 60 * 60; // 24 hour cooldown for 24h change
 
+const frontendUrl = process.env.FRONTEND_URL || "http://localhost:5173";
+
 export function startNotificationScheduler(client: Client) {
     // Run every minute
     cron.schedule("* * * * *", async () => {
@@ -121,7 +123,8 @@ async function checkNotifications(client: Client) {
                 const hourChange = item.oneHourChange;
                 if (hourChange !== null && Math.abs(hourChange) >= watch.one_hour_change_threshold) {
                     const direction = hourChange > 0 ? "📈 UP" : "📉 DOWN";
-                    const msg = `**${item.name}** (1H): ${direction} ${hourChange.toFixed(2)}% (Buy: ${item.buyPrice}, Sell: ${item.sellPrice})`;
+                    const link = `${frontendUrl}/item/${item.id}`;
+                    const msg = `**${item.name}** (1H): ${direction} ${hourChange.toFixed(2)}% (Buy: ${item.buyPrice}, Sell: ${item.sellPrice})\n[View Item](${link})`;
 
                     await updateLastNotified(watch.id, '1h');
                     addToBatch(watch.discord_id, msg);
@@ -149,7 +152,8 @@ async function checkNotifications(client: Client) {
 
                 if (dayChange !== null && Math.abs(dayChange) >= threshold) {
                     const direction = dayChange > 0 ? "📈 UP" : "📉 DOWN";
-                    const msg = `**${item.name}** (24H): ${direction} ${dayChange.toFixed(2)}% (Buy: ${item.buyPrice}, Sell: ${item.sellPrice})`;
+                    const link = `${frontendUrl}/item/${item.id}`;
+                    const msg = `**${item.name}** (24H): ${direction} ${dayChange.toFixed(2)}% (Buy: ${item.buyPrice}, Sell: ${item.sellPrice})\n[View Item](${link})`;
 
                     await updateLastNotified(watch.id, '24h');
                     addToBatch(watch.discord_id, msg);
