@@ -17,6 +17,7 @@ interface Item {
   margin: number | null;
   volume: number | null;
   dayChange: number | null;
+  oneHourChange: number | null;
   marginVolume: number | null;
   limit: number | null;
   lastBuyTime: number | null;
@@ -370,6 +371,23 @@ export const ItemDetail: React.FC = () => {
             <div className="stat-label">Volume</div>
             <div className="stat-value">
               {item.volume?.toLocaleString() ?? "-"}
+            </div>
+          </div>
+          <div className="stat-card">
+            <div className="stat-label">1h Change</div>
+            <div
+              className={`stat-value ${item.oneHourChange !== null
+                ? item.oneHourChange > 0
+                  ? "positive"
+                  : item.oneHourChange < 0
+                    ? "negative"
+                    : ""
+                : ""
+                }`}
+            >
+              {item.oneHourChange !== null
+                ? `${item.oneHourChange > 0 ? "+" : ""}${item.oneHourChange.toFixed(2)}%`
+                : "-"}
             </div>
           </div>
           <div className="stat-card">
