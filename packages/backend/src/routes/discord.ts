@@ -22,6 +22,32 @@ router.get("/config", (req, res) => {
     res.json({ clientId: process.env.DISCORD_CLIENT_ID });
 });
 
+/**
+ * Bot Endpoint: Get Items
+ * GET /api/discord/bot/items
+ * Protected by x-bot-api-key header
+ */
+router.get("/bot/items", async (req, res) => {
+    const apiKey = req.headers['x-bot-api-key'];
+
+    // Simple API Key check
+    if (!process.env.BOT_API_KEY || apiKey !== process.env.BOT_API_KEY) {
+        return res.status(401).json({ error: "Unauthorized: Invalid or missing Bot API Key" });
+    }
+
+    try {
+        let items = getLatestItems();
+        if (!items || items.length === 0) {
+            items = await getCombinedItems();
+        }
+        res.json({ items });
+    } catch (err) {
+        // eslint-disable-next-line no-console
+        console.error("[Bot API] Error fetching items:", err);
+        res.status(500).json({ error: "Internal Server Error" });
+    }
+});
+
 // --- Protected Routes ---
 router.use(authenticateToken);
 

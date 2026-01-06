@@ -1,6 +1,6 @@
 import cron from "node-cron";
 import { Client, EmbedBuilder, TextChannel } from "discord.js";
-import { getAllActiveWatches, getLatestPrice, updateLastNotified, getDayChange } from "./database";
+import { getAllActiveWatches, updateLastNotified } from "./database";
 import { logger } from "@osrstradingtools/shared";
 
 const COOLDOWN_SECONDS = 60 * 60; // 1 hour cooldown per item per user
@@ -62,7 +62,38 @@ async function checkNotifications(client: Client) {
     const watches = await getAllActiveWatches();
     const now = Math.floor(Date.now() / 1000);
 
-    // Group by user to batch messages if we wanted to (simple version sends individual for now or basic batching)
+    if (watches.length === 0) return;
+
+    // Fetch latest items from backend
+    let items: any[] = [];
+    try {
+        const backendUrl = process.env.BACKEND_URL || "http://localhost:4000";
+        // Use the dedicated bot endpoint with API Key authentication
+        const res = await fetch(`${backendUrl}/api/discord/bot/items`, {
+            headers: {
+                "x-bot-api-key": process.env.BOT_API_KEY || ""
+            }
+        });
+
+        if (!res.ok) {
+            // Log specific error if unauthorized to help debugging
+            if (res.status === 401) {
+                logger.error("[Scheduler] Unauthorized: Check BOT_API_KEY in .env");
+            }
+            throw new Error(`Backend responded with ${res.status}`);
+        }
+
+        const data = await res.json();
+        items = data.items || [];
+    } catch (err) {
+        logger.error("[Scheduler] Failed to fetch items from backend:", err);
+        return;
+    }
+
+    // Map items for O(1) lookup
+    const itemMap = new Map(items.map(i => [i.id, i]));
+
+    // Group by user to batch messages
     const notificationsToSend: { discordId: string; messages: string[] }[] = [];
 
     for (const watch of watches) {
@@ -71,23 +102,17 @@ async function checkNotifications(client: Client) {
             continue;
         }
 
-        // Get price data
-        const price = await getLatestPrice(watch.item_id);
-        if (!price) continue;
-
-        // Calculate change
-        const dayChange = await getDayChange(watch.item_id, price.buy_price, price.sell_price);
+        const item = itemMap.get(watch.item_id);
+        if (!item) continue;
 
         // Check threshold
-        // Threshold is magnitude? Or direction? Assuming magnitude for now (absolute change) based on "day change".
-        // Or if user sets 5%, do they mean > +5% or mismatch > 5%? 
-        // Usually trading tools alert on spikes in either direction or specific drops.
-        // Let's assume ABS(change) >= threshold.
+        // item.dayChange is already calculated by backend
+        const dayChange = item.dayChange;
 
         if (dayChange !== null && Math.abs(dayChange) >= (watch.day_change_threshold || 5.0)) {
             // Trigger notification
             const direction = dayChange > 0 ? "📈 UP" : "📉 DOWN";
-            const msg = `**Item ${watch.item_id}**: ${direction} ${dayChange.toFixed(2)}% (Buy: ${price.buy_price}, Sell: ${price.sell_price})`;
+            const msg = `**${item.name}**: ${direction} ${dayChange.toFixed(2)}% (Buy: ${item.buyPrice}, Sell: ${item.sellPrice})`;
 
             // Update DB
             await updateLastNotified(watch.id);

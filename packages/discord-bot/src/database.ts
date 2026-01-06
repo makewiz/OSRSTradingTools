@@ -123,57 +123,7 @@ export async function updateLastNotified(id: number): Promise<void> {
   await pool.query(query, [Math.floor(Date.now() / 1000), id]);
 }
 
-/**
- * Get latest price for an item (from price history)
- */
-export async function getLatestPrice(itemId: number): Promise<{ buy_price: number | null; sell_price: number | null } | null> {
-  const query = `
-    SELECT buy_price, sell_price FROM item_price_history
-    WHERE item_id = $1 AND granularity = 'minute'
-    ORDER BY timestamp DESC LIMIT 1
-  `;
-  const result = await pool.query(query, [itemId]);
-  return result.rows[0] ? (result.rows[0] as { buy_price: number | null; sell_price: number | null }) : null;
-}
 
-/**
- * Calculate day change (reused logic from backend, simplified)
- */
-export async function getDayChange(itemId: number, currentBuy: number | null, currentSell: number | null): Promise<number | null> {
-  if (currentBuy === null && currentSell === null) return null;
-
-  const now = Math.floor(Date.now() / 1000);
-  const oneDayAgo = now - 24 * 60 * 60;
-
-  // Find price ~24h ago
-  const query = `
-    SELECT buy_price, sell_price FROM item_price_history
-    WHERE item_id = $1 AND timestamp <= $2
-    ORDER BY timestamp DESC LIMIT 1
-  `;
-
-  const result = await pool.query(query, [itemId, oneDayAgo]);
-  const old = result.rows[0] as { buy_price: number | null; sell_price: number | null } | undefined;
-
-  if (!old) return null;
-
-  // Calculate change based on average price if possible
-  const getAvg = (b: number | null, s: number | null) => {
-    if (b && s) return (b + s) / 2;
-    if (b) return b;
-    if (s) return s;
-    return null;
-  };
-
-  const currentAvg = getAvg(currentBuy, currentSell);
-  const oldAvg = getAvg(old.buy_price, old.sell_price);
-
-  if (currentAvg && oldAvg && oldAvg > 0) {
-    return ((currentAvg - oldAvg) / oldAvg) * 100;
-  }
-
-  return null;
-}
 
 export async function closeDatabase() {
   await pool.end();
