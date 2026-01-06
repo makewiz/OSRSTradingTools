@@ -2,6 +2,7 @@
 import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { API_BASE_URL } from "../config";
+import { useAuth } from "../contexts/AuthContext";
 import "./Highlights.css"; // We'll create this CSS file or use inline/main css
 
 interface HighlightItem {
@@ -24,9 +25,10 @@ export const Highlights: React.FC = () => {
     const [analysis, setAnalysis] = useState<MarketAnalysis | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const { fetchWithAuth } = useAuth();
 
     useEffect(() => {
-        fetch(`${API_BASE_URL}/api/highlights`)
+        fetchWithAuth(`${API_BASE_URL}/api/highlights`)
             .then((res) => {
                 if (!res.ok) throw new Error("Failed to fetch highlights");
                 return res.json();
@@ -40,7 +42,7 @@ export const Highlights: React.FC = () => {
                 setError("Unable to load market highlights");
                 setLoading(false);
             });
-    }, []);
+    }, [fetchWithAuth]);
 
     if (loading) return <div className="highlights-loading">Loading daily market insights...</div>;
     if (error) return null; // Don't show if failed, just hide section

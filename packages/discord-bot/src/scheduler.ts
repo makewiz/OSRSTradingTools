@@ -38,7 +38,12 @@ async function broadcastHighlights(client: Client) {
         const channel = await client.channels.fetch(channelId);
         if (!channel || !(channel instanceof TextChannel)) return;
 
-        const res = await fetch("http://localhost:4000/api/highlights");
+        const backendUrl = process.env.BACKEND_URL || "http://localhost:4000";
+        const res = await fetch(`${backendUrl}/api/discord/bot/highlights`, {
+            headers: {
+                "x-bot-api-key": process.env.BOT_API_KEY || ""
+            }
+        });
         if (!res.ok) throw new Error("API Error");
         const data = await res.json();
 

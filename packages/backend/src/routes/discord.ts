@@ -11,6 +11,7 @@ import {
 import { exchangeCodeForToken, getDiscordUser } from "../oauth";
 import { getCombinedItems } from "../osrsClient";
 import { getLatestItems } from "../scheduler";
+import { AnalysisService } from "../analysis";
 
 const router = express.Router();
 
@@ -44,6 +45,29 @@ router.get("/bot/items", async (req, res) => {
     } catch (err) {
         // eslint-disable-next-line no-console
         console.error("[Bot API] Error fetching items:", err);
+        res.status(500).json({ error: "Internal Server Error" });
+    }
+});
+
+/**
+ * Bot Endpoint: Get Highlights
+ * GET /api/discord/bot/highlights
+ * Protected by x-bot-api-key header
+ */
+router.get("/bot/highlights", async (req, res) => {
+    const apiKey = req.headers['x-bot-api-key'];
+
+    // Simple API Key check
+    if (!process.env.BOT_API_KEY || apiKey !== process.env.BOT_API_KEY) {
+        return res.status(401).json({ error: "Unauthorized: Invalid or missing Bot API Key" });
+    }
+
+    try {
+        const analysis = await AnalysisService.getAnalysis();
+        res.json(analysis);
+    } catch (err) {
+        // eslint-disable-next-line no-console
+        console.error("[Bot API] Error fetching highlights:", err);
         res.status(500).json({ error: "Internal Server Error" });
     }
 });
