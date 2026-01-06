@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { API_BASE_URL } from "../config";
-import { Highlights } from "../components/Highlights";
+
 
 interface Item {
     id: number;
@@ -32,7 +32,11 @@ type SortKey =
 
 const FAVORITES_KEY = "osrs_trading_favorites";
 
-export const ItemList: React.FC = () => {
+interface ItemListProps {
+    defaultShowFavorites?: boolean;
+}
+
+export const ItemList: React.FC<ItemListProps> = ({ defaultShowFavorites = false }) => {
     const { user, token, fetchWithAuth } = useAuth();
     const [items, setItems] = useState<Item[]>([]);
     const [loading, setLoading] = useState(true);
@@ -42,8 +46,8 @@ export const ItemList: React.FC = () => {
     const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
     const [favorites, setFavorites] = useState<number[]>([]);
     const [watches, setWatches] = useState<number[]>([]);
-    const [onlyFavorites, setOnlyFavorites] = useState(false);
-    const [pageSize, setPageSize] = useState(100);
+    const [onlyFavorites, setOnlyFavorites] = useState(defaultShowFavorites);
+    const [pageSize, setPageSize] = useState(50);
     const [page, setPage] = useState(1);
     const [discordLinked, setDiscordLinked] = useState(false);
 
@@ -334,7 +338,6 @@ export const ItemList: React.FC = () => {
 
     return (
         <main className="app-main">
-            <Highlights />
             <section className="controls">
                 <input
                     className="search-input"
@@ -343,14 +346,7 @@ export const ItemList: React.FC = () => {
                     onChange={(e) => setSearch(e.target.value)}
                 />
 
-                <label className="checkbox-label">
-                    <input
-                        type="checkbox"
-                        checked={onlyFavorites}
-                        onChange={(e) => setOnlyFavorites(e.target.checked)}
-                    />
-                    Show favourites only
-                </label>
+
             </section>
 
             <section className="filters-section">

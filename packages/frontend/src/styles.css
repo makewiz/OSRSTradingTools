@@ -41,16 +41,141 @@ a:hover {
 }
 
 .app-header {
-  text-align: center;
   margin-bottom: 30px;
   border-bottom: 2px solid var(--border-color);
-  padding-bottom: 20px;
+  padding-bottom: 10px;
+  background: var(--bg-color);
+}
+
+.header-container {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 0;
+  position: relative;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  /* Default to full width for mobile */
+}
+
+@media (min-width: 769px) {
+  .brand {
+    width: auto;
+  }
 }
 
 .app-header h1 {
   margin: 0;
   color: var(--primary-color);
   text-shadow: 2px 2px 0px #000;
+  font-size: 1.5rem;
+}
+
+.header-tagline {
+  text-align: center;
+  color: #888;
+  margin-top: 10px;
+  font-size: 0.9rem;
+}
+
+/* Navigation */
+.main-nav {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+.nav-link {
+  color: #fff;
+  font-weight: 500;
+  text-decoration: none;
+  font-size: 1rem;
+  padding: 5px 10px;
+  border-radius: 4px;
+  transition: background 0.2s;
+}
+
+.nav-link:hover {
+  background: rgba(255, 255, 255, 0.1);
+  text-decoration: none;
+}
+
+.menu-toggle {
+  display: none;
+  background: none;
+  border: none;
+  color: var(--primary-color);
+  font-size: 1.8rem;
+  cursor: pointer;
+  padding: 0 10px;
+}
+
+/* Mobile Navigation */
+@media (max-width: 768px) {
+  .header-container {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .menu-toggle {
+    display: block;
+  }
+
+  .main-nav {
+    display: none;
+    width: 100%;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0;
+    margin-top: 10px;
+    background: #252525;
+    border-radius: 8px;
+    overflow: hidden;
+  }
+
+  .main-nav.open {
+    display: flex;
+    animation: slideDown 0.3s ease-out;
+  }
+
+  .nav-link {
+    padding: 15px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  }
+
+  .nav-link:last-child {
+    border-bottom: none;
+  }
+
+  .nav-divider {
+    height: 1px;
+    background: rgba(255, 255, 255, 0.1);
+    margin: 5px 0;
+  }
+
+  .logout-button {
+    text-align: left;
+    width: 100%;
+    background: none;
+    border: none;
+  }
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .controls {
@@ -142,6 +267,23 @@ a:hover {
 
 .clear-filters:hover {
   background: rgba(244, 67, 54, 0.1);
+}
+
+.logout-button {
+  background: transparent;
+  border: 1px solid var(--border-color);
+  color: #aaa;
+  /* Changed from #fff to #aaa for better visibility if bg is light, or just to match other secondary text */
+  padding: 5px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.logout-button:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+  border-color: #fff;
 }
 
 .search-input {
@@ -379,31 +521,7 @@ a:hover {
   text-align: center;
 }
 
-.user-nav {
-  position: absolute;
-  top: 20px;
-  right: 20px;
-  display: flex;
-  gap: 15px;
-  align-items: center;
-}
 
-.user-nav span {
-  color: var(--primary-color);
-}
-
-.logout-button {
-  background: transparent;
-  border: 1px solid var(--border-color);
-  color: #fff;
-  padding: 5px 10px;
-  border-radius: 4px;
-  cursor: pointer;
-}
-
-.logout-button:hover {
-  background: rgba(255, 255, 255, 0.1);
-}
 
 /* Item Detail Styles */
 .item-detail-page {
@@ -472,17 +590,7 @@ a:hover {
   border-radius: 6px;
 }
 
-@media (max-width: 768px) {
-  .user-nav {
-    position: static;
-    justify-content: center;
-    margin-bottom: 15px;
-  }
 
-  .app-header h1 {
-    margin-top: 10px;
-  }
-}
 
 .wiki-link {
   display: inline-block;

@@ -12,6 +12,8 @@ import { DiscordCallback } from "./pages/DiscordCallback";
 import { Privacy } from "./pages/Privacy";
 import { Terms } from "./pages/Terms";
 import { Watches } from "./pages/Watches";
+import { Favorites } from "./pages/Favorites";
+import { HighlightsPage } from "./pages/HighlightsPage";
 
 export const App: React.FC = () => {
   return (
@@ -19,13 +21,16 @@ export const App: React.FC = () => {
       <div className="app">
         <Header />
         <Routes>
-          <Route path="/" element={<ItemList />} />
+          <Route path="/" element={<HighlightsPage />} />
+          <Route path="/items" element={<ItemList />} />
           <Route path="/item/:id" element={<ItemDetail />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
           <Route path="/profile" element={<Profile />} />
           <Route path="/auth/discord/callback" element={<DiscordCallback />} />
           <Route path="/watches" element={<Watches />} />
+          <Route path="/favorites" element={<Favorites />} />
+          <Route path="/highlights" element={<HighlightsPage />} />
           <Route path="/privacy" element={<Privacy />} />
           <Route path="/terms" element={<Terms />} />
         </Routes>

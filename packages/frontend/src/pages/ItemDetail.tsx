@@ -196,7 +196,7 @@ export const ItemDetail: React.FC = () => {
     return (
       <div className="item-detail-container">
         <p className="error">{error || "Item not found"}</p>
-        <Link to="/" className="back-link">
+        <Link to="/items" className="back-link">
           ← Back to items
         </Link>
       </div>
@@ -208,7 +208,7 @@ export const ItemDetail: React.FC = () => {
   return (
     <main className="app-main">
       <div className="item-detail-container">
-        <Link to="/" className="back-link">
+        <Link to="/items" className="back-link">
           ← Back to items
         </Link>
 

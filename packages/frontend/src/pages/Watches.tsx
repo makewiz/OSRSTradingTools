@@ -121,87 +121,89 @@ export const Watches: React.FC = () => {
                     {watches.length === 0 ? (
                         <p>You have no active watches. Use the Discord bot or item detail page to add one!</p>
                     ) : (
-                        <table className="items-table" style={{ width: '100%' }}>
-                            <thead>
-                                <tr>
-                                    <th>Item</th>
-                                    <th>Period</th>
-                                    <th>Threshold</th>
-                                    <th>Cooldown (s)</th>
-                                    <th style={{ textAlign: 'right' }}>Action</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {watches.map(w => {
-                                    const isEditing = editingWatchId === w.item_id;
-                                    // Display logic: prioritize showing 1h if both exist? Or just show what is set. 
-                                    // Usually they are exclusive in UI but DB supports both.
-                                    // Let's rely on what we inferred during startEditing for 'active' period if editing.
-                                    // Otherwise, multiple rows? Item ID should be unique per watcher list here for simplicity.
+                        <div className="table-wrapper">
+                            <table className="items-table" style={{ width: '100%' }}>
+                                <thead>
+                                    <tr>
+                                        <th>Item</th>
+                                        <th>Period</th>
+                                        <th>Threshold</th>
+                                        <th>Cooldown (s)</th>
+                                        <th style={{ textAlign: 'right' }}>Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {watches.map(w => {
+                                        const isEditing = editingWatchId === w.item_id;
+                                        // Display logic: prioritize showing 1h if both exist? Or just show what is set. 
+                                        // Usually they are exclusive in UI but DB supports both.
+                                        // Let's rely on what we inferred during startEditing for 'active' period if editing.
+                                        // Otherwise, multiple rows? Item ID should be unique per watcher list here for simplicity.
 
-                                    const activePeriod = w.one_hour_change_threshold !== null ? '1H' : '24H';
-                                    const activeThreshold = w.one_hour_change_threshold !== null ? w.one_hour_change_threshold : w.day_change_threshold;
+                                        const activePeriod = w.one_hour_change_threshold !== null ? '1H' : '24H';
+                                        const activeThreshold = w.one_hour_change_threshold !== null ? w.one_hour_change_threshold : w.day_change_threshold;
 
-                                    return (
-                                        <tr key={w.id}>
-                                            <td>
-                                                <Link to={`/item/${w.item_id}`} className="item-name-link">
-                                                    {w.itemName || `Item ${w.item_id}`}
-                                                </Link>
-                                            </td>
-                                            <td>
-                                                {isEditing ? (
-                                                    <select
-                                                        value={editPeriod}
-                                                        onChange={(e) => setEditPeriod(e.target.value as '1h' | '24h')}
-                                                        className="dark-input"
-                                                    >
-                                                        <option value="1h">1H</option>
-                                                        <option value="24h">24H</option>
-                                                    </select>
-                                                ) : <span className="tag" style={{ background: activePeriod === '1H' ? '#4caf50' : '#2196f3' }}>{activePeriod}</span>}
-                                            </td>
-                                            <td>
-                                                {isEditing ? (
-                                                    <input
-                                                        type="number"
-                                                        value={editThreshold}
-                                                        onChange={e => setEditThreshold(e.target.value)}
-                                                        className="dark-input"
-                                                        style={{ width: '60px' }}
-                                                        step="0.1"
-                                                    />
-                                                ) : `${activeThreshold?.toFixed(1)}%`}
-                                            </td>
-                                            <td>
-                                                {isEditing ? (
-                                                    <input
-                                                        type="number"
-                                                        value={editCooldown}
-                                                        onChange={e => setEditCooldown(e.target.value)}
-                                                        className="dark-input"
-                                                        style={{ width: '80px' }}
-                                                    />
-                                                ) : `${w.cooldown_seconds || 3600}s`}
-                                            </td>
-                                            <td style={{ textAlign: 'right' }}>
-                                                {isEditing ? (
-                                                    <div style={{ display: 'flex', gap: '5px', justifyContent: 'flex-end' }}>
-                                                        <button className="page-button" style={{ background: '#4caf50', padding: '4px 8px' }} onClick={() => saveEdit(w.item_id)}>✓</button>
-                                                        <button className="page-button" style={{ background: '#777', padding: '4px 8px' }} onClick={() => setEditingWatchId(null)}>✕</button>
-                                                    </div>
-                                                ) : (
-                                                    <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
-                                                        <button className="page-button icon-btn" onClick={() => startEditing(w)}>✎</button>
-                                                        <button className="page-button icon-btn" style={{ color: '#f44336' }} onClick={() => handleRemoveWatch(w.item_id)}>🗑</button>
-                                                    </div>
-                                                )}
-                                            </td>
-                                        </tr>
-                                    );
-                                })}
-                            </tbody>
-                        </table>
+                                        return (
+                                            <tr key={w.id}>
+                                                <td>
+                                                    <Link to={`/item/${w.item_id}`} className="item-name-link">
+                                                        {w.itemName || `Item ${w.item_id}`}
+                                                    </Link>
+                                                </td>
+                                                <td>
+                                                    {isEditing ? (
+                                                        <select
+                                                            value={editPeriod}
+                                                            onChange={(e) => setEditPeriod(e.target.value as '1h' | '24h')}
+                                                            className="dark-input"
+                                                        >
+                                                            <option value="1h">1H</option>
+                                                            <option value="24h">24H</option>
+                                                        </select>
+                                                    ) : <span className="tag" style={{ background: activePeriod === '1H' ? '#4caf50' : '#2196f3' }}>{activePeriod}</span>}
+                                                </td>
+                                                <td>
+                                                    {isEditing ? (
+                                                        <input
+                                                            type="number"
+                                                            value={editThreshold}
+                                                            onChange={e => setEditThreshold(e.target.value)}
+                                                            className="dark-input"
+                                                            style={{ width: '60px' }}
+                                                            step="0.1"
+                                                        />
+                                                    ) : `${activeThreshold?.toFixed(1)}%`}
+                                                </td>
+                                                <td>
+                                                    {isEditing ? (
+                                                        <input
+                                                            type="number"
+                                                            value={editCooldown}
+                                                            onChange={e => setEditCooldown(e.target.value)}
+                                                            className="dark-input"
+                                                            style={{ width: '80px' }}
+                                                        />
+                                                    ) : `${w.cooldown_seconds || 3600}s`}
+                                                </td>
+                                                <td style={{ textAlign: 'right' }}>
+                                                    {isEditing ? (
+                                                        <div style={{ display: 'flex', gap: '5px', justifyContent: 'flex-end' }}>
+                                                            <button className="page-button" style={{ background: '#4caf50', padding: '4px 8px' }} onClick={() => saveEdit(w.item_id)}>✓</button>
+                                                            <button className="page-button" style={{ background: '#777', padding: '4px 8px' }} onClick={() => setEditingWatchId(null)}>✕</button>
+                                                        </div>
+                                                    ) : (
+                                                        <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+                                                            <button className="page-button icon-btn" onClick={() => startEditing(w)}>✎</button>
+                                                            <button className="page-button icon-btn" style={{ color: '#f44336' }} onClick={() => handleRemoveWatch(w.item_id)}>🗑</button>
+                                                        </div>
+                                                    )}
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
+                        </div>
                     )}
                 </div>
             )}
