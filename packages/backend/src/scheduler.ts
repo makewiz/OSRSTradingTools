@@ -84,21 +84,24 @@ export async function runRetentionPolicy(): Promise<void> {
     const oneYearAgo = now - 365 * 24 * 60 * 60;
 
     // Helper: Downsample prices (keep max timestamp per interval)
+    // OPTIMIZED: Uses DELETE ... USING for better performance on large sets
     const processPriceRetention = async (table: string, endTs: number, startTs: number, interval: number) => {
-      // Delete rows in range [startTs, endTs) that are NOT the max timestamp in their bucket
       await client.query(`
-        DELETE FROM ${table}
-        WHERE timestamp < $1 AND timestamp >= $2
-        AND (item_id, timestamp) NOT IN (
-          SELECT item_id, MAX(timestamp)
+        DELETE FROM ${table} p
+        USING (
+          SELECT item_id, MAX(timestamp) AS keep_ts
           FROM ${table}
           WHERE timestamp < $1 AND timestamp >= $2
           GROUP BY item_id, FLOOR(timestamp / $3)
-        )
+        ) k
+        WHERE p.item_id = k.item_id
+        AND FLOOR(p.timestamp / $3) = FLOOR(k.keep_ts / $3)
+        AND p.timestamp <> k.keep_ts
       `, [endTs, startTs, interval]);
     };
 
     // Helper: Downsample volumes (sum volumes per interval)
+    // OPTIMIZED: Only updates rows if values actually changed
     const processVolumeRetention = async (endTs: number, startTs: number, interval: number) => {
       // 1. Upsert aggregated volumes
       await client.query(`
@@ -114,6 +117,8 @@ export async function runRetentionPolicy(): Promise<void> {
         ON CONFLICT (item_id, timestamp) DO UPDATE SET
           buy_volume = EXCLUDED.buy_volume,
           sell_volume = EXCLUDED.sell_volume
+        WHERE item_volumes.buy_volume IS DISTINCT FROM EXCLUDED.buy_volume
+           OR item_volumes.sell_volume IS DISTINCT FROM EXCLUDED.sell_volume
       `, [endTs, startTs, interval]);
 
       // 2. Delete non-aligned timestamps in this range
@@ -124,29 +129,41 @@ export async function runRetentionPolicy(): Promise<void> {
       `, [endTs, startTs, interval]);
     };
 
-    // 1. Delete Data > 1 Year
+    // 1. Delete Data > 1 Year (Hard delete, no downsampling)
     await client.query("DELETE FROM item_buy_prices WHERE timestamp < $1", [oneYearAgo]);
     await client.query("DELETE FROM item_sell_prices WHERE timestamp < $1", [oneYearAgo]);
     await client.query("DELETE FROM item_volumes WHERE timestamp < $1", [oneYearAgo]);
 
+    // Optimization: Define a "processing window" for historical tiers.
+    // Instead of scanning the full historical range every hour (which re-processes static data),
+    // we only scan the "entry" zone where data moves from one tier to another.
+    // 2 days (172800s) is a safe overlap to catch any data transition.
+
+    const TWO_DAYS = 2 * 24 * 60 * 60;
+
     // 2. Tier: 30 days to 1 year -> 24h resolution (86400s)
-    await processPriceRetention('item_buy_prices', thirtyDaysAgo, oneYearAgo, 86400);
-    await processPriceRetention('item_sell_prices', thirtyDaysAgo, oneYearAgo, 86400);
-    await processVolumeRetention(thirtyDaysAgo, oneYearAgo, 86400);
+    // Scan window: [30 days ago - 2 days, 30 days ago)
+    const tier2Start = thirtyDaysAgo - TWO_DAYS;
+    await processPriceRetention('item_buy_prices', thirtyDaysAgo, tier2Start, 86400);
+    await processPriceRetention('item_sell_prices', thirtyDaysAgo, tier2Start, 86400);
+    await processVolumeRetention(thirtyDaysAgo, tier2Start, 86400);
 
     // 3. Tier: 7 days to 30 days -> 6h resolution (21600s)
-    await processPriceRetention('item_buy_prices', sevenDaysAgo, thirtyDaysAgo, 21600);
-    await processPriceRetention('item_sell_prices', sevenDaysAgo, thirtyDaysAgo, 21600);
-    await processVolumeRetention(sevenDaysAgo, thirtyDaysAgo, 21600);
+    // Scan window: [7 days ago - 2 days, 7 days ago)
+    const tier3Start = sevenDaysAgo - TWO_DAYS;
+    await processPriceRetention('item_buy_prices', sevenDaysAgo, tier3Start, 21600);
+    await processPriceRetention('item_sell_prices', sevenDaysAgo, tier3Start, 21600);
+    await processVolumeRetention(sevenDaysAgo, tier3Start, 21600);
 
     // 4. Tier: 24 hours to 7 days -> 1h resolution (3600s)
-    await processPriceRetention('item_buy_prices', oneDayAgo, sevenDaysAgo, 3600);
-    await processPriceRetention('item_sell_prices', oneDayAgo, sevenDaysAgo, 3600);
-    await processVolumeRetention(oneDayAgo, sevenDaysAgo, 3600);
+    // Scan window: [1 day ago - 2 days, 1 day ago)
+    const tier4Start = oneDayAgo - TWO_DAYS;
+    await processPriceRetention('item_buy_prices', oneDayAgo, tier4Start, 3600);
+    await processPriceRetention('item_sell_prices', oneDayAgo, tier4Start, 3600);
+    await processVolumeRetention(oneDayAgo, tier4Start, 3600);
 
     // 5. Tier: < 24 hours -> 5m resolution (300s)
-    // Only for prices. Volumes are naturally 5m resolution.
-    // Note: We scan from 'now' back to 'oneDayAgo'
+    // This is the active tier, keep scanning full last 24h to ensure consistency.
     await processPriceRetention('item_buy_prices', now, oneDayAgo, 300);
     await processPriceRetention('item_sell_prices', now, oneDayAgo, 300);
 
