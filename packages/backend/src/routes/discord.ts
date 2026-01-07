@@ -10,7 +10,7 @@ import {
 } from "../database";
 import { exchangeCodeForToken, getDiscordUser } from "../oauth";
 import { getCombinedItems } from "../osrsClient";
-import { getLatestItems } from "../scheduler";
+import { getLatestItems, touchActivity, getLastFetchTime } from "../scheduler";
 import { AnalysisService } from "../analysis";
 
 const router = express.Router();
@@ -37,8 +37,9 @@ router.get("/bot/items", async (req, res) => {
     }
 
     try {
+        touchActivity();
         let items = getLatestItems();
-        if (!items || items.length === 0) {
+        if (!items || items.length === 0 || Date.now() - getLastFetchTime() > 120000) {
             items = await getCombinedItems();
         }
         res.json({ items });

@@ -1,10 +1,28 @@
 import cron from "node-cron";
-import { getCombinedItems, CombinedItem } from "./osrsClient";
+import { getCombinedItems, CombinedItem, get5m, Osrs5mItem } from "./osrsClient";
 import { insertItemHistory, pool } from "./database";
 import { logger } from "@osrstradingtools/shared";
 
-let isRunning = false;
+let isRunningLatest = false;
+let isRunningHistory = false;
 let latestItemsCache: CombinedItem[] = [];
+
+// Activity Tracking
+let lastActivityTimestamp = Date.now();
+let lastFetchTimestamp = 0;
+const INACTIVITY_TIMEOUT_MS = 10 * 60 * 1000; // 10 minutes
+
+export function touchActivity() {
+  lastActivityTimestamp = Date.now();
+}
+
+export function isSystemActive(): boolean {
+  return Date.now() - lastActivityTimestamp < INACTIVITY_TIMEOUT_MS;
+}
+
+export function getLastFetchTime(): number {
+  return lastFetchTimestamp;
+}
 
 /**
  * Get the latest cached items
@@ -14,52 +32,76 @@ export function getLatestItems(): CombinedItem[] {
 }
 
 /**
- * Fetch and store current prices in the database (5m resolution)
+ * Fetch and store 5m history (Always runs)
  */
-async function fetchAndStorePrices(): Promise<void> {
-  if (isRunning) {
-    logger.debug("[Scheduler] Previous fetch still running, skipping...");
+async function fetchHistoryJob(): Promise<void> {
+  if (isRunningHistory) return;
+  isRunningHistory = true;
+
+  try {
+    logger.debug(`[Scheduler] Fetching specific 5m prices for history...`);
+    const response = await get5m();
+    const data = response.data;
+    const timestamp = response.timestamp;
+
+    if (!timestamp) {
+      logger.warn("[Scheduler] 5m data missing timestamp, skipping history insert.");
+      return;
+    }
+
+    // Insert into DB
+    let count = 0;
+    for (const [idStr, itemVal] of Object.entries(data)) {
+      const item = itemVal as Osrs5mItem;
+      const itemId = parseInt(idStr, 10);
+      if (
+        item.avgHighPrice !== null ||
+        item.avgLowPrice !== null ||
+        item.highPriceVolume !== null ||
+        item.lowPriceVolume !== null
+      ) {
+        await insertItemHistory(
+          "item_history_5m",
+          itemId,
+          timestamp,
+          item.avgHighPrice,
+          item.avgLowPrice,
+          item.highPriceVolume,
+          item.lowPriceVolume
+        );
+        count++;
+      }
+    }
+    logger.debug(`[Scheduler] Stored ${count} item prices (5m resolution)`);
+  } catch (error) {
+    logger.error("[Scheduler] Error in history job:", error);
+  } finally {
+    isRunningHistory = false;
+  }
+}
+
+/**
+ * Fetch latest prices (Runs only if active)
+ */
+async function fetchLatestJob(): Promise<void> {
+  if (isRunningLatest) return;
+
+  // Check activity
+  if (!isSystemActive()) {
+    // We do not log this every minute to avoid spam, but we skip fetching
     return;
   }
 
-  isRunning = true;
-
+  isRunningLatest = true;
   try {
-    logger.debug(`[Scheduler] Fetching prices...`);
-
     const items = await getCombinedItems();
     latestItemsCache = items;
-
-    // Store each item's price and volume data into the 5m history table
-    for (const item of items) {
-      if (item.fiveMinTimestamp) {
-        // We insert into the 5m table.
-        // We use avgHighPrice/avgLowPrice if available.
-        // If not available (null), we might still want to store volume if it exists.
-        if (
-          item.avgHighPrice !== null ||
-          item.avgLowPrice !== null ||
-          item.highPriceVolume !== null ||
-          item.lowPriceVolume !== null
-        ) {
-          await insertItemHistory(
-            "item_history_5m",
-            item.id,
-            item.fiveMinTimestamp,
-            item.avgHighPrice,
-            item.avgLowPrice,
-            item.highPriceVolume,
-            item.lowPriceVolume
-          );
-        }
-      }
-    }
-
-    logger.debug(`[Scheduler] Stored ${items.length} item prices successfully (5m resolution)`);
+    lastFetchTimestamp = Date.now();
+    // logger.debug(`[Scheduler] Updated latest items cache (${items.length} items)`);
   } catch (error) {
-    logger.error("[Scheduler] Error fetching/storing prices:", error);
+    logger.error("[Scheduler] Error in latest fetch job:", error);
   } finally {
-    isRunning = false;
+    isRunningLatest = false;
   }
 }
 
@@ -163,16 +205,18 @@ export async function runRetentionPolicy(): Promise<void> {
  * Start the scheduled price fetcher (runs every minute)
  */
 export function startPriceScheduler(): void {
-  // Run immediately on startup
-  fetchAndStorePrices().catch((err) => {
-    logger.error("[Scheduler] Initial fetch failed:", err);
+  // Initial run
+  fetchHistoryJob().catch(err => logger.error(err));
+  fetchLatestJob().catch(err => logger.error(err));
+
+  // Run Latest fetch every minute (checked for activity inside)
+  cron.schedule("* * * * *", () => {
+    fetchLatestJob().catch(err => logger.error("[Scheduler] Latest job failed:", err));
   });
 
-  // Run every minute
-  cron.schedule("* * * * *", () => {
-    fetchAndStorePrices().catch((err) => {
-      logger.error("[Scheduler] Scheduled fetch failed:", err);
-    });
+  // Run History fetch every 5 minutes
+  cron.schedule("*/5 * * * *", () => {
+    fetchHistoryJob().catch(err => logger.error("[Scheduler] History job failed:", err));
   });
 
   // Schedule retention policy to run once every hour

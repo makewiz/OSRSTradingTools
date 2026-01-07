@@ -5,7 +5,7 @@ import express from "express";
 import cors from "cors";
 import { getCombinedItems } from "./osrsClient";
 import { initializeDatabase, closeDatabase } from "./database";
-import { startPriceScheduler, getLatestItems } from "./scheduler";
+import { startPriceScheduler, getLatestItems, touchActivity, getLastFetchTime } from "./scheduler";
 
 import itemsRouter from "./routes/items";
 import authRouter from "./routes/auth";
@@ -55,8 +55,9 @@ app.get("/api/items", async (req, res, next) => {
   }
 }, async (_req, res) => {
   try {
+    touchActivity();
     const cached = getLatestItems();
-    if (cached && cached.length > 0) {
+    if (cached && cached.length > 0 && Date.now() - getLastFetchTime() < 120000) {
       res.json({ items: cached });
     } else {
       // Fallback if cache is empty (e.g. startup)

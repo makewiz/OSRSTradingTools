@@ -120,7 +120,7 @@ async function getLatest(): Promise<OsrsLatestResponse> {
   return data;
 }
 
-async function get5m(): Promise<Osrs5mResponse> {
+export async function get5m(): Promise<Osrs5mResponse> {
   const now = Date.now();
   if (fiveMinCache && now - fiveMinCache.fetchedAt < LATEST_TTL) {
     return fiveMinCache.data;

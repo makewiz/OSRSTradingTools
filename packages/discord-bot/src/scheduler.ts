@@ -67,9 +67,35 @@ async function broadcastHighlights(client: Client) {
 }
 
 async function checkNotifications(client: Client) {
-    const watches = await getAllActiveWatches();
+    const startHour = parseInt(process.env.BOT_SLEEP_START || "-1", 10);
+    const endHour = parseInt(process.env.BOT_SLEEP_END || "-1", 10);
     const now = Math.floor(Date.now() / 1000);
+    const currentHour = new Date().getUTCHours(); // UTC or local? Backend uses local or UTC?
+    // Let's assume user wants to configure hours based on server time. 
+    // process.env.TZ might be set or system local time.
+    // Using simple getHours() uses local time of the server.
+    const localHour = new Date().getHours();
 
+    if (startHour >= 0 && endHour >= 0) {
+        let isSleepTime = false;
+        if (startHour < endHour) {
+            // Example: 01 to 05
+            if (localHour >= startHour && localHour < endHour) isSleepTime = true;
+        } else {
+            // Example: 22 to 06
+            if (localHour >= startHour || localHour < endHour) isSleepTime = true;
+        }
+
+        if (isSleepTime) {
+            // logger.debug("[Scheduler] Bot is in sleep mode. Spending resources sparingly.");
+            // We do NOTHING. No DB check, no backend fetch.
+            return;
+        }
+    }
+
+    const watches = await getAllActiveWatches();
+
+    // Explicitly optimize: If no watches, do not fetch backend
     if (watches.length === 0) return;
 
     // Fetch latest items from backend
