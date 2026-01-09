@@ -12,7 +12,7 @@ import {
     generateToken,
     authenticateToken
 } from "../auth";
-import { exchangeCodeForToken, getDiscordUser } from "../oauth";
+import { exchangeCodeForToken, getDiscordUser, checkGuildMembership } from "../oauth";
 import crypto from "crypto";
 import { authLimiter } from "../middleware/rateLimiter";
 
@@ -131,7 +131,10 @@ router.post("/discord/login", authLimiter, async (req, res) => {
 
         if (!user) {
             if (process.env.DISABLE_REGISTRATION === "true") {
-                return res.status(403).json({ error: "Registration is currently disabled" });
+                const isMember = await checkGuildMembership(discordProfile.id);
+                if (!isMember) {
+                    return res.status(403).json({ error: "Registration is currently disabled" });
+                }
             }
 
             // 3. If not, treat as "Register via Discord"
