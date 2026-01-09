@@ -27,12 +27,15 @@ Use this checklist to ensure all environment variables are configured:
 - [ ] `DISCORD_CLIENT_ID`
 - [ ] `DISCORD_CLIENT_SECRET`
 - [ ] `DISCORD_REDIRECT_URI` (your frontend URL + `/auth/discord/callback`)
+- [ ] `BOT_API_KEY` (secure random string, must match bot service)
 - [ ] `PORT` (usually 4000)
 
 ### Discord Bot Service
 - [ ] `DATABASE_URL` (auto-configured by Railway)
 - [ ] `DISCORD_BOT_TOKEN`
 - [ ] `DISCORD_CLIENT_ID`
+- [ ] `BOT_API_KEY` (must match backend service)
+- [ ] `BACKEND_URL` (use private networking URL, e.g. `http://backend.railway.internal:4000`)
 
 ### Frontend Service
 - [ ] `VITE_API_URL` (your backend URL)

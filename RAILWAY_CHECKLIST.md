@@ -43,6 +43,7 @@ Use this checklist to ensure you complete all steps for deploying to Railway.
   - [ ] `DISCORD_CLIENT_ID=<your-value>`
   - [ ] `DISCORD_CLIENT_SECRET=<your-value>`
   - [ ] `DISCORD_REDIRECT_URI=<frontend-url>/auth/callback` (update after frontend deployed)
+  - [ ] `BOT_API_KEY=<secure-random-key>`
   - [ ] `PORT=4000`
 - [ ] Service deployed successfully
 - [ ] No errors in deployment logs
@@ -59,6 +60,8 @@ Use this checklist to ensure you complete all steps for deploying to Railway.
   - [ ] `DATABASE_URL=${{Postgres.DATABASE_URL}}`
   - [ ] `DISCORD_BOT_TOKEN=<your-bot-token>`
   - [ ] `DISCORD_CLIENT_ID=<your-client-id>`
+  - [ ] `BOT_API_KEY=<must-match-backend-key>`
+  - [ ] `BACKEND_URL=http://<backend-service-name>.railway.internal:4000`
 - [ ] Service deployed successfully
 - [ ] Bot shows as online in Discord
 - [ ] No errors in deployment logs
