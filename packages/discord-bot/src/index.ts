@@ -1,7 +1,7 @@
 import { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder, EmbedBuilder } from "discord.js";
 import dotenv from "dotenv";
 import path from "path";
-import { addWatch, removeWatch, getWatches, setNotificationsEnabled, closeDatabase } from "./database";
+import { addWatch, removeWatch, getWatches, setNotificationsEnabled, setSystemSetting, closeDatabase } from "./database";
 import { startNotificationScheduler } from "./scheduler";
 
 // Load environment variables from backend .env for simplicity in this setup, 
@@ -68,6 +68,20 @@ const commands = [
   new SlashCommandBuilder()
     .setName("highlights")
     .setDescription("Get daily market highlights"),
+  new SlashCommandBuilder()
+    .setName("config")
+    .setDescription("Configure bot settings")
+    .addSubcommand(subcommand =>
+      subcommand
+        .setName("sleep")
+        .setDescription("Set bot sleep hours")
+        .addIntegerOption(option => option.setName("start").setDescription("Start hour (0-23 UTC)").setRequired(true))
+        .addIntegerOption(option => option.setName("end").setDescription("End hour (0-23 UTC)").setRequired(true)))
+    .addSubcommand(subcommand =>
+      subcommand
+        .setName("channel")
+        .setDescription("Set highlights channel ID")
+        .addStringOption(option => option.setName("id").setDescription("Channel ID").setRequired(true)))
 ].map(command => command.toJSON());
 
 // Register Commands
@@ -167,6 +181,25 @@ client.on("interactionCreate", async (interaction) => {
       } catch (err) {
         console.error(err);
         await interaction.editReply({ content: "Failed to fetch highlights. Is the backend running?" });
+      }
+    } else if (commandName === "config") {
+      if (interaction.options.getSubcommand() === "sleep") {
+        const start = interaction.options.getInteger("start", true);
+        const end = interaction.options.getInteger("end", true);
+
+        if (start < 0 || start > 23 || end < 0 || end > 23) {
+          await interaction.reply({ content: "Hours must be between 0 and 23.", ephemeral: true });
+          return;
+        }
+
+        await setSystemSetting("bot_sleep_start", start.toString());
+        await setSystemSetting("bot_sleep_end", end.toString());
+
+        await interaction.reply({ content: `✅ Bot sleep time set to ${start}:00 - ${end}:00`, ephemeral: true });
+      } else if (interaction.options.getSubcommand() === "channel") {
+        const channelId = interaction.options.getString("id", true);
+        await setSystemSetting("discord_highlights_channel_id", channelId);
+        await interaction.reply({ content: `✅ Highlights channel set to: ${channelId}`, ephemeral: true });
       }
     }
   } catch (err) {

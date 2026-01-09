@@ -28,6 +28,7 @@ export interface User {
   password_hash: string | null;
   email: string | null;
   created_at: number;
+  is_admin: boolean;
 }
 
 export interface UserFavorite {
@@ -52,6 +53,11 @@ export interface NotificationSetting {
   last_notified_at: number | null;
 }
 
+export interface SystemSetting {
+  key: string;
+  value: string;
+}
+
 export async function initializeDatabase(): Promise<void> {
   const client = await pool.connect();
   try {
@@ -63,13 +69,27 @@ export async function initializeDatabase(): Promise<void> {
         username TEXT UNIQUE NOT NULL,
         password_hash TEXT,
         email TEXT,
-        created_at BIGINT NOT NULL DEFAULT (CAST(EXTRACT(EPOCH FROM NOW()) AS BIGINT))
+        created_at BIGINT NOT NULL DEFAULT (CAST(EXTRACT(EPOCH FROM NOW()) AS BIGINT)),
+        is_admin BOOLEAN NOT NULL DEFAULT FALSE
       )
     `);
 
     // Migration: Ensure password_hash is nullable (for existing databases)
     await client.query(`
       ALTER TABLE users ALTER COLUMN password_hash DROP NOT NULL
+    `);
+
+    // Migration: Add is_admin column if not exists
+    await client.query(`
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS is_admin BOOLEAN NOT NULL DEFAULT FALSE
+    `);
+
+    // System Settings table
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS system_settings (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL
+      )
     `);
 
     // ... rest of tables (favorites, discord, notifications) ...
@@ -625,4 +645,32 @@ export async function removeBackendWatch(discordId: string, itemId: number): Pro
 // Close database connection gracefully
 export async function closeDatabase(): Promise<void> {
   await pool.end();
+}
+
+/**
+ * System Settings Management
+ */
+
+export async function getSystemSetting(key: string, defaultValue: string = ""): Promise<string> {
+  const query = `SELECT value FROM system_settings WHERE key = $1`;
+  const result = await pool.query(query, [key]);
+  if (result.rows.length > 0) {
+    return result.rows[0].value;
+  }
+  return defaultValue;
+}
+
+export async function setSystemSetting(key: string, value: string): Promise<void> {
+  const query = `
+    INSERT INTO system_settings (key, value)
+    VALUES ($1, $2)
+    ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value
+  `;
+  await pool.query(query, [key, value]);
+}
+
+export async function getAllSystemSettings(): Promise<SystemSetting[]> {
+  const query = `SELECT * FROM system_settings`;
+  const result = await pool.query(query);
+  return result.rows;
 }

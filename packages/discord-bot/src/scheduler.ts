@@ -1,6 +1,6 @@
 import cron from "node-cron";
 import { Client, EmbedBuilder, TextChannel } from "discord.js";
-import { getAllActiveWatches, updateLastNotified } from "./database";
+import { getAllActiveWatches, updateLastNotified, getSystemSetting } from "./database";
 import { logger } from "@osrstradingtools/shared";
 
 const COOLDOWN_1H_SECONDS = 60 * 60; // 1 hour cooldown for 1h change
@@ -31,7 +31,15 @@ export function startNotificationScheduler(client: Client) {
 }
 
 async function broadcastHighlights(client: Client) {
-    const channelId = process.env.DISCORD_HIGHLIGHTS_CHANNEL_ID;
+    let channelId = process.env.DISCORD_HIGHLIGHTS_CHANNEL_ID;
+
+    try {
+        const dbChannelId = await getSystemSetting("discord_highlights_channel_id", "");
+        if (dbChannelId) channelId = dbChannelId;
+    } catch (err) {
+        // Fallback to env var
+    }
+
     if (!channelId) return;
 
     try {
@@ -67,27 +75,35 @@ async function broadcastHighlights(client: Client) {
 }
 
 async function checkNotifications(client: Client) {
-    const startHour = parseInt(process.env.BOT_SLEEP_START || "-1", 10);
-    const endHour = parseInt(process.env.BOT_SLEEP_END || "-1", 10);
+    let startHour = parseInt(process.env.BOT_SLEEP_START || "-1", 10);
+    let endHour = parseInt(process.env.BOT_SLEEP_END || "-1", 10);
+
+    // Attempt to fetch dynamic settings from DB
+    try {
+        const dbStart = await getSystemSetting("bot_sleep_start", "");
+        const dbEnd = await getSystemSetting("bot_sleep_end", "");
+
+        if (dbStart !== "") startHour = parseInt(dbStart, 10);
+        if (dbEnd !== "") endHour = parseInt(dbEnd, 10);
+    } catch (err) {
+        // Fallback to env vars on error, already set above
+    }
+
     const now = Math.floor(Date.now() / 1000);
-    const currentHour = new Date().getUTCHours(); // UTC or local? Backend uses local or UTC?
-    // Let's assume user wants to configure hours based on server time. 
-    // process.env.TZ might be set or system local time.
-    // Using simple getHours() uses local time of the server.
-    const localHour = new Date().getHours();
+    // User requested UTC time for bot sleep times
+    const currentHourUtc = new Date().getUTCHours();
 
     if (startHour >= 0 && endHour >= 0) {
         let isSleepTime = false;
         if (startHour < endHour) {
             // Example: 01 to 05
-            if (localHour >= startHour && localHour < endHour) isSleepTime = true;
+            if (currentHourUtc >= startHour && currentHourUtc < endHour) isSleepTime = true;
         } else {
             // Example: 22 to 06
-            if (localHour >= startHour || localHour < endHour) isSleepTime = true;
+            if (currentHourUtc >= startHour || currentHourUtc < endHour) isSleepTime = true;
         }
 
         if (isSleepTime) {
-            // logger.debug("[Scheduler] Bot is in sleep mode. Spending resources sparingly.");
             // We do NOTHING. No DB check, no backend fetch.
             return;
         }
