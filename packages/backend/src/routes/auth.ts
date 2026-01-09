@@ -150,7 +150,7 @@ router.post("/discord/login", authLimiter, async (req, res) => {
             // const randomPw = crypto.randomBytes(16).toString("hex");
             // const pwHash = await hashPassword(randomPw);
 
-            user = await createUser(username, null, discordProfile.email || null);
+            user = await createUser(username, null, null);
 
             // Link Immediately
             await linkDiscordUser(user.id, discordProfile.id);

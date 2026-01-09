@@ -62,9 +62,9 @@ export const Login: React.FC = () => {
                     alert("Discord Client ID not configured on backend.");
                     return;
                 }
-                const scope = encodeURIComponent("identify email");
+                const scope = encodeURIComponent("identify");
                 const state = encodeURIComponent("login");
-                const url = `https://discord.com/api/oauth2/authorize?client_id=${clientId}&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&response_type=code&scope=${scope}&state=${state}`;
+                const url = `https://discord.com/api/oauth2/authorize?client_id=${clientId}&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&response_type=code&scope=${scope}&state=${state}&prompt=none`;
                 window.location.href = url;
             })
             .catch(err => {
