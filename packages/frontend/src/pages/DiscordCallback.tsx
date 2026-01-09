@@ -41,7 +41,14 @@ export const DiscordCallback: React.FC = () => {
                         body: JSON.stringify({ code })
                     });
 
-                    if (!res.ok) throw new Error("Failed to link account.");
+                    if (!res.ok) {
+                        let errorMessage = "Failed to link account.";
+                        try {
+                            const data = await res.json();
+                            if (data.error) errorMessage = data.error;
+                        } catch (e) { /* ignore */ }
+                        throw new Error(errorMessage);
+                    }
 
                     navigate("/profile");
                 } else {
@@ -52,7 +59,14 @@ export const DiscordCallback: React.FC = () => {
                         body: JSON.stringify({ code })
                     });
 
-                    if (!res.ok) throw new Error("Failed to login with Discord.");
+                    if (!res.ok) {
+                        let errorMessage = "Failed to login with Discord.";
+                        try {
+                            const data = await res.json();
+                            if (data.error) errorMessage = data.error;
+                        } catch (e) { /* ignore */ }
+                        throw new Error(errorMessage);
+                    }
 
                     const data = await res.json();
                     // Fix argument order: login(token, user)
