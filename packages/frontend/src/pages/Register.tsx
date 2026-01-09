@@ -11,8 +11,14 @@ export const Register: React.FC = () => {
     const [error, setError] = useState<string | null>(null);
     const [loading, setLoading] = useState(false);
 
-    const { login } = useAuth();
+    const { login, registrationEnabled } = useAuth();
     const navigate = useNavigate();
+
+    React.useEffect(() => {
+        if (registrationEnabled === false) {
+            navigate("/login");
+        }
+    }, [navigate, registrationEnabled]);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();

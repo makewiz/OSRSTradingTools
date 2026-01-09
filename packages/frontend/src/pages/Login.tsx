@@ -12,7 +12,7 @@ export const Login: React.FC = () => {
     const [error, setError] = useState<string | null>(null);
     const [loading, setLoading] = useState(false);
 
-    const { login } = useAuth();
+    const { login, registrationEnabled } = useAuth();
     const navigate = useNavigate();
     const location = useLocation();
 
@@ -116,10 +116,12 @@ export const Login: React.FC = () => {
                         {loading ? "Logging in..." : "Login"}
                     </button>
                 </form>
-                <p>
-                    Don't have an account? <Link to="/register">Register here</Link>
-                </p>
+                {registrationEnabled && (
+                    <p>
+                        Don't have an account? <Link to="/register">Register here</Link>
+                    </p>
+                )}
             </div>
-        </div>
+        </div >
     );
 };

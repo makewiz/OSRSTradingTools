@@ -17,11 +17,13 @@ interface AuthContextType {
     login: (token: string, user: User) => void;
     logout: () => void;
     fetchWithAuth: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
+    registrationEnabled: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 import { useNavigate } from "react-router-dom";
+import { API_BASE_URL } from "../config";
 
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
     const [user, setUser] = useState<User | null>(() => {
@@ -30,7 +32,20 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     });
     const [token, setToken] = useState<string | null>(() => localStorage.getItem("auth_token"));
     const [isLoading, setIsLoading] = useState(false);
+    const [registrationEnabled, setRegistrationEnabled] = useState(false);
     const navigate = useNavigate();
+
+    // Fetch public config on mount
+    useEffect(() => {
+        fetch(`${API_BASE_URL}/api/config`)
+            .then(res => res.json())
+            .then(data => {
+                if (typeof data.registrationEnabled === 'boolean') {
+                    setRegistrationEnabled(data.registrationEnabled);
+                }
+            })
+            .catch(console.error);
+    }, []);
 
     const login = (newToken: string, newUser: User) => {
         setToken(newToken);
@@ -77,7 +92,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 isLoading,
                 login,
                 logout,
-                fetchWithAuth
+                fetchWithAuth,
+                registrationEnabled
             }}
         >
             {children}

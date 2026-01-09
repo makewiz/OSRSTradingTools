@@ -43,7 +43,7 @@ const changePasswordSchema = z.object({
 router.post("/register", authLimiter, async (req, res) => {
     try {
         if (process.env.DISABLE_REGISTRATION === "true") {
-            return res.status(403).json({ error: "Registration is currently disabled" });
+            return res.status(403).json({ error: "Registration is disabled" });
         }
 
         // Validate input

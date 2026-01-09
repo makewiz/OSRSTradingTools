@@ -3,7 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 
 export const Header: React.FC = () => {
-    const { user, logout } = useAuth();
+    const { user, logout, registrationEnabled } = useAuth();
     const navigate = useNavigate();
     const [isMenuOpen, setIsMenuOpen] = React.useState(false);
 
@@ -58,7 +58,9 @@ export const Header: React.FC = () => {
                         <>
                             <div className="nav-divider"></div>
                             <Link to="/login" className="nav-link" onClick={closeMenu}>Login</Link>
-                            <Link to="/register" className="nav-link" onClick={closeMenu}>Register</Link>
+                            {registrationEnabled && (
+                                <Link to="/register" className="nav-link" onClick={closeMenu}>Register</Link>
+                            )}
                         </>
                     )}
                 </nav>
