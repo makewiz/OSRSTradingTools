@@ -131,9 +131,15 @@ router.post("/discord/login", authLimiter, async (req, res) => {
 
         if (!user) {
             if (process.env.DISABLE_REGISTRATION === "true") {
-                const isMember = await checkGuildMembership(discordProfile.id);
-                if (!isMember) {
-                    return res.status(403).json({ error: "Registration is currently disabled" });
+                try {
+                    const isMember = await checkGuildMembership(discordProfile.id);
+                    if (!isMember) {
+                        return res.status(403).json({ error: "Registration is disabled" });
+                    }
+                } catch (err) {
+                    // eslint-disable-next-line no-console
+                    console.error("Guild check failed during registration:", err);
+                    return res.status(503).json({ error: "Registration temporarily unavailable" });
                 }
             }
 

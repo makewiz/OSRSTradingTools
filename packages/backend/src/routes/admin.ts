@@ -97,9 +97,7 @@ router.post("/users", async (req, res) => {
         const { password_hash, ...safeUser } = user;
         res.status(201).json({ user: safeUser });
 
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars
-        const { password_hash, ...safeUser } = user;
-        res.status(201).json({ user: safeUser });
+
 
     } catch (err) {
         console.error(err);
