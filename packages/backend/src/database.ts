@@ -426,18 +426,20 @@ export async function calculateHourChange(
  */
 
 // Create new user
+// Create new user
 export async function createUser(
   username: string,
   passwordHash: string | null,
-  email: string | null = null
+  email: string | null = null,
+  isAdmin: boolean = false
 ): Promise<User> {
   const query = `
-    INSERT INTO users (username, password_hash, email)
-    VALUES ($1, $2, $3)
+    INSERT INTO users (username, password_hash, email, is_admin)
+    VALUES ($1, $2, $3, $4)
     RETURNING *
   `;
 
-  const result = await pool.query(query, [username, passwordHash, email]);
+  const result = await pool.query(query, [username, passwordHash, email, isAdmin]);
   const user = result.rows[0];
 
   return {

@@ -91,18 +91,11 @@ router.post("/users", async (req, res) => {
         }
 
         const hash = await hashPassword(password);
-        const user = await createUser(username, hash, email || null);
+        const user = await createUser(username, hash, email || null, is_admin);
 
-        // If admin, we need to update the user immediately because createUser defaults false usually
-        // Note: createUser implementation in database.ts doesn't support is_admin arg yet. 
-        // I need to either update createUser or run an update query.
-        // Let's run a manual update if is_admin is true.
-
-        if (is_admin) {
-            const { pool } = await import("../database");
-            await pool.query("UPDATE users SET is_admin = TRUE WHERE id = $1", [user.id]);
-            user.is_admin = true;
-        }
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        const { password_hash, ...safeUser } = user;
+        res.status(201).json({ user: safeUser });
 
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
         const { password_hash, ...safeUser } = user;
