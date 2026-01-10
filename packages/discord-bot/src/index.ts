@@ -1,4 +1,4 @@
-import { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder, EmbedBuilder } from "discord.js";
+import { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder, EmbedBuilder, PermissionsBitField } from "discord.js";
 import dotenv from "dotenv";
 import path from "path";
 import { addWatch, removeWatch, getWatches, setNotificationsEnabled, setSystemSetting, closeDatabase } from "./database";
@@ -183,6 +183,11 @@ client.on("interactionCreate", async (interaction) => {
         await interaction.editReply({ content: "Failed to fetch highlights. Is the backend running?" });
       }
     } else if (commandName === "config") {
+      if (!interaction.memberPermissions?.has(PermissionsBitField.Flags.Administrator)) {
+        await interaction.reply({ content: "You do not have permission to use this command.", ephemeral: true });
+        return;
+      }
+
       if (interaction.options.getSubcommand() === "sleep") {
         const start = interaction.options.getInteger("start", true);
         const end = interaction.options.getInteger("end", true);
