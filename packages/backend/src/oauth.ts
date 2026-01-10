@@ -82,15 +82,21 @@ export async function checkGuildMembership(userId: string): Promise<boolean> {
     try {
         const response = await axios.get(`${DISCORD_API_URL}/guilds/${guildId}/members/${userId}`, {
             headers: { Authorization: `Bot ${botToken}` },
+            timeout: 5000,
         });
         return response.status === 200;
     } catch (err: any) {
-        if (err.response && err.response.status === 404) {
-            return false; // User not in guild
+        if (err.response) {
+            if (err.response.status === 404) {
+                return false; // User not in guild
+            }
+            // eslint-disable-next-line no-console
+            console.error("Failed to check guild membership. Status:", err.response.status, "Data:", err.response.data);
+        } else {
+            // eslint-disable-next-line no-console
+            console.error("Failed to check guild membership:", err.message);
         }
-        // eslint-disable-next-line no-console
-        console.error("Failed to check guild membership:", err.message);
-        return false;
+        throw err; // Rethrow so caller knows it was a transient/upstream error
     }
 }
 
