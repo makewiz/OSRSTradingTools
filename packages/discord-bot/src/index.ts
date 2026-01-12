@@ -1,7 +1,7 @@
-import { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder, EmbedBuilder } from "discord.js";
+import { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder, EmbedBuilder, PermissionsBitField } from "discord.js";
 import dotenv from "dotenv";
 import path from "path";
-import { addWatch, removeWatch, getWatches, setNotificationsEnabled, closeDatabase } from "./database";
+import { addWatch, removeWatch, getWatches, setNotificationsEnabled, setSystemSetting, closeDatabase, isUserAdmin } from "./database";
 import { startNotificationScheduler } from "./scheduler";
 
 // Load environment variables from backend .env for simplicity in this setup, 
@@ -68,6 +68,20 @@ const commands = [
   new SlashCommandBuilder()
     .setName("highlights")
     .setDescription("Get daily market highlights"),
+  new SlashCommandBuilder()
+    .setName("config")
+    .setDescription("Configure bot settings")
+    .addSubcommand(subcommand =>
+      subcommand
+        .setName("sleep")
+        .setDescription("Set bot sleep hours")
+        .addIntegerOption(option => option.setName("start").setDescription("Start hour (0-23 UTC) or -1 to disable").setMinValue(-1).setMaxValue(23).setRequired(true))
+        .addIntegerOption(option => option.setName("end").setDescription("End hour (0-23 UTC) or -1 to disable").setMinValue(-1).setMaxValue(23).setRequired(true)))
+    .addSubcommand(subcommand =>
+      subcommand
+        .setName("channel")
+        .setDescription("Set highlights channel ID")
+        .addStringOption(option => option.setName("id").setDescription("Channel ID").setRequired(true)))
 ].map(command => command.toJSON());
 
 // Register Commands
@@ -167,6 +181,70 @@ client.on("interactionCreate", async (interaction) => {
       } catch (err) {
         console.error(err);
         await interaction.editReply({ content: "Failed to fetch highlights. Is the backend running?" });
+      }
+    } else if (commandName === "config") {
+      const isAdmin = await isUserAdmin(discordId);
+      const hasPerms = interaction.memberPermissions?.has(PermissionsBitField.Flags.Administrator);
+
+      if (!hasPerms && !isAdmin) {
+        await interaction.reply({ content: "You do not have permission to use this command.", ephemeral: true });
+        return;
+      }
+
+      if (interaction.options.getSubcommand() === "sleep") {
+        const start = interaction.options.getInteger("start", true);
+        const end = interaction.options.getInteger("end", true);
+
+        if ((start < -1 || start > 23) || (end < -1 || end > 23)) {
+          await interaction.reply({ content: "Hours must be between 0 and 23, or -1 to disable.", ephemeral: true });
+          return;
+        }
+
+        await setSystemSetting("bot_sleep_start", start.toString());
+        await setSystemSetting("bot_sleep_end", end.toString());
+
+        if (start === -1 || end === -1) {
+          await interaction.reply({ content: `✅ Bot sleep disabled (set to -1)`, ephemeral: true });
+        } else {
+          // If start and end are the same the bot will sleep all day. This is allowed for now.
+          await interaction.reply({ content: `✅ Bot sleep time set to ${start}:00 - ${end}:00`, ephemeral: true });
+        }
+      } else if (interaction.options.getSubcommand() === "channel") {
+        const channelId = interaction.options.getString("id", true);
+
+        if (!interaction.guild) {
+          await interaction.reply({ content: "This command can only be used in a server.", ephemeral: true });
+          return;
+        }
+
+        try {
+          const channel = await interaction.guild.channels.fetch(channelId);
+
+          if (!channel) {
+            await interaction.reply({ content: "❌ Channel not found. Please provide a valid Channel ID from this server.", ephemeral: true });
+            return;
+          }
+
+          if (!channel.isTextBased()) {
+            await interaction.reply({ content: "❌ The provided channel must be text-based.", ephemeral: true });
+            return;
+          }
+
+          // Check if bot can send messages
+          const perms = channel.permissionsFor(client.user!);
+          if (!perms?.has("SendMessages")) {
+            await interaction.reply({ content: "❌ I do not have permission to send messages in that channel.", ephemeral: true });
+            return;
+          }
+
+          await setSystemSetting("discord_highlights_channel_id", channelId);
+          await interaction.reply({ content: `✅ Highlights channel set to: <#${channelId}>`, ephemeral: true });
+
+        } catch (err) {
+          // eslint-disable-next-line no-console
+          console.error("Error validating channel:", err);
+          await interaction.reply({ content: "❌ Invalid Channel ID or unable to verify channel.", ephemeral: true });
+        }
       }
     }
   } catch (err) {

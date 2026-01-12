@@ -6,8 +6,15 @@ Hobby web app to help Old School RuneScape traders browse items, inspect GE marg
 
 - **Frontend**: React + Vite + TypeScript (`packages/frontend`)
 - **Backend**: Node + Express + TypeScript (`packages/backend`)
+- **Shared**: Shared types and utilities (`packages/shared`)
 - **Database**: PostgreSQL (`pg`) for price history and user data
 - **Discord bot**: `discord.js` + TypeScript (`packages/discord-bot`)
+
+### Features
+- **Real-time Pricing**: Fetches latest OSRS prices every minute.
+- **Market Analysis**: Identifies high margin items, volume spikes, and price drops.
+- **AI Integration**: Generates daily market summaries using OpenAI (optional).
+- **Discord Alerts**: Users can watch items and get notified of price changes.
 
 ### Deployment
 
@@ -49,6 +56,8 @@ JWT_SECRET=your-secret-key-here
 DISCORD_CLIENT_ID=your-discord-client-id
 DISCORD_CLIENT_SECRET=your-discord-client-secret
 DISCORD_REDIRECT_URI=http://localhost:5173/auth/callback
+BOT_API_KEY=your-secure-random-api-key
+OPENAI_API_KEY=your-openai-api-key-optional
 ```
 
 See [`.env.example`](.env.example) for a complete template.
@@ -71,12 +80,14 @@ The backend starts on `http://localhost:4000` and exposes:
 
 **Database & Scheduled Fetching**:
 - PostgreSQL database stores price history and user data
-- Price data is fetched from OSRS Wiki APIs **every minute** and stored in the database
+- **Caching**: Latest prices are fetched every minute while the system is active (user/bot activity).
+- **History**: Price history is fetched every 5 minutes (persisted regardless of activity).
 - Data retention strategy:
-  - **Last 24 hours**: Minute-level accuracy
-  - **Last 7 days**: Hourly aggregates
-  - **Older data**: Daily aggregates
-- Aggregation runs automatically (hourly aggregation daily at 2 AM, daily aggregation weekly)
+  - **5-minute resolution**: Kept for 24 hours
+  - **Hourly resolution**: Kept for 7 days
+  - **6-hour resolution**: Kept for 30 days
+  - **Daily resolution**: Kept for 1 year
+- Aggregation runs automatically every hour to downsample data and clean up old records.
 
 ### Running the frontend
 
@@ -103,6 +114,8 @@ Create a `.env` file in `packages/discord-bot` (do **not** commit it) with:
 DISCORD_BOT_TOKEN=your_discord_bot_token_here
 DISCORD_CLIENT_ID=your_discord_client_id
 DATABASE_URL=postgresql://user:password@localhost:5432/osrs_trading_tools
+BOT_API_KEY=must-match-backend-api-key
+BACKEND_URL=http://localhost:4000
 ```
 
 Then:
@@ -111,7 +124,10 @@ Then:
 npm run dev:bot
 ```
 
-The bot logs in and watches for price alerts, sends notifications to users based on their watched items.
+The bot logs in and provides slash commands:
+- `/watch <item_id> [threshold]`: Get notified when an item's price changes by X% (default 5%).
+- `/highlights`: Get a daily market analysis report with top movers and AI summary.
+- `/listwatches`: See your active watches.
 
 ### Security and secrets
 

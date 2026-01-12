@@ -8,6 +8,7 @@ import { ItemDetail } from "./pages/ItemDetail";
 import { Login } from "./pages/Login";
 import { Register } from "./pages/Register";
 import { Profile } from "./pages/Profile";
+import { Admin } from "./pages/Admin";
 import { DiscordCallback } from "./pages/DiscordCallback";
 import { Privacy } from "./pages/Privacy";
 import { Terms } from "./pages/Terms";
@@ -27,6 +28,7 @@ export const App: React.FC = () => {
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
           <Route path="/profile" element={<Profile />} />
+          <Route path="/admin" element={<Admin />} />
           <Route path="/auth/discord/callback" element={<DiscordCallback />} />
           <Route path="/watches" element={<Watches />} />
           <Route path="/favorites" element={<Favorites />} />

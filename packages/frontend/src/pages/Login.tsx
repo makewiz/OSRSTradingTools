@@ -12,7 +12,7 @@ export const Login: React.FC = () => {
     const [error, setError] = useState<string | null>(null);
     const [loading, setLoading] = useState(false);
 
-    const { login } = useAuth();
+    const { login, registrationEnabled } = useAuth();
     const navigate = useNavigate();
     const location = useLocation();
 
@@ -62,9 +62,9 @@ export const Login: React.FC = () => {
                     alert("Discord Client ID not configured on backend.");
                     return;
                 }
-                const scope = encodeURIComponent("identify email");
+                const scope = encodeURIComponent("identify");
                 const state = encodeURIComponent("login");
-                const url = `https://discord.com/api/oauth2/authorize?client_id=${clientId}&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&response_type=code&scope=${scope}&state=${state}`;
+                const url = `https://discord.com/api/oauth2/authorize?client_id=${clientId}&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&response_type=code&scope=${scope}&state=${state}&prompt=none`;
                 window.location.href = url;
             })
             .catch(err => {
@@ -116,10 +116,12 @@ export const Login: React.FC = () => {
                         {loading ? "Logging in..." : "Login"}
                     </button>
                 </form>
-                <p>
-                    Don't have an account? <Link to="/register">Register here</Link>
-                </p>
+                {registrationEnabled && (
+                    <p>
+                        Don't have an account? <Link to="/register">Register here</Link>
+                    </p>
+                )}
             </div>
-        </div>
+        </div >
     );
 };

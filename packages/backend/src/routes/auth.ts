@@ -12,7 +12,7 @@ import {
     generateToken,
     authenticateToken
 } from "../auth";
-import { exchangeCodeForToken, getDiscordUser } from "../oauth";
+import { exchangeCodeForToken, getDiscordUser, checkGuildMembership } from "../oauth";
 import crypto from "crypto";
 import { authLimiter } from "../middleware/rateLimiter";
 
@@ -43,7 +43,7 @@ const changePasswordSchema = z.object({
 router.post("/register", authLimiter, async (req, res) => {
     try {
         if (process.env.DISABLE_REGISTRATION === "true") {
-            return res.status(403).json({ error: "Registration is currently disabled" });
+            return res.status(403).json({ error: "Registration is disabled" });
         }
 
         // Validate input
@@ -131,7 +131,16 @@ router.post("/discord/login", authLimiter, async (req, res) => {
 
         if (!user) {
             if (process.env.DISABLE_REGISTRATION === "true") {
-                return res.status(403).json({ error: "Registration is currently disabled" });
+                try {
+                    const isMember = await checkGuildMembership(discordProfile.id);
+                    if (!isMember) {
+                        return res.status(403).json({ error: "Registration is disabled" });
+                    }
+                } catch (err) {
+                    // eslint-disable-next-line no-console
+                    console.error("Guild check failed during registration:", err);
+                    return res.status(503).json({ error: "Registration temporarily unavailable" });
+                }
             }
 
             // 3. If not, treat as "Register via Discord"
@@ -150,7 +159,7 @@ router.post("/discord/login", authLimiter, async (req, res) => {
             // const randomPw = crypto.randomBytes(16).toString("hex");
             // const pwHash = await hashPassword(randomPw);
 
-            user = await createUser(username, null, discordProfile.email || null);
+            user = await createUser(username, null, null);
 
             // Link Immediately
             await linkDiscordUser(user.id, discordProfile.id);

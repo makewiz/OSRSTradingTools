@@ -68,3 +68,35 @@ export async function getDiscordUser(accessToken: string): Promise<DiscordUser> 
         throw new Error("Failed to fetch Discord user");
     }
 }
+
+export async function checkGuildMembership(userId: string): Promise<boolean> {
+    const guildId = process.env.DISCORD_GUILD_ID;
+    const botToken = process.env.DISCORD_BOT_TOKEN;
+
+    if (!guildId || !botToken) {
+        // eslint-disable-next-line no-console
+        console.warn("DISCORD_GUILD_ID or DISCORD_BOT_TOKEN not set. Cannot check guild membership.");
+        return false;
+    }
+
+    try {
+        const response = await axios.get(`${DISCORD_API_URL}/guilds/${guildId}/members/${userId}`, {
+            headers: { Authorization: `Bot ${botToken}` },
+            timeout: 5000,
+        });
+        return response.status === 200;
+    } catch (err: any) {
+        if (err.response) {
+            if (err.response.status === 404) {
+                return false; // User not in guild
+            }
+            // eslint-disable-next-line no-console
+            console.error("Failed to check guild membership. Status:", err.response.status, "Data:", err.response.data);
+        } else {
+            // eslint-disable-next-line no-console
+            console.error("Failed to check guild membership:", err.message);
+        }
+        throw err; // Rethrow so caller knows it was a transient/upstream error
+    }
+}
+

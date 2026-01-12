@@ -53,6 +53,20 @@ export async function getDiscordUser(discordId: string): Promise<DiscordUser | n
 }
 
 /**
+ * Check if a Discord user is linked to an Admin account
+ */
+export async function isUserAdmin(discordId: string): Promise<boolean> {
+  const query = `
+    SELECT u.is_admin 
+    FROM discord_users du
+    JOIN users u ON du.user_id = u.id
+    WHERE du.discord_id = $1
+  `;
+  const result = await pool.query(query, [discordId]);
+  return result.rows.length > 0 && result.rows[0].is_admin === true;
+}
+
+/**
  * Add a watch for an item
  */
 // Add/Update Watch
@@ -149,6 +163,29 @@ export async function updateLastNotified(id: number, period: '24h' | '1h'): Prom
 }
 
 
+
+
+
+/**
+ * System Settings
+ */
+export async function getSystemSetting(key: string, defaultValue: string = ""): Promise<string> {
+  const query = `SELECT value FROM system_settings WHERE key = $1`;
+  const result = await pool.query(query, [key]);
+  if (result.rows.length > 0) {
+    return result.rows[0].value;
+  }
+  return defaultValue;
+}
+
+export async function setSystemSetting(key: string, value: string): Promise<void> {
+  const query = `
+    INSERT INTO system_settings (key, value)
+    VALUES ($1, $2)
+    ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value
+  `;
+  await pool.query(query, [key, value]);
+}
 
 export async function closeDatabase() {
   await pool.end();
