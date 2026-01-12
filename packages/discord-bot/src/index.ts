@@ -203,8 +203,40 @@ client.on("interactionCreate", async (interaction) => {
         await interaction.reply({ content: `✅ Bot sleep time set to ${start}:00 - ${end}:00`, ephemeral: true });
       } else if (interaction.options.getSubcommand() === "channel") {
         const channelId = interaction.options.getString("id", true);
-        await setSystemSetting("discord_highlights_channel_id", channelId);
-        await interaction.reply({ content: `✅ Highlights channel set to: ${channelId}`, ephemeral: true });
+
+        if (!interaction.guild) {
+          await interaction.reply({ content: "This command can only be used in a server.", ephemeral: true });
+          return;
+        }
+
+        try {
+          const channel = await interaction.guild.channels.fetch(channelId);
+
+          if (!channel) {
+            await interaction.reply({ content: "❌ Channel not found. Please provide a valid Channel ID from this server.", ephemeral: true });
+            return;
+          }
+
+          if (!channel.isTextBased()) {
+            await interaction.reply({ content: "❌ The provided channel must be text-based.", ephemeral: true });
+            return;
+          }
+
+          // Check if bot can send messages
+          const perms = channel.permissionsFor(client.user!);
+          if (!perms?.has("SendMessages")) {
+            await interaction.reply({ content: "❌ I do not have permission to send messages in that channel.", ephemeral: true });
+            return;
+          }
+
+          await setSystemSetting("discord_highlights_channel_id", channelId);
+          await interaction.reply({ content: `✅ Highlights channel set to: <#${channelId}>`, ephemeral: true });
+
+        } catch (err) {
+          // eslint-disable-next-line no-console
+          console.error("Error validating channel:", err);
+          await interaction.reply({ content: "❌ Invalid Channel ID or unable to verify channel.", ephemeral: true });
+        }
       }
     }
   } catch (err) {
