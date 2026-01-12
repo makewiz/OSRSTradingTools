@@ -53,6 +53,20 @@ export async function getDiscordUser(discordId: string): Promise<DiscordUser | n
 }
 
 /**
+ * Check if a Discord user is linked to an Admin account
+ */
+export async function isUserAdmin(discordId: string): Promise<boolean> {
+  const query = `
+    SELECT u.is_admin 
+    FROM discord_users du
+    JOIN users u ON du.user_id = u.id
+    WHERE du.discord_id = $1
+  `;
+  const result = await pool.query(query, [discordId]);
+  return result.rows.length > 0 && result.rows[0].is_admin === true;
+}
+
+/**
  * Add a watch for an item
  */
 // Add/Update Watch

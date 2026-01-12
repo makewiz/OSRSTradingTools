@@ -1,7 +1,7 @@
 import { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder, EmbedBuilder, PermissionsBitField } from "discord.js";
 import dotenv from "dotenv";
 import path from "path";
-import { addWatch, removeWatch, getWatches, setNotificationsEnabled, setSystemSetting, closeDatabase } from "./database";
+import { addWatch, removeWatch, getWatches, setNotificationsEnabled, setSystemSetting, closeDatabase, isUserAdmin } from "./database";
 import { startNotificationScheduler } from "./scheduler";
 
 // Load environment variables from backend .env for simplicity in this setup, 
@@ -183,7 +183,10 @@ client.on("interactionCreate", async (interaction) => {
         await interaction.editReply({ content: "Failed to fetch highlights. Is the backend running?" });
       }
     } else if (commandName === "config") {
-      if (!interaction.memberPermissions?.has(PermissionsBitField.Flags.Administrator)) {
+      const isAdmin = await isUserAdmin(discordId);
+      const hasPerms = interaction.memberPermissions?.has(PermissionsBitField.Flags.Administrator);
+
+      if (!hasPerms && !isAdmin) {
         await interaction.reply({ content: "You do not have permission to use this command.", ephemeral: true });
         return;
       }
