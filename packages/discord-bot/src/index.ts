@@ -75,8 +75,8 @@ const commands = [
       subcommand
         .setName("sleep")
         .setDescription("Set bot sleep hours")
-        .addIntegerOption(option => option.setName("start").setDescription("Start hour (0-23 UTC)").setRequired(true))
-        .addIntegerOption(option => option.setName("end").setDescription("End hour (0-23 UTC)").setRequired(true)))
+        .addIntegerOption(option => option.setName("start").setDescription("Start hour (0-23 UTC) or -1 to disable").setMinValue(-1).setMaxValue(23).setRequired(true))
+        .addIntegerOption(option => option.setName("end").setDescription("End hour (0-23 UTC) or -1 to disable").setMinValue(-1).setMaxValue(23).setRequired(true)))
     .addSubcommand(subcommand =>
       subcommand
         .setName("channel")
@@ -192,15 +192,20 @@ client.on("interactionCreate", async (interaction) => {
         const start = interaction.options.getInteger("start", true);
         const end = interaction.options.getInteger("end", true);
 
-        if (start < 0 || start > 23 || end < 0 || end > 23) {
-          await interaction.reply({ content: "Hours must be between 0 and 23.", ephemeral: true });
+        if ((start < -1 || start > 23) || (end < -1 || end > 23)) {
+          await interaction.reply({ content: "Hours must be between 0 and 23, or -1 to disable.", ephemeral: true });
           return;
         }
 
         await setSystemSetting("bot_sleep_start", start.toString());
         await setSystemSetting("bot_sleep_end", end.toString());
 
-        await interaction.reply({ content: `✅ Bot sleep time set to ${start}:00 - ${end}:00`, ephemeral: true });
+        if (start === -1 || end === -1) {
+          await interaction.reply({ content: `✅ Bot sleep disabled (set to -1)`, ephemeral: true });
+        } else {
+          // If start and end are the same the bot will sleep all day. This is allowed for now.
+          await interaction.reply({ content: `✅ Bot sleep time set to ${start}:00 - ${end}:00`, ephemeral: true });
+        }
       } else if (interaction.options.getSubcommand() === "channel") {
         const channelId = interaction.options.getString("id", true);
 

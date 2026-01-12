@@ -120,10 +120,10 @@ export const Admin: React.FC = () => {
                 {settingsSuccess && <div className="success-message">{settingsSuccess}</div>}
                 <form onSubmit={handleSaveSettings} className="admin-form">
                     <div className="form-group">
-                        <label>Bot Sleep Start Hour (0-23 UTC)</label>
+                        <label>Bot Sleep Start Hour (0-23 UTC, or -1 to disable)</label>
                         <input
                             type="number"
-                            min="0"
+                            min="-1"
                             max="23"
                             value={settings.bot_sleep_start || ""}
                             onChange={(e) => setSettings({ ...settings, bot_sleep_start: e.target.value })}
@@ -131,10 +131,10 @@ export const Admin: React.FC = () => {
                         />
                     </div>
                     <div className="form-group">
-                        <label>Bot Sleep End Hour (0-23 UTC)</label>
+                        <label>Bot Sleep End Hour (0-23 UTC, or -1 to disable)</label>
                         <input
                             type="number"
-                            min="0"
+                            min="-1"
                             max="23"
                             value={settings.bot_sleep_end || ""}
                             onChange={(e) => setSettings({ ...settings, bot_sleep_end: e.target.value })}

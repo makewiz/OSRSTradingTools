@@ -95,7 +95,10 @@ async function checkNotifications(client: Client) {
 
     if (startHour >= 0 && endHour >= 0) {
         let isSleepTime = false;
-        if (startHour < endHour) {
+        if (startHour == endHour) {
+            // Continuous sleep time
+            isSleepTime = true;
+        } else if (startHour < endHour) {
             // Example: 01 to 05
             if (currentHourUtc >= startHour && currentHourUtc < endHour) isSleepTime = true;
         } else {
