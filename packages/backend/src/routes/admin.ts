@@ -24,8 +24,8 @@ const userCreateSchema = z.object({
 });
 
 const settingsUpdateSchema = z.object({
-    bot_sleep_start: z.string().regex(/^\d+$/, "Must be an integer hour (0-23)").optional(),
-    bot_sleep_end: z.string().regex(/^\d+$/, "Must be an integer hour (0-23)").optional(),
+    bot_sleep_start: z.string().regex(/^([01]?\d|2[0-3])$/, "Must be an integer hour (0-23)").optional(),
+    bot_sleep_end: z.string().regex(/^([01]?\d|2[0-3])$/, "Must be an integer hour (0-23)").optional(),
     discord_highlights_channel_id: z.string().regex(/^\d+$/, "Must be a numeric Discord ID").optional(),
 });
 
