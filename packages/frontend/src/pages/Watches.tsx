@@ -209,6 +209,26 @@ export const Watches: React.FC = () => {
         }
     };
 
+    const toggleAdvancedWatch = async (watch: AdvancedWatch) => {
+        const newEnabled = !watch.enabled;
+        // Optimistic update
+        setAdvancedWatches(prev => prev.map(w => w.id === watch.id ? { ...w, enabled: newEnabled } : w));
+
+        try {
+            const res = await fetchWithAuth(`${API_BASE_URL}/api/discord/advanced-watches/${watch.id}`, {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ enabled: newEnabled })
+            });
+
+            if (!res.ok) throw new Error("Failed to toggle watch");
+        } catch (err) {
+            // Revert if failed
+            setAdvancedWatches(prev => prev.map(w => w.id === watch.id ? { ...w, enabled: !newEnabled } : w));
+            setError("Failed to update watch status");
+        }
+    };
+
     const updateAdvForm = (key: string, value: any) => {
         if (value === "") value = null;
         else if (key === 'is_members') {
@@ -244,6 +264,7 @@ export const Watches: React.FC = () => {
                                         <tr>
                                             <th>Watch Rules</th>
                                             <th>Settings</th>
+                                            <th>Status</th>
                                             <th style={{ textAlign: 'right' }}>Action</th>
                                         </tr>
                                     </thead>
@@ -270,6 +291,16 @@ export const Watches: React.FC = () => {
                                                     <div style={{ fontSize: '0.9em', color: '#aaa' }}>
                                                         Top {w.max_count} by {w.order_by} ({w.direction})
                                                     </div>
+                                                </td>
+                                                <td>
+                                                    <label className="switch">
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={w.enabled}
+                                                            onChange={() => toggleAdvancedWatch(w)}
+                                                        />
+                                                        <span className="slider round"></span>
+                                                    </label>
                                                 </td>
                                                 <td style={{ textAlign: 'right', minWidth: '100px' }}>
                                                     <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
@@ -488,6 +519,47 @@ export const Watches: React.FC = () => {
                 .tag { background: #333; padding: 2px 6px; borderRadius: 4px; font-size: 0.85em; border: 1px solid #444; }
                 .dark-input { background: #333; border: 1px solid #444; color: #fff; padding: 8px; border-radius: 4px; width: 100%; box-sizing: border-box; }
                 .dark-input:focus { border-color: #4caf50; outline: none; }
+
+                /* Toggle Switch */
+                .switch {
+                  position: relative;
+                  display: inline-block;
+                  width: 40px;
+                  height: 22px;
+                }
+                .switch input { opacity: 0; width: 0; height: 0; }
+                .slider {
+                  position: absolute;
+                  cursor: pointer;
+                  top: 0; left: 0; right: 0; bottom: 0;
+                  background-color: #ccc;
+                  -webkit-transition: .4s;
+                  transition: .4s;
+                  border-radius: 22px;
+                }
+                .slider:before {
+                  position: absolute;
+                  content: "";
+                  height: 16px;
+                  width: 16px;
+                  left: 3px;
+                  bottom: 3px;
+                  background-color: white;
+                  -webkit-transition: .4s;
+                  transition: .4s;
+                  border-radius: 50%;
+                }
+                input:checked + .slider {
+                  background-color: #4caf50;
+                }
+                input:focus + .slider {
+                  box-shadow: 0 0 1px #4caf50;
+                }
+                input:checked + .slider:before {
+                  -webkit-transform: translateX(18px);
+                  -ms-transform: translateX(18px);
+                  transform: translateX(18px);
+                }
             `}</style>
         </div>
     );

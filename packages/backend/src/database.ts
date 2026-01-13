@@ -767,8 +767,9 @@ export async function updateAdvancedWatch(id: number, discordId: string, watch: 
       name = $1, min_buy_price = $2, max_buy_price = $3, min_sell_price = $4, max_sell_price = $5,
       min_volume = $6, min_change_1h = $7, min_change_24h = $8, is_members = $9, min_buy_limit = $10,
       max_buy_limit = $11, min_margin = $12, max_margin = $13, min_profit = $14, max_profit = $15,
-      min_roi = $16, min_potential_profit = $17, cooldown_minutes = $18, order_by = $19, direction = $20, max_count = $21
-    WHERE id = $22 AND discord_id = $23
+      min_roi = $16, min_potential_profit = $17, cooldown_minutes = $18, order_by = $19, direction = $20, max_count = $21,
+      enabled = $22
+    WHERE id = $23 AND discord_id = $24
     RETURNING *
   `;
 
@@ -777,6 +778,7 @@ export async function updateAdvancedWatch(id: number, discordId: string, watch: 
     merged.min_volume, merged.min_change_1h, merged.min_change_24h, merged.is_members, merged.min_buy_limit,
     merged.max_buy_limit, merged.min_margin, merged.max_margin, merged.min_profit, merged.max_profit,
     merged.min_roi, merged.min_potential_profit, merged.cooldown_minutes, merged.order_by, merged.direction, merged.max_count,
+    merged.enabled,
     id, discordId
   ];
 
