@@ -6,7 +6,11 @@ import {
     updateDiscordSettings,
     addBackendWatch,
     removeBackendWatch,
-    getBackendWatches
+    getBackendWatches,
+    addAdvancedWatch,
+    removeAdvancedWatch,
+    getAdvancedWatches,
+    updateAdvancedWatch
 } from "../database";
 import { exchangeCodeForToken, getDiscordUser } from "../oauth";
 import { getCombinedItems } from "../osrsClient";
@@ -267,5 +271,108 @@ router.delete("/watch/:itemId", async (req, res) => {
         res.status(500).json({ error: "Failed to remove watch" });
     }
 });
+
+/**
+ * Advanced Watches Routes
+ */
+
+/**
+ * Get Advanced Watches
+ * GET /api/discord/advanced-watches
+ */
+router.get("/advanced-watches", async (req, res) => {
+    const userId = req.user!.id;
+    try {
+        const discordUser = await getDiscordUserByUserId(userId);
+        if (!discordUser) return res.json({ watches: [] });
+
+        const watches = await getAdvancedWatches(discordUser.discord_id);
+        res.json({ watches });
+    } catch (err) {
+        // eslint-disable-next-line no-console
+        console.error(err);
+        res.status(500).json({ error: "Failed to fetch advanced watches" });
+    }
+});
+
+/**
+ * Create Advanced Watch
+ * POST /api/discord/advanced-watches
+ */
+router.post("/advanced-watches", async (req, res) => {
+    const userId = req.user!.id;
+    // Validate body? 
+    // We expect the body to match Partial<AdvancedWatch>
+
+    try {
+        const discordUser = await getDiscordUserByUserId(userId);
+        if (!discordUser) {
+            return res.status(404).json({ error: "No Discord account linked" });
+        }
+
+        const watchData = {
+            discord_id: discordUser.discord_id,
+            ...req.body
+        };
+
+        // Basic validation could go here
+
+        const newWatch = await addAdvancedWatch(watchData);
+        res.status(201).json({ success: true, watch: newWatch });
+    } catch (err) {
+        // eslint-disable-next-line no-console
+        console.error(err);
+        res.status(500).json({ error: "Failed to create advanced watch" });
+    }
+});
+
+/**
+ * Update Advanced Watch
+ * PUT /api/discord/advanced-watches/:id
+ */
+router.put("/advanced-watches/:id", async (req, res) => {
+    const userId = req.user!.id;
+    const id = parseInt(req.params.id, 10);
+
+    if (isNaN(id)) return res.status(400).json({ error: "Invalid ID" });
+
+    try {
+        const discordUser = await getDiscordUserByUserId(userId);
+        if (!discordUser) return res.status(404).json({ error: "No Discord linked" });
+
+        const updated = await updateAdvancedWatch(id, discordUser.discord_id, req.body);
+        if (!updated) return res.status(404).json({ error: "Watch not found" });
+
+        res.json({ success: true, watch: updated });
+    } catch (err) {
+        // eslint-disable-next-line no-console
+        console.error(err);
+        res.status(500).json({ error: "Failed to update advanced watch" });
+    }
+});
+
+/**
+ * Delete Advanced Watch
+ * DELETE /api/discord/advanced-watches/:id
+ */
+router.delete("/advanced-watches/:id", async (req, res) => {
+    const userId = req.user!.id;
+    const id = parseInt(req.params.id, 10);
+
+    if (isNaN(id)) return res.status(400).json({ error: "Invalid ID" });
+
+    try {
+        const discordUser = await getDiscordUserByUserId(userId);
+        if (!discordUser) return res.status(404).json({ error: "No Discord linked" });
+
+        await removeAdvancedWatch(id, discordUser.discord_id);
+        res.json({ success: true, id });
+    } catch (err) {
+        // eslint-disable-next-line no-console
+        console.error(err);
+        res.status(500).json({ error: "Failed to delete advanced watch" });
+    }
+});
+
 
 export default router;

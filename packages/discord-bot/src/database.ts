@@ -32,6 +32,36 @@ export interface NotificationSetting {
   cooldown_seconds: number | null;
 }
 
+export interface AdvancedWatch {
+  id: number;
+  discord_id: string;
+  name: string | null;
+  min_buy_price: number | null;
+  max_buy_price: number | null;
+  min_sell_price: number | null;
+  max_sell_price: number | null;
+  min_volume: number | null;
+  min_change_1h: number | null;
+  min_change_24h: number | null;
+  is_members: boolean | null;
+  min_buy_limit: number | null;
+  max_buy_limit: number | null;
+  min_margin: number | null;
+  max_margin: number | null;
+  min_profit: number | null;
+  max_profit: number | null;
+  min_roi: number | null;
+  min_potential_profit: number | null;
+  cooldown_minutes: number;
+  order_by: string;
+  direction: 'asc' | 'desc';
+  max_count: number;
+  created_at: number;
+  enabled: boolean;
+}
+
+
+
 /**
  * Ensure Discord user exists in DB
  */
@@ -161,6 +191,40 @@ export async function updateLastNotified(id: number, period: '24h' | '1h'): Prom
   `;
   await pool.query(query, [Math.floor(Date.now() / 1000), id]);
 }
+
+/**
+ * Advanced Watch Functions
+ */
+
+export async function getAllActiveAdvancedWatches(): Promise<AdvancedWatch[]> {
+  const query = `
+    SELECT * FROM advanced_watches WHERE enabled = TRUE
+  `;
+  const result = await pool.query(query);
+  return result.rows.map(row => ({ ...row, created_at: parseInt(row.created_at) })) as AdvancedWatch[];
+}
+
+export async function getAdvancedWatchHistory(watchId: number, itemId: number): Promise<number | null> {
+  const query = `
+    SELECT triggered_at FROM advanced_watch_history WHERE watch_id = $1 AND item_id = $2
+  `;
+  const result = await pool.query(query, [watchId, itemId]);
+  if (result.rows.length > 0) {
+    return parseInt(result.rows[0].triggered_at);
+  }
+  return null;
+}
+
+export async function updateAdvancedWatchHistory(watchId: number, itemId: number): Promise<void> {
+  const now = Math.floor(Date.now() / 1000);
+  const query = `
+    INSERT INTO advanced_watch_history (watch_id, item_id, triggered_at)
+    VALUES ($1, $2, $3)
+    ON CONFLICT (watch_id, item_id) DO UPDATE SET triggered_at = EXCLUDED.triggered_at
+  `;
+  await pool.query(query, [watchId, itemId, now]);
+}
+
 
 
 

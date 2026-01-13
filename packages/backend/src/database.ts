@@ -58,6 +58,35 @@ export interface SystemSetting {
   value: string;
 }
 
+export interface AdvancedWatch {
+  id: number;
+  discord_id: string;
+  name: string | null;
+  min_buy_price: number | null;
+  max_buy_price: number | null;
+  min_sell_price: number | null;
+  max_sell_price: number | null;
+  min_volume: number | null;
+  min_change_1h: number | null;
+  min_change_24h: number | null;
+  is_members: boolean | null;
+  min_buy_limit: number | null;
+  max_buy_limit: number | null;
+  min_margin: number | null;
+  max_margin: number | null;
+  min_profit: number | null;
+  max_profit: number | null;
+  min_roi: number | null;
+  min_potential_profit: number | null;
+  cooldown_minutes: number;
+  order_by: string;
+  direction: 'asc' | 'desc';
+  max_count: number;
+  created_at: number;
+  enabled: boolean;
+}
+
+
 export async function initializeDatabase(): Promise<void> {
   const client = await pool.connect();
   try {
@@ -209,6 +238,58 @@ export async function initializeDatabase(): Promise<void> {
       )
     `);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_item_history_24h_time ON item_history_24h(item_id, timestamp DESC)`);
+
+    // --- ADVANCED WATCHES ---
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS advanced_watches (
+        id SERIAL PRIMARY KEY,
+        discord_id TEXT NOT NULL,
+        min_buy_price INTEGER,
+        max_buy_price INTEGER,
+        min_sell_price INTEGER,
+        max_sell_price INTEGER,
+        min_volume INTEGER,
+        min_change_1h REAL,
+        min_change_24h REAL,
+        is_members BOOLEAN,
+        min_buy_limit INTEGER,
+        max_buy_limit INTEGER,
+        min_margin INTEGER,
+        max_margin INTEGER,
+        min_profit INTEGER,
+        max_profit INTEGER,
+        min_roi REAL,
+        min_potential_profit INTEGER,
+        cooldown_seconds INTEGER DEFAULT 3600,
+        created_at BIGINT NOT NULL DEFAULT (CAST(EXTRACT(EPOCH FROM NOW()) AS BIGINT)),
+        enabled BOOLEAN NOT NULL DEFAULT TRUE
+      )
+    `);
+
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS advanced_watch_history (
+        watch_id INTEGER NOT NULL,
+        item_id INTEGER NOT NULL,
+        triggered_at BIGINT NOT NULL,
+        PRIMARY KEY (watch_id, item_id),
+        FOREIGN KEY (watch_id) REFERENCES advanced_watches(id) ON DELETE CASCADE
+      )
+    `);
+
+    // Migration: Add new columns if not exist
+    await client.query(`
+      ALTER TABLE advanced_watches
+      ADD COLUMN IF NOT EXISTS name TEXT,
+      ADD COLUMN IF NOT EXISTS order_by TEXT DEFAULT 'profit',
+      ADD COLUMN IF NOT EXISTS direction TEXT DEFAULT 'desc',
+      ADD COLUMN IF NOT EXISTS max_count INTEGER DEFAULT 10,
+      ADD COLUMN IF NOT EXISTS cooldown_minutes INTEGER DEFAULT 60
+    `);
+
+    // Deprecate cooldown_seconds (migrate data if needed, or just ignore it)
+    // We will assume new watches use cooldown_minutes.
+
+
 
   } finally {
     client.release();
@@ -641,6 +722,73 @@ export async function removeBackendWatch(discordId: string, itemId: number): Pro
   `;
   await pool.query(query, [discordId, itemId]);
 }
+
+
+/**
+ * Advanced Watches Management
+ */
+
+export async function addAdvancedWatch(watch: Omit<AdvancedWatch, 'id' | 'created_at' | 'enabled'>): Promise<AdvancedWatch> {
+  const query = `
+    INSERT INTO advanced_watches (
+      discord_id, name, min_buy_price, max_buy_price, min_sell_price, max_sell_price, 
+      min_volume, min_change_1h, min_change_24h, is_members, min_buy_limit, 
+      max_buy_limit, min_margin, max_margin, min_profit, max_profit, 
+      min_roi, min_potential_profit, cooldown_minutes, order_by, direction, max_count
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)
+    RETURNING *
+  `;
+  const params = [
+    watch.discord_id, watch.name, watch.min_buy_price, watch.max_buy_price, watch.min_sell_price, watch.max_sell_price,
+    watch.min_volume, watch.min_change_1h, watch.min_change_24h, watch.is_members, watch.min_buy_limit,
+    watch.max_buy_limit, watch.min_margin, watch.max_margin, watch.min_profit, watch.max_profit,
+    watch.min_roi, watch.min_potential_profit, watch.cooldown_minutes, watch.order_by, watch.direction, watch.max_count
+  ];
+
+  const result = await pool.query(query, params);
+  return { ...result.rows[0], created_at: parseInt(result.rows[0].created_at) } as AdvancedWatch;
+}
+
+export async function getAdvancedWatches(discordId: string): Promise<AdvancedWatch[]> {
+  const query = `SELECT * FROM advanced_watches WHERE discord_id = $1 ORDER BY created_at DESC`;
+  const result = await pool.query(query, [discordId]);
+  return result.rows.map(row => ({ ...row, created_at: parseInt(row.created_at) })) as AdvancedWatch[];
+}
+
+export async function updateAdvancedWatch(id: number, discordId: string, watch: Partial<AdvancedWatch>): Promise<AdvancedWatch | null> {
+  const existing = await pool.query('SELECT * FROM advanced_watches WHERE id = $1 AND discord_id = $2', [id, discordId]);
+  if (existing.rows.length === 0) return null;
+
+  const current = existing.rows[0];
+  const merged = { ...current, ...watch };
+
+  const query = `
+    UPDATE advanced_watches SET
+      name = $1, min_buy_price = $2, max_buy_price = $3, min_sell_price = $4, max_sell_price = $5,
+      min_volume = $6, min_change_1h = $7, min_change_24h = $8, is_members = $9, min_buy_limit = $10,
+      max_buy_limit = $11, min_margin = $12, max_margin = $13, min_profit = $14, max_profit = $15,
+      min_roi = $16, min_potential_profit = $17, cooldown_minutes = $18, order_by = $19, direction = $20, max_count = $21
+    WHERE id = $22 AND discord_id = $23
+    RETURNING *
+  `;
+
+  const params = [
+    merged.name, merged.min_buy_price, merged.max_buy_price, merged.min_sell_price, merged.max_sell_price,
+    merged.min_volume, merged.min_change_1h, merged.min_change_24h, merged.is_members, merged.min_buy_limit,
+    merged.max_buy_limit, merged.min_margin, merged.max_margin, merged.min_profit, merged.max_profit,
+    merged.min_roi, merged.min_potential_profit, merged.cooldown_minutes, merged.order_by, merged.direction, merged.max_count,
+    id, discordId
+  ];
+
+  const result = await pool.query(query, params);
+  return { ...result.rows[0], created_at: parseInt(result.rows[0].created_at) } as AdvancedWatch;
+}
+
+export async function removeAdvancedWatch(id: number, discordId: string): Promise<void> {
+  const query = `DELETE FROM advanced_watches WHERE id = $1 AND discord_id = $2`;
+  await pool.query(query, [id, discordId]);
+}
+
 
 
 
