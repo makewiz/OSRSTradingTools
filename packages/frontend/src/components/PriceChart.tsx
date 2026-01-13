@@ -104,7 +104,7 @@ export const PriceChart: React.FC<PriceChartProps> = ({ data, forecastData, isHi
 
   return (
     <ResponsiveContainer width="100%" height={300}>
-      <ComposedChart data={chartData} syncId="priceChart" margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+      <ComposedChart data={chartData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
         <CartesianGrid strokeDasharray="3 3" stroke="rgba(255, 255, 255, 0.1)" />
         <XAxis
           dataKey="time"
