@@ -217,7 +217,6 @@ export const ItemDetail: React.FC = () => {
     };
 
     fetchHistory();
-    fetchHistory();
   }, [id, timeRange]);
 
   // Forecast state
