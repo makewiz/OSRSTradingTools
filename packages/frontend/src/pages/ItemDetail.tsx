@@ -220,13 +220,13 @@ export const ItemDetail: React.FC = () => {
   }, [id, timeRange]);
 
   // Forecast state
-  const [forecastData, setForecastData] = useState<any[]>([]);
+  const [forecastData, setForecastData] = useState<any>(null);
 
   useEffect(() => {
     if (!id) return;
     // Only fetch forecast for '24h' view as regression is calculated on that basis in this MVP
     if (timeRange !== '24h') {
-      setForecastData([]);
+      setForecastData(null);
       return;
     }
 
@@ -235,7 +235,7 @@ export const ItemDetail: React.FC = () => {
         const res = await fetchWithAuth(`${API_BASE_URL}/api/items/${id}/forecast?lookback=86400`);
         if (res.ok) {
           const data = await res.json();
-          setForecastData(data.forecast || []);
+          setForecastData(data.forecast || null);
         }
       } catch (e) {
         console.error("Failed to load forecast", e);

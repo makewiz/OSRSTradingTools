@@ -111,42 +111,35 @@ router.get("/:id/forecast", async (req, res) => {
     // Fetch history to base the forecast on
     const history = await getPriceHistory(itemId, startTime, now);
 
-    // Prepare data points for regression (using average of buy/sell if available, else just what we have)
-    // We need a single series for simple linear regression.
-    // Let's rely on 'buy' price (lower price) as it's often more stable for demand trends,
-    // or average them. Let's do average of buy/sell for each timestamp.
+    // Prepare data points for regression
+    // We separate buy and sell streams to detect spread trends
 
-    const mergedPoints: { x: number, y: number }[] = [];
+    const buyPoints: { x: number, y: number }[] = [];
+    const sellPoints: { x: number, y: number }[] = [];
 
-    // Map timestamps to indices
-    const timeMap = new Map<number, { buy?: number, sell?: number }>();
-
+    // Flatten history into simple points
     history.buy.forEach(p => {
-      const existing = timeMap.get(p.timestamp) || {};
-      timeMap.set(p.timestamp, { ...existing, buy: p.price });
+      if (p.price) buyPoints.push({ x: p.timestamp, y: p.price });
     });
+    // Sort buyPoints by time
+    buyPoints.sort((a, b) => a.x - b.x);
+
     history.sell.forEach(p => {
-      const existing = timeMap.get(p.timestamp) || {};
-      timeMap.set(p.timestamp, { ...existing, sell: p.price });
+      if (p.price) sellPoints.push({ x: p.timestamp, y: p.price });
     });
+    // Sort sellPoints by time
+    sellPoints.sort((a, b) => a.x - b.x);
 
-    // Sort by time
-    const sortedTimes = Array.from(timeMap.keys()).sort((a, b) => a - b);
+    const buyForecast = generateForecast(buyPoints);
+    const sellForecast = generateForecast(sellPoints);
 
-    for (const t of sortedTimes) {
-      const val = timeMap.get(t)!;
-      if (val.buy && val.sell) {
-        mergedPoints.push({ x: t, y: (val.buy + val.sell) / 2 });
-      } else if (val.buy) {
-        mergedPoints.push({ x: t, y: val.buy });
-      } else if (val.sell) {
-        mergedPoints.push({ x: t, y: val.sell });
+    res.json({
+      itemId,
+      forecast: {
+        buy: buyForecast,
+        sell: sellForecast
       }
-    }
-
-    const forecast = generateForecast(mergedPoints); // Default 6h forecast
-
-    res.json({ itemId, forecast });
+    });
 
   } catch (err) {
     // eslint-disable-next-line no-console
