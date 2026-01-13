@@ -2,6 +2,7 @@ import express from "express";
 import { getCombinedItems } from "../osrsClient";
 import { getLatestItems, touchActivity, getLastFetchTime } from "../scheduler";
 import { getPriceHistory, getLatestPrice } from "../database";
+import { generateForecast } from "../prediction";
 import { authenticateToken } from "../auth";
 
 const router = express.Router();
@@ -88,6 +89,69 @@ router.get("/:id/history", async (req, res) => {
     // eslint-disable-next-line no-console
     console.error(err);
     res.status(502).json({ error: "Failed to fetch price history" });
+  }
+});
+
+/**
+ * Get price forecast for an item
+ * GET /:id/forecast?lookback=86400
+ */
+router.get("/:id/forecast", async (req, res) => {
+  try {
+    const itemId = parseInt(req.params.id, 10);
+    if (isNaN(itemId)) {
+      return res.status(400).json({ error: "Invalid item ID" });
+    }
+
+    const now = Math.floor(Date.now() / 1000);
+    // Default to analyzing last 24h
+    const lookback = req.query.lookback ? parseInt(req.query.lookback as string, 10) : 24 * 60 * 60;
+    const startTime = now - lookback;
+
+    // Fetch history to base the forecast on
+    const history = await getPriceHistory(itemId, startTime, now);
+
+    // Prepare data points for regression (using average of buy/sell if available, else just what we have)
+    // We need a single series for simple linear regression.
+    // Let's rely on 'buy' price (lower price) as it's often more stable for demand trends,
+    // or average them. Let's do average of buy/sell for each timestamp.
+
+    const mergedPoints: { x: number, y: number }[] = [];
+
+    // Map timestamps to indices
+    const timeMap = new Map<number, { buy?: number, sell?: number }>();
+
+    history.buy.forEach(p => {
+      const existing = timeMap.get(p.timestamp) || {};
+      timeMap.set(p.timestamp, { ...existing, buy: p.price });
+    });
+    history.sell.forEach(p => {
+      const existing = timeMap.get(p.timestamp) || {};
+      timeMap.set(p.timestamp, { ...existing, sell: p.price });
+    });
+
+    // Sort by time
+    const sortedTimes = Array.from(timeMap.keys()).sort((a, b) => a - b);
+
+    for (const t of sortedTimes) {
+      const val = timeMap.get(t)!;
+      if (val.buy && val.sell) {
+        mergedPoints.push({ x: t, y: (val.buy + val.sell) / 2 });
+      } else if (val.buy) {
+        mergedPoints.push({ x: t, y: val.buy });
+      } else if (val.sell) {
+        mergedPoints.push({ x: t, y: val.sell });
+      }
+    }
+
+    const forecast = generateForecast(mergedPoints); // Default 6h forecast
+
+    res.json({ itemId, forecast });
+
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error(err);
+    res.status(500).json({ error: "Failed to generate forecast" });
   }
 });
 

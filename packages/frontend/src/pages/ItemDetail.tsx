@@ -217,7 +217,33 @@ export const ItemDetail: React.FC = () => {
     };
 
     fetchHistory();
+    fetchHistory();
   }, [id, timeRange]);
+
+  // Forecast state
+  const [forecastData, setForecastData] = useState<any[]>([]);
+
+  useEffect(() => {
+    if (!id) return;
+    // Only fetch forecast for '24h' view as regression is calculated on that basis in this MVP
+    if (timeRange !== '24h') {
+      setForecastData([]);
+      return;
+    }
+
+    const fetchForecast = async () => {
+      try {
+        const res = await fetchWithAuth(`${API_BASE_URL}/api/items/${id}/forecast?lookback=86400`);
+        if (res.ok) {
+          const data = await res.json();
+          setForecastData(data.forecast || []);
+        }
+      } catch (e) {
+        console.error("Failed to load forecast", e);
+      }
+    }
+    fetchForecast();
+  }, [id, timeRange, fetchWithAuth]);
 
   const toggleWatch = async () => {
     if (!item || !user || !discordLinked) {
@@ -488,6 +514,7 @@ export const ItemDetail: React.FC = () => {
             <h3 style={{ marginTop: 0, marginBottom: '15px', color: '#d0d7e2', fontSize: '1.2rem' }}>Price Trends</h3>
             <PriceChart
               data={priceHistory}
+              forecastData={forecastData}
               isHighFidelity={!(Array.isArray(priceHistory) && priceHistory.length > 0 && 'buyPrice' in priceHistory[0])}
               graphType="price"
             />
