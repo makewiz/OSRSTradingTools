@@ -160,10 +160,19 @@ export const Watches: React.FC = () => {
 
     const handleRemoveAdvancedWatch = async (id: number) => {
         if (!confirm("Delete this advanced watch?")) return;
+
+        // Capture previous state for rollback
+        const previousWatches = advancedWatches;
+
         try {
             setAdvancedWatches(prev => prev.filter(w => w.id !== id));
-            await fetchWithAuth(`${API_BASE_URL}/api/discord/advanced-watches/${id}`, { method: "DELETE" });
+            const res = await fetchWithAuth(`${API_BASE_URL}/api/discord/advanced-watches/${id}`, { method: "DELETE" });
+
+            if (!res.ok) {
+                throw new Error("Failed to delete advanced watch");
+            }
         } catch (err) {
+            setAdvancedWatches(previousWatches);
             setError("Failed to remove advanced watch");
         }
     };
