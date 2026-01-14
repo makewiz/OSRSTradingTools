@@ -523,9 +523,9 @@ export const Watches: React.FC = () => {
             )}
 
             <style>{`
-                .form-group { display: flex; flexDirection: column; gap: 5px; }
+                .form-group { display: flex; flex-direction: column; gap: 5px; }
                 .form-group label { font-size: 0.9em; color: #aaa; }
-                .tag { background: #333; padding: 2px 6px; borderRadius: 4px; font-size: 0.85em; border: 1px solid #444; }
+                .tag { background: #333; padding: 2px 6px; border-radius: 4px; font-size: 0.85em; border: 1px solid #444; }
                 .dark-input { background: #333; border: 1px solid #444; color: #fff; padding: 8px; border-radius: 4px; width: 100%; box-sizing: border-box; }
                 .dark-input:focus { border-color: #4caf50; outline: none; }
 
