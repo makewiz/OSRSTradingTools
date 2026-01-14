@@ -361,6 +361,31 @@ router.post("/advanced-watches", async (req, res) => {
  * Update Advanced Watch
  * PUT /api/discord/advanced-watches/:id
  */
+const updateAdvancedWatchSchema = z.object({
+    name: z.string().nullable().optional(),
+    min_buy_price: z.number().int().nonnegative().nullable().optional(),
+    max_buy_price: z.number().int().nonnegative().nullable().optional(),
+    min_sell_price: z.number().int().nonnegative().nullable().optional(),
+    max_sell_price: z.number().int().nonnegative().nullable().optional(),
+    min_volume: z.number().int().nonnegative().nullable().optional(),
+    min_change_1h: z.number().nullable().optional(),
+    min_change_24h: z.number().nullable().optional(),
+    is_members: z.boolean().nullable().optional(),
+    min_buy_limit: z.number().int().nonnegative().nullable().optional(),
+    max_buy_limit: z.number().int().nonnegative().nullable().optional(),
+    min_margin: z.number().int().nullable().optional(),
+    max_margin: z.number().int().nullable().optional(),
+    min_profit: z.number().int().nullable().optional(),
+    max_profit: z.number().int().nullable().optional(),
+    min_roi: z.number().nullable().optional(),
+    min_potential_profit: z.number().int().nullable().optional(),
+    cooldown_minutes: z.number().int().min(1).optional(),
+    order_by: z.enum(['profit', 'margin', 'roi', 'volume']).optional(),
+    direction: z.enum(['asc', 'desc']).optional(),
+    max_count: z.number().int().min(1).max(100).optional(),
+    enabled: z.boolean().optional()
+});
+
 router.put("/advanced-watches/:id", async (req, res) => {
     const userId = req.user!.id;
     const id = parseInt(req.params.id, 10);
@@ -371,7 +396,17 @@ router.put("/advanced-watches/:id", async (req, res) => {
         const discordUser = await getDiscordUserByUserId(userId);
         if (!discordUser) return res.status(404).json({ error: "No Discord linked" });
 
-        const updated = await updateAdvancedWatch(id, discordUser.discord_id, req.body);
+        // Validate and sanitize input
+        const validationResult = updateAdvancedWatchSchema.safeParse(req.body);
+
+        if (!validationResult.success) {
+            return res.status(400).json({
+                error: "Invalid input",
+                details: validationResult.error.format()
+            });
+        }
+
+        const updated = await updateAdvancedWatch(id, discordUser.discord_id, validationResult.data);
         if (!updated) return res.status(404).json({ error: "Watch not found" });
 
         res.json({ success: true, watch: updated });
