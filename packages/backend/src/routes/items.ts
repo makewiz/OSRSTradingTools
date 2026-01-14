@@ -2,7 +2,7 @@ import express from "express";
 import { getCombinedItems } from "../osrsClient";
 import { getLatestItems, touchActivity, getLastFetchTime } from "../scheduler";
 import { getPriceHistory, getLatestPrice } from "../database";
-import { generateForecast } from "../prediction";
+import { generateForecast, generateAIForecast } from "../prediction";
 import { authenticateToken } from "../auth";
 
 const router = express.Router();
@@ -130,14 +130,38 @@ router.get("/:id/forecast", async (req, res) => {
     // Sort sellPoints by time
     sellPoints.sort((a, b) => a.x - b.x);
 
-    const buyForecast = generateForecast(buyPoints);
-    const sellForecast = generateForecast(sellPoints);
+    // Determine forecast parameters based on lookback
+    let forecastDuration = 6 * 60 * 60; // Default 6h
+    let resolution = 30 * 60; // Default 30m
+
+    if (lookback >= 30000000) { // ~1y
+      forecastDuration = 14 * 24 * 60 * 60; // 14 days
+      resolution = 24 * 60 * 60; // 1 day
+    } else if (lookback >= 2000000) { // ~30d
+      forecastDuration = 3 * 24 * 60 * 60; // 3 days
+      resolution = 6 * 60 * 60; // 6 hours
+    } else if (lookback >= 600000) { // ~7d
+      forecastDuration = 24 * 60 * 60; // 24 hours
+      resolution = 2 * 60 * 60; // 2 hours
+    }
+
+    const buyForecast = generateForecast(buyPoints, forecastDuration, resolution);
+    const sellForecast = generateForecast(sellPoints, forecastDuration, resolution);
+
+    // AI Forecast (Experimental)
+    // Only run if we have enough data points (e.g. > 20) to avoid wasting CPU
+    const buyAIForecast = buyPoints.length > 20 ? generateAIForecast(buyPoints, forecastDuration, resolution) : [];
+    const sellAIForecast = sellPoints.length > 20 ? generateAIForecast(sellPoints, forecastDuration, resolution) : [];
 
     res.json({
       itemId,
       forecast: {
         buy: buyForecast,
-        sell: sellForecast
+        sell: sellForecast,
+        ai: {
+          buy: buyAIForecast,
+          sell: sellAIForecast
+        }
       }
     });
 

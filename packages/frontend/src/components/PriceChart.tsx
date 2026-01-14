@@ -35,12 +35,25 @@ export interface ForecastPoint {
 
 interface PriceChartProps {
   data: PriceDataPoint[] | HighFidelityData;
-  forecastData?: { buy: ForecastPoint[], sell: ForecastPoint[] } | ForecastPoint[]; // Backwards compat or just use new structure
+  forecastData?: {
+    buy: ForecastPoint[],
+    sell: ForecastPoint[],
+    ai?: { buy: ForecastPoint[], sell: ForecastPoint[] }
+  } | ForecastPoint[];
   isHighFidelity?: boolean;
   graphType?: 'price' | 'volume';
+  showForecast?: boolean;
+  forecastModel?: 'linear' | 'ai';
 }
 
-export const PriceChart: React.FC<PriceChartProps> = ({ data, forecastData, isHighFidelity, graphType = 'price' }) => {
+export const PriceChart: React.FC<PriceChartProps> = ({
+  data,
+  forecastData,
+  isHighFidelity,
+  graphType = 'price',
+  showForecast = false,
+  forecastModel = 'linear'
+}) => {
   let chartData: any[] = [];
 
   if (isHighFidelity && data) {
@@ -78,20 +91,25 @@ export const PriceChart: React.FC<PriceChartProps> = ({ data, forecastData, isHi
   }
 
   // Merge Forecast Data if available and only for price graph
-  if (forecastData && graphType === 'price') {
+  if (forecastData && graphType === 'price' && showForecast) {
     const fData = forecastData as any;
     let newPoints: any[] = [];
 
     // Check if it's the new split structure
     if (fData.buy || fData.sell) {
+      // Choose which forecast source to use
+      const useAI = forecastModel === 'ai' && fData.ai;
+      const sourceBuy = useAI ? fData.ai.buy : fData.buy;
+      const sourceSell = useAI ? fData.ai.sell : fData.sell;
+
       // Collect all timestamps
       const fTimestamps = new Set<number>();
-      if (fData.buy) fData.buy.forEach((p: any) => fTimestamps.add(p.x));
-      if (fData.sell) fData.sell.forEach((p: any) => fTimestamps.add(p.x));
+      if (sourceBuy) sourceBuy.forEach((p: any) => fTimestamps.add(p.x));
+      if (sourceSell) sourceSell.forEach((p: any) => fTimestamps.add(p.x));
 
       newPoints = Array.from(fTimestamps).map(ts => {
-        const buyP = fData.buy?.find((p: any) => p.x === ts);
-        const sellP = fData.sell?.find((p: any) => p.x === ts);
+        const buyP = sourceBuy?.find((p: any) => p.x === ts);
+        const sellP = sourceSell?.find((p: any) => p.x === ts);
         return {
           timestamp: ts,
           time: new Date(ts * 1000).toLocaleString(),
@@ -188,41 +206,34 @@ export const PriceChart: React.FC<PriceChartProps> = ({ data, forecastData, isHi
               connectNulls
             />
             {/* Forecast Lines */}
-            <Line
-              yAxisId="left"
-              type="monotone"
-              dataKey="forecastBuy"
-              stroke="#f87171"
-              strokeWidth={2}
-              strokeDasharray="5 5"
-              dot={false}
-              name="Forecast Buy"
-              connectNulls
-            />
-            <Line
-              yAxisId="left"
-              type="monotone"
-              dataKey="forecastSell"
-              stroke="#4ade80"
-              strokeWidth={2}
-              strokeDasharray="5 5"
-              dot={false}
-              name="Forecast Sell"
-              connectNulls
-            />
+            {showForecast && (
+              <>
+                <Line
+                  yAxisId="left"
+                  type="monotone"
+                  dataKey="forecastBuy"
+                  stroke="#f87171"
+                  strokeWidth={2}
+                  strokeDasharray="5 5"
+                  dot={false}
+                  name="Forecast Buy"
+                  connectNulls
+                />
+                <Line
+                  yAxisId="left"
+                  type="monotone"
+                  dataKey="forecastSell"
+                  stroke="#4ade80"
+                  strokeWidth={2}
+                  strokeDasharray="5 5"
+                  dot={false}
+                  name="Forecast Sell"
+                  connectNulls
+                />
+              </>
+            )}
 
-            {/* Legacy Single Forecast Line (fallback) */}
-            <Line
-              yAxisId="left"
-              type="monotone"
-              dataKey="forecastPrice"
-              stroke="#8b5cf6"
-              strokeWidth={2}
-              strokeDasharray="5 5"
-              dot={false}
-              name="Forecast"
-              connectNulls
-            />
+
           </>
         )}
 

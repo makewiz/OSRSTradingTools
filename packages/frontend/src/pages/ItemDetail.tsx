@@ -221,18 +221,24 @@ export const ItemDetail: React.FC = () => {
 
   // Forecast state
   const [forecastData, setForecastData] = useState<any>(null);
+  const [showForecast, setShowForecast] = useState(false);
+  const [forecastModel, setForecastModel] = useState<'linear' | 'ai'>('linear');
 
   useEffect(() => {
     if (!id) return;
-    // Only fetch forecast for '24h' view as regression is calculated on that basis in this MVP
-    if (timeRange !== '24h') {
-      setForecastData(null);
-      return;
-    }
+
+    // Calculate lookback based on timeRange
+    const timeRangesLines: Record<string, number> = {
+      "24h": 24 * 60 * 60,
+      "7d": 7 * 24 * 60 * 60,
+      "30d": 30 * 24 * 60 * 60,
+      "1y": 365 * 24 * 60 * 60,
+    };
+    const lookback = timeRangesLines[timeRange] || 86400;
 
     const fetchForecast = async () => {
       try {
-        const res = await fetchWithAuth(`${API_BASE_URL}/api/items/${id}/forecast?lookback=86400`);
+        const res = await fetchWithAuth(`${API_BASE_URL}/api/items/${id}/forecast?lookback=${lookback}`);
         if (res.ok) {
           const data = await res.json();
           setForecastData(data.forecast || null);
@@ -482,31 +488,64 @@ export const ItemDetail: React.FC = () => {
         <div className="price-history-section">
           <div className="price-history-header">
             <h3>Price History</h3>
-            <div className="time-range-selector">
-              <button
-                className={`time-range-btn ${timeRange === "24h" ? "active" : ""}`}
-                onClick={() => setTimeRange("24h")}
-              >
-                24h
-              </button>
-              <button
-                className={`time-range-btn ${timeRange === "7d" ? "active" : ""}`}
-                onClick={() => setTimeRange("7d")}
-              >
-                7d
-              </button>
-              <button
-                className={`time-range-btn ${timeRange === "30d" ? "active" : ""}`}
-                onClick={() => setTimeRange("30d")}
-              >
-                30d
-              </button>
-              <button
-                className={`time-range-btn ${timeRange === "1y" ? "active" : ""}`}
-                onClick={() => setTimeRange("1y")}
-              >
-                1y
-              </button>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+              {/* Forecast Controls */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', background: '#1e2030', padding: '5px 10px', borderRadius: '4px' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer', fontSize: '0.9rem', color: '#d0d7e2' }}>
+                  <input
+                    type="checkbox"
+                    checked={showForecast}
+                    onChange={(e) => setShowForecast(e.target.checked)}
+                  />
+                  Show Forecast
+                </label>
+
+                {showForecast && (
+                  <select
+                    value={forecastModel}
+                    onChange={(e) => setForecastModel(e.target.value as 'linear' | 'ai')}
+                    style={{
+                      background: '#13151b',
+                      color: '#d0d7e2',
+                      border: '1px solid #30363d',
+                      borderRadius: '4px',
+                      padding: '2px 5px',
+                      fontSize: '0.85rem'
+                    }}
+                  >
+                    <option value="linear">Linear Regression</option>
+                    <option value="ai">AI (Neural Net)</option>
+                  </select>
+                )}
+              </div>
+
+              <div className="time-range-selector">
+                <button
+                  className={`time-range-btn ${timeRange === "24h" ? "active" : ""}`}
+                  onClick={() => setTimeRange("24h")}
+                >
+                  24h
+                </button>
+                <button
+                  className={`time-range-btn ${timeRange === "7d" ? "active" : ""}`}
+                  onClick={() => setTimeRange("7d")}
+                >
+                  7d
+                </button>
+                <button
+                  className={`time-range-btn ${timeRange === "30d" ? "active" : ""}`}
+                  onClick={() => setTimeRange("30d")}
+                >
+                  30d
+                </button>
+                <button
+                  className={`time-range-btn ${timeRange === "1y" ? "active" : ""}`}
+                  onClick={() => setTimeRange("1y")}
+                >
+                  1y
+                </button>
+              </div>
             </div>
           </div>
           <div className="chart-container" style={{ marginBottom: '20px' }}>
@@ -516,6 +555,8 @@ export const ItemDetail: React.FC = () => {
               forecastData={forecastData}
               isHighFidelity={!(Array.isArray(priceHistory) && priceHistory.length > 0 && 'buyPrice' in priceHistory[0])}
               graphType="price"
+              showForecast={showForecast}
+              forecastModel={forecastModel}
             />
           </div>
           <div className="chart-container">
