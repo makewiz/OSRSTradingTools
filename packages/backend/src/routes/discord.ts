@@ -1,4 +1,5 @@
 import express from "express";
+import { z } from "zod";
 import { authenticateToken } from "../auth";
 import {
     linkDiscordUser,
@@ -299,10 +300,32 @@ router.get("/advanced-watches", async (req, res) => {
  * Create Advanced Watch
  * POST /api/discord/advanced-watches
  */
+const createAdvancedWatchSchema = z.object({
+    name: z.string().nullable().optional().transform(v => v ?? null),
+    min_buy_price: z.number().int().nonnegative().nullable().optional().transform(v => v ?? null),
+    max_buy_price: z.number().int().nonnegative().nullable().optional().transform(v => v ?? null),
+    min_sell_price: z.number().int().nonnegative().nullable().optional().transform(v => v ?? null),
+    max_sell_price: z.number().int().nonnegative().nullable().optional().transform(v => v ?? null),
+    min_volume: z.number().int().nonnegative().nullable().optional().transform(v => v ?? null),
+    min_change_1h: z.number().nullable().optional().transform(v => v ?? null),
+    min_change_24h: z.number().nullable().optional().transform(v => v ?? null),
+    is_members: z.boolean().nullable().optional().transform(v => v ?? null),
+    min_buy_limit: z.number().int().nonnegative().nullable().optional().transform(v => v ?? null),
+    max_buy_limit: z.number().int().nonnegative().nullable().optional().transform(v => v ?? null),
+    min_margin: z.number().int().nullable().optional().transform(v => v ?? null),
+    max_margin: z.number().int().nullable().optional().transform(v => v ?? null),
+    min_profit: z.number().int().nullable().optional().transform(v => v ?? null),
+    max_profit: z.number().int().nullable().optional().transform(v => v ?? null),
+    min_roi: z.number().nullable().optional().transform(v => v ?? null),
+    min_potential_profit: z.number().int().nullable().optional().transform(v => v ?? null),
+    cooldown_minutes: z.number().int().min(1).default(60),
+    order_by: z.enum(['profit', 'margin', 'roi', 'volume']).default('profit'),
+    direction: z.enum(['asc', 'desc']).default('desc'),
+    max_count: z.number().int().min(1).max(100).default(10)
+});
+
 router.post("/advanced-watches", async (req, res) => {
     const userId = req.user!.id;
-    // Validate body? 
-    // We expect the body to match Partial<AdvancedWatch>
 
     try {
         const discordUser = await getDiscordUserByUserId(userId);
@@ -310,12 +333,20 @@ router.post("/advanced-watches", async (req, res) => {
             return res.status(404).json({ error: "No Discord account linked" });
         }
 
+        // Validate and sanitize input
+        const validationResult = createAdvancedWatchSchema.safeParse(req.body);
+
+        if (!validationResult.success) {
+            return res.status(400).json({
+                error: "Invalid input",
+                details: validationResult.error.format()
+            });
+        }
+
         const watchData = {
             discord_id: discordUser.discord_id,
-            ...req.body
+            ...validationResult.data
         };
-
-        // Basic validation could go here
 
         const newWatch = await addAdvancedWatch(watchData);
         res.status(201).json({ success: true, watch: newWatch });
