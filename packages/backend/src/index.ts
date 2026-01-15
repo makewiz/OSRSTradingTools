@@ -52,7 +52,11 @@ app.use("/api/admin", adminRouter);
 // Config routes
 app.use("/api/config", configRouter);
 // Analysis routes
+// Analysis routes
 app.use("/api/analysis", analysisRouter);
+// Filter routes
+import filtersRouter from "./routes/filters";
+app.use("/api/filters", filtersRouter);
 
 
 import { authenticateToken } from "./auth";

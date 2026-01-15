@@ -59,6 +59,14 @@ export interface SystemSetting {
   value: string;
 }
 
+export interface SavedFilter {
+  id: number;
+  user_id: number;
+  name: string;
+  config: any; // Using any for JSONB to avoid strict typing issues with the unpredictable filter structure
+  created_at: number;
+}
+
 export interface AdvancedWatch {
   id: number;
   discord_id: string;
@@ -285,6 +293,18 @@ export async function initializeDatabase(): Promise<void> {
       ADD COLUMN IF NOT EXISTS direction TEXT DEFAULT 'desc',
       ADD COLUMN IF NOT EXISTS max_count INTEGER DEFAULT 10,
       ADD COLUMN IF NOT EXISTS cooldown_minutes INTEGER DEFAULT 60
+    `);
+
+    // Saved Filters
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS saved_filters (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL,
+        name TEXT NOT NULL,
+        config JSONB NOT NULL,
+        created_at BIGINT NOT NULL DEFAULT (CAST(EXTRACT(EPOCH FROM NOW()) AS BIGINT)),
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+      )
     `);
 
     // Deprecate cooldown_seconds (migrate data if needed, or just ignore it)
@@ -894,4 +914,30 @@ export async function getAllSystemSettings(): Promise<SystemSetting[]> {
   const query = `SELECT * FROM system_settings`;
   const result = await pool.query(query);
   return result.rows;
+}
+
+export async function createSavedFilter(userId: number, name: string, config: any): Promise<SavedFilter> {
+  const query = `
+    INSERT INTO saved_filters (user_id, name, config)
+    VALUES ($1, $2, $3)
+    RETURNING *
+  `;
+  const result = await pool.query(query, [userId, name, config]);
+  const row = result.rows[0];
+  return { ...row, created_at: parseInt(row.created_at) };
+}
+
+export async function getSavedFilters(userId: number): Promise<SavedFilter[]> {
+  const query = `
+    SELECT * FROM saved_filters WHERE user_id = $1 ORDER BY created_at DESC
+  `;
+  const result = await pool.query(query, [userId]);
+  return result.rows.map(row => ({ ...row, created_at: parseInt(row.created_at) }));
+}
+
+export async function deleteSavedFilter(userId: number, filterId: number): Promise<void> {
+  const query = `
+    DELETE FROM saved_filters WHERE id = $1 AND user_id = $2
+  `;
+  await pool.query(query, [filterId, userId]);
 }
