@@ -390,6 +390,25 @@ export async function getPriceHistory(
     try {
       const apiData = await fetchWikiTimeSeries(itemId, timestep);
 
+      // Save to database asynchronously to populate history for future requests
+      const savePromises = apiData.map(d =>
+        insertItemHistory(
+          table,
+          itemId,
+          d.timestamp,
+          d.avgHighPrice,
+          d.avgLowPrice,
+          d.highPriceVolume,
+          d.lowPriceVolume
+        ).catch(e => console.error(`[PriceHistory] Failed to insert history point ${d.timestamp}:`, e))
+      );
+
+      // We await the save to ensure consistency before returning, 
+      // or we could let it run in background. User asked to "save... so we dont have to fetch again".
+      // Awaiting ensures it's done. 
+      await Promise.all(savePromises);
+      console.log(`[PriceHistory] Persisted ${apiData.length} points to ${table} from Wiki API.`);
+
       // Filter and map API data to row format
       // API Timestamp is in seconds.
       const apiRows = apiData
