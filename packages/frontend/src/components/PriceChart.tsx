@@ -35,7 +35,7 @@ export interface ForecastPoint {
 
 interface PriceChartProps {
   data: PriceDataPoint[] | HighFidelityData;
-  forecastData?: { buy: ForecastPoint[], sell: ForecastPoint[] } | ForecastPoint[]; // Backwards compat or just use new structure
+  forecastData?: ForecastPoint[];
   isHighFidelity?: boolean;
   graphType?: 'price' | 'volume';
 }
@@ -78,40 +78,17 @@ export const PriceChart: React.FC<PriceChartProps> = ({ data, forecastData, isHi
   }
 
   // Merge Forecast Data if available and only for price graph
-  if (forecastData && graphType === 'price') {
-    const fData = forecastData as any;
-    let newPoints: any[] = [];
-
-    // Check if it's the new split structure
-    if (fData.buy || fData.sell) {
-      // Collect all timestamps
-      const fTimestamps = new Set<number>();
-      if (fData.buy) fData.buy.forEach((p: any) => fTimestamps.add(p.x));
-      if (fData.sell) fData.sell.forEach((p: any) => fTimestamps.add(p.x));
-
-      newPoints = Array.from(fTimestamps).map(ts => {
-        const buyP = fData.buy?.find((p: any) => p.x === ts);
-        const sellP = fData.sell?.find((p: any) => p.x === ts);
-        return {
-          timestamp: ts,
-          time: new Date(ts * 1000).toLocaleString(),
-          forecastBuy: buyP?.y ?? null,
-          forecastSell: sellP?.y ?? null,
-          isForecast: true
-        };
-      });
-    } else if (Array.isArray(fData)) {
-      // Legacy single array
-      newPoints = fData.map((p: any) => ({
-        timestamp: p.x,
-        time: new Date(p.x * 1000).toLocaleString(),
-        forecastPrice: p.y,
-        isForecast: true
-      }));
-    }
-
+  if (forecastData && forecastData.length > 0 && graphType === 'price') {
+    const forecastChartData = forecastData.map(p => ({
+      timestamp: p.x,
+      time: new Date(p.x * 1000).toLocaleString(),
+      forecastPrice: p.y,
+      forecastLower: p.lowerBound,
+      forecastUpper: p.upperBound,
+      isForecast: true
+    }));
     // Append forecast data to chartData
-    chartData = [...chartData, ...newPoints];
+    chartData = [...chartData, ...forecastChartData];
 
     // Sort again just in case overlap exists
     chartData.sort((a, b) => a.timestamp - b.timestamp);
@@ -187,41 +164,36 @@ export const PriceChart: React.FC<PriceChartProps> = ({ data, forecastData, isHi
               name="Sell Price"
               connectNulls
             />
-            {/* Forecast Lines */}
-            <Line
-              yAxisId="left"
-              type="monotone"
-              dataKey="forecastBuy"
-              stroke="#f87171"
-              strokeWidth={2}
-              strokeDasharray="5 5"
-              dot={false}
-              name="Forecast Buy"
-              connectNulls
-            />
-            <Line
-              yAxisId="left"
-              type="monotone"
-              dataKey="forecastSell"
-              stroke="#4ade80"
-              strokeWidth={2}
-              strokeDasharray="5 5"
-              dot={false}
-              name="Forecast Sell"
-              connectNulls
-            />
-
-            {/* Legacy Single Forecast Line (fallback) */}
+            {/* Forecast Line */}
             <Line
               yAxisId="left"
               type="monotone"
               dataKey="forecastPrice"
-              stroke="#8b5cf6"
+              stroke="#8b5cf6" // Violet color for forecast
               strokeWidth={2}
               strokeDasharray="5 5"
               dot={false}
               name="Forecast"
               connectNulls
+            />
+            {/* Confidence Interval (Optional: could use Area) */}
+            <Area
+              yAxisId="left"
+              dataKey="forecastUpper"
+              stroke="none"
+              fill="#8b5cf6"
+              fillOpacity={0.1}
+              name="Confidence Range"
+              connectNulls
+            />
+            <Area
+              yAxisId="left"
+              dataKey="forecastLower" // Trick: Area usually does range, but simple stacking might not work for bounds efficiently without 'range' prop in Area (recharts 2.x). 
+              // Simplified: Just showing the line is good enough for MVP, but Area with baseValue is tricky.
+              // Better approach for confidence interval in composed chart:
+              // Calculate 'confidence' as [low, high] array if supported, or just omit for now to keep it clean.
+              stroke="none"
+              fill="none" // Hidden for now, just using it to scale axis if needed
             />
           </>
         )}

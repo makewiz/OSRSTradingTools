@@ -10,45 +10,32 @@ export interface ForecastPoint extends Point {
 }
 
 /**
- * Calculates weighted linear regression (y = mx + b)
- * giving more weight to recent data points.
+ * Calculates simple linear regression (y = mx + b)
  */
-export function calculateWeightedLinearRegression(data: Point[]) {
+export function calculateLinearRegression(data: Point[]) {
     const n = data.length;
     if (n < 2) return null;
 
-    let sumW = 0;
-    let sumWX = 0;
-    let sumWY = 0;
-    let sumWXY = 0;
-    let sumWXX = 0;
+    let sumX = 0;
+    let sumY = 0;
+    let sumXY = 0;
+    let sumXX = 0;
 
-    // Use normalized X for numerical stability, similar to before
-    // Weights: simple linear ramp from 1 to N. 
-    // This gives the most recent point N times more influence than the oldest.
-
-    for (let i = 0; i < n; i++) {
-        const point = data[i];
-        const weight = i + 1; // Weight range [1, n]
-
-        sumW += weight;
-        sumWX += weight * point.x;
-        sumWY += weight * point.y;
-        sumWXY += weight * point.x * point.y;
-        sumWXX += weight * point.x * point.x;
+    for (const point of data) {
+        sumX += point.x;
+        sumY += point.y;
+        sumXY += point.x * point.y;
+        sumXX += point.x * point.x;
     }
 
-    const denominator = sumW * sumWXX - sumWX * sumWX;
-    if (denominator === 0) return null;
-
-    const slope = (sumW * sumWXY - sumWX * sumWY) / denominator;
-    const intercept = (sumWY - slope * sumWX) / sumW;
+    const slope = (n * sumXY - sumX * sumY) / (n * sumXX - sumX * sumX);
+    const intercept = (sumY - slope * sumX) / n;
 
     return { slope, intercept };
 }
 
 /**
- * Generates a forecast based on recent history using Weighted Linear Regression
+ * Generates a forecast based on recent history
  * @param history Recent price data points
  * @param forecastDurationSeconds How far into the future to forecast
  * @param resolutionSeconds Gap between forecast points
@@ -63,33 +50,30 @@ export function generateForecast(
     if (validData.length < 10) return []; // Need consistent data for a trend
 
     // 2. Normalize timestamps for calculation (regression struggles with huge numbers)
+    // We'll treat the first point as t=0
     const startTime = validData[0].x;
     const normalizedData = validData.map(p => ({
         x: p.x - startTime,
         y: p.y
     }));
 
-    // 3. Calculate Weighted Regression
-    const regression = calculateWeightedLinearRegression(normalizedData);
+    // 3. Calculate separate regressions for Buy and Sell if needed, 
+    // but for now we'll assumes 'history' is a single series (e.g. averaged price)
+
+    const regression = calculateLinearRegression(normalizedData);
     if (!regression) return [];
 
     const { slope, intercept } = regression;
 
-    // 4. Calculate Standard Error (Weighted RMSE) for Confidence Intervals
-    let sumWeightedSquaredResiduals = 0;
-    let sumWeights = 0;
-
-    for (let i = 0; i < normalizedData.length; i++) {
-        const p = normalizedData[i];
-        const weight = i + 1;
+    // 4. Calculate Standard Error for Confidence Intervals (Simplified)
+    // We'll use the standard deviation of residuals as a proxy for "volatility"
+    let sumSquaredResiduals = 0;
+    for (const p of normalizedData) {
         const predicted = slope * p.x + intercept;
         const residual = p.y - predicted;
-
-        sumWeightedSquaredResiduals += weight * residual * residual;
-        sumWeights += weight;
+        sumSquaredResiduals += residual * residual;
     }
-
-    const weightedStdDev = Math.sqrt(sumWeightedSquaredResiduals / sumWeights);
+    const stdDev = Math.sqrt(sumSquaredResiduals / normalizedData.length);
 
     // 5. Generate Future Points
     const lastTime = validData[validData.length - 1].x;
@@ -105,8 +89,9 @@ export function generateForecast(
         const predictedPrice = slope * futureTimeRelative + intercept;
 
         // Widen confidence interval as we go further into the future
+        // Simple heuristic: 1 stdDev +/- (0.1 stdDev per step)
         const uncertaintyMultiplier = 1 + (i * 0.1);
-        const marginOfError = weightedStdDev * uncertaintyMultiplier;
+        const marginOfError = stdDev * uncertaintyMultiplier;
 
         forecastPoints.push({
             x: futureTimeAbsolute,
