@@ -61,15 +61,30 @@ router.get("/risk/:id", async (req, res) => {
         const closes = [...buyPrices, ...sellPrices];
         const volumes = historyData.volume.map(v => (v.buy_volume || 0) + (v.sell_volume || 0));
 
+        if (closes.length === 0) {
+            return res.json({
+                riskScore: 5,
+                rating: "Unknown",
+                reasoning: "Insufficient price history data to perform analysis."
+            });
+        }
+
         const highPrice = Math.max(...closes);
         const lowPrice = Math.min(...closes);
-        const avgVolume = volumes.reduce((a: number, b: number) => a + b, 0) / (volumes.length || 1);
+
+        const avgVolume = volumes.length > 0
+            ? volumes.reduce((a: number, b: number) => a + b, 0) / volumes.length
+            : 0;
 
         // Calculate simple volatility (standard deviation estimate)
-        const meanPrice = closes.reduce((a: number, b: number) => a + b, 0) / (closes.length || 1);
-        const variance = closes.reduce((a: number, b: number) => a + Math.pow(b - meanPrice, 2), 0) / (closes.length || 1);
-        const stdDev = Math.sqrt(variance);
-        const volatilityPercent = (stdDev / meanPrice) * 100;
+        const meanPrice = closes.reduce((a: number, b: number) => a + b, 0) / closes.length;
+
+        let volatilityPercent = 0;
+        if (meanPrice > 0) {
+            const variance = closes.reduce((a: number, b: number) => a + Math.pow(b - meanPrice, 2), 0) / closes.length;
+            const stdDev = Math.sqrt(variance);
+            volatilityPercent = (stdDev / meanPrice) * 100;
+        }
 
         const context = {
             name: item.name,
