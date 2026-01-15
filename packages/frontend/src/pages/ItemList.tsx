@@ -1,34 +1,10 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState, useCallback } from "react";
 import { Link } from "react-router-dom";
+import { AutoRefreshControls } from "../components/AutoRefreshControls";
 import { useAuth } from "../contexts/AuthContext";
+import { useFilters } from "../contexts/FilterContext";
 import { API_BASE_URL } from "../config";
-
-
-interface Item {
-    id: number;
-    name: string;
-    examine: string;
-    members: boolean;
-    wikiUrl: string;
-    iconUrl: string;
-    buyPrice: number | null;
-    sellPrice: number | null;
-    margin: number | null;
-    volume: number | null;
-    dayChange: number | null;
-    marginVolume: number | null;
-    limit: number | null;
-}
-
-type SortKey =
-    | "name"
-    | "buyPrice"
-    | "sellPrice"
-    | "margin"
-    | "volume"
-    | "dayChange"
-    | "marginVolume"
-    | "limit";
+import { Item, SortKey } from "../types/item";
 
 const FAVORITES_KEY = "osrs_trading_favorites";
 
@@ -38,36 +14,31 @@ interface ItemListProps {
 
 export const ItemList: React.FC<ItemListProps> = ({ defaultShowFavorites = false }) => {
     const { user, token, fetchWithAuth } = useAuth();
+    const {
+        filterState, setFilterState,
+        savedPresets, savePreset, loadPreset, deletePreset, resetFilters
+    } = useFilters();
+
     const [items, setItems] = useState<Item[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
-    const [search, setSearch] = useState("");
-    const [sortKey, setSortKey] = useState<SortKey>("marginVolume");
-    const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
     const [favorites, setFavorites] = useState<number[]>([]);
     const [watches, setWatches] = useState<number[]>([]);
-    const [onlyFavorites, setOnlyFavorites] = useState(defaultShowFavorites);
-    const [pageSize, setPageSize] = useState(50);
-    const [page, setPage] = useState(1);
     const [discordLinked, setDiscordLinked] = useState(false);
-
-    // Filter states
     const [showFilters, setShowFilters] = useState(false);
-    const [minBuy, setMinBuy] = useState<number | "">("");
-    const [maxBuy, setMaxBuy] = useState<number | "">("");
-    const [minSell, setMinSell] = useState<number | "">("");
-    const [maxSell, setMaxSell] = useState<number | "">("");
-    const [minMargin, setMinMargin] = useState<number | "">("");
-    const [maxMargin, setMaxMargin] = useState<number | "">("");
-    const [minVolume, setMinVolume] = useState<number | "">("");
-    const [maxVolume, setMaxVolume] = useState<number | "">("");
-    const [minDayChange, setMinDayChange] = useState<number | "">("");
-    const [maxDayChange, setMaxDayChange] = useState<number | "">("");
-    const [minMarginVolume, setMinMarginVolume] = useState<number | "">("");
-    const [maxMarginVolume, setMaxMarginVolume] = useState<number | "">("");
-    const [minLimit, setMinLimit] = useState<number | "">("");
-    const [maxLimit, setMaxLimit] = useState<number | "">("");
-    const [membersFilter, setMembersFilter] = useState<"all" | "members" | "f2p">("all");
+
+    // UI state for saving presets
+    const [isSaving, setIsSaving] = useState(false);
+    const [newPresetName, setNewPresetName] = useState("");
+
+    // Destructure filter state for easier access
+    const {
+        search, sortKey, sortDir, page, pageSize,
+        minBuy, maxBuy, minSell, maxSell, minMargin, maxMargin,
+        minVolume, maxVolume, minDayChange, maxDayChange,
+        minMarginVolume, maxMarginVolume, minLimit, maxLimit,
+        membersFilter
+    } = filterState;
 
     // Load favorites logic
     useEffect(() => {
@@ -97,7 +68,7 @@ export const ItemList: React.FC<ItemListProps> = ({ defaultShowFavorites = false
         };
 
         loadFavorites();
-    }, [user, token]);
+    }, [user, token, fetchWithAuth]);
 
     // Load watches logic
     useEffect(() => {
@@ -123,7 +94,7 @@ export const ItemList: React.FC<ItemListProps> = ({ defaultShowFavorites = false
             }
         };
         loadWatches();
-    }, [user, token]);
+    }, [user, token, fetchWithAuth]);
 
 
     // Sync favorites to localStorage only if NOT logged in
@@ -133,27 +104,27 @@ export const ItemList: React.FC<ItemListProps> = ({ defaultShowFavorites = false
         }
     }, [favorites, user]);
 
-    useEffect(() => {
-        const fetchItems = async () => {
-            setLoading(true);
-            setError(null);
-            try {
-                const res = await fetchWithAuth(`${API_BASE_URL}/api/items`);
-                if (!res.ok) {
-                    throw new Error(`HTTP ${res.status}`);
-                }
-                const data = await res.json();
-                setItems(data.items ?? []);
-            } catch (err) {
-                setError("Failed to load items. Try again in a moment.");
-                console.error(err);
-            } finally {
-                setLoading(false);
+    const fetchItems = useCallback(async (isAutoRefresh = false) => {
+        if (!isAutoRefresh) setLoading(true);
+        try {
+            const res = await fetchWithAuth(`${API_BASE_URL}/api/items`);
+            if (!res.ok) {
+                throw new Error(`HTTP ${res.status}`);
             }
-        };
+            const data = await res.json();
+            setItems(data.items ?? []);
+            setError(null);
+        } catch (err) {
+            if (!isAutoRefresh) setError("Failed to load items. Try again in a moment.");
+            console.error(err);
+        } finally {
+            if (!isAutoRefresh) setLoading(false);
+        }
+    }, [fetchWithAuth]);
 
+    useEffect(() => {
         fetchItems();
-    }, []);
+    }, [fetchItems]);
 
     const toggleFavorite = async (id: number) => {
         const isFav = favorites.includes(id);
@@ -212,16 +183,25 @@ export const ItemList: React.FC<ItemListProps> = ({ defaultShowFavorites = false
         }
     };
 
-    // Reset page when filters change
-    useEffect(() => {
-        setPage(1);
-    }, [
-        search, sortKey, sortDir, onlyFavorites, pageSize,
-        minBuy, maxBuy, minSell, maxSell, minMargin, maxMargin,
-        minVolume, maxVolume, minDayChange, maxDayChange,
-        minMarginVolume, maxMarginVolume, minLimit, maxLimit,
-        membersFilter
-    ]);
+    // Helper to update partial filter state
+    const updateFilter = (updates: Partial<typeof filterState>) => {
+        setFilterState(prev => ({ ...prev, ...updates, page: 1 }));
+    };
+
+    const handleSortChange = (key: SortKey) => {
+        if (key === sortKey) {
+            setFilterState(prev => ({ ...prev, sortDir: prev.sortDir === "asc" ? "desc" : "asc" }));
+        } else {
+            setFilterState(prev => ({ ...prev, sortKey: key, sortDir: key === "name" ? "asc" : "desc" }));
+        }
+    };
+
+    const handleSavePreset = async () => {
+        if (!newPresetName.trim()) return;
+        await savePreset(newPresetName);
+        setNewPresetName("");
+        setIsSaving(false);
+    };
 
     const filteredAndSorted = useMemo(() => {
         let list = items;
@@ -234,7 +214,7 @@ export const ItemList: React.FC<ItemListProps> = ({ defaultShowFavorites = false
             );
         }
 
-        if (onlyFavorites) {
+        if (defaultShowFavorites) {
             list = list.filter((i) => favorites.includes(i.id));
         }
 
@@ -305,7 +285,7 @@ export const ItemList: React.FC<ItemListProps> = ({ defaultShowFavorites = false
         });
 
         return list;
-    }, [items, search, sortKey, sortDir, favorites, onlyFavorites, minBuy, maxBuy, minSell, maxSell, minMargin, maxMargin, minVolume, maxVolume, minDayChange, maxDayChange, minMarginVolume, maxMarginVolume, minLimit, maxLimit, membersFilter]);
+    }, [items, search, sortKey, sortDir, favorites, defaultShowFavorites, minBuy, maxBuy, minSell, maxSell, minMargin, maxMargin, minVolume, maxVolume, minDayChange, maxDayChange, minMarginVolume, maxMarginVolume, minLimit, maxLimit, membersFilter]);
 
     const totalItems = filteredAndSorted.length;
     const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
@@ -316,26 +296,6 @@ export const ItemList: React.FC<ItemListProps> = ({ defaultShowFavorites = false
         startIndex + pageSize
     );
 
-    const handleSortChange = (key: SortKey) => {
-        if (key === sortKey) {
-            setSortDir((d) => (d === "asc" ? "desc" : "asc"));
-        } else {
-            setSortKey(key);
-            setSortDir(key === "name" ? "asc" : "desc");
-        }
-    };
-
-    const clearFilters = () => {
-        setMinBuy(""); setMaxBuy("");
-        setMinSell(""); setMaxSell("");
-        setMinMargin(""); setMaxMargin("");
-        setMinVolume(""); setMaxVolume("");
-        setMinDayChange(""); setMaxDayChange("");
-        setMinMarginVolume(""); setMaxMarginVolume("");
-        setMinLimit(""); setMaxLimit("");
-        setMembersFilter("all");
-    };
-
     return (
         <main className="app-main">
             <section className="controls">
@@ -343,16 +303,58 @@ export const ItemList: React.FC<ItemListProps> = ({ defaultShowFavorites = false
                     className="search-input"
                     placeholder="Search items by name or examine..."
                     value={search}
-                    onChange={(e) => setSearch(e.target.value)}
+                    onChange={(e) => updateFilter({ search: e.target.value })}
                 />
+            </section>
 
-
+            <section className="controls" style={{ marginTop: '10px', display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '15px' }}>
+                <AutoRefreshControls onRefresh={() => fetchItems(true)} />
             </section>
 
             <section className="filters-section">
-                <div className="filters-header" onClick={() => setShowFilters(!showFilters)}>
-                    <h3>Advanced Filters {showFilters ? "▼" : "▶"}</h3>
-                    {showFilters && <button className="clear-filters" onClick={(e) => { e.stopPropagation(); clearFilters(); }}>Clear Filters</button>}
+                <div className="filters-header">
+                    <div onClick={() => setShowFilters(!showFilters)} style={{ cursor: 'pointer' }}>
+                        <h3>Advanced Filters {showFilters ? "▼" : "▶"}</h3>
+                    </div>
+
+                    <div className="filter-actions">
+                        {showFilters && (
+                            <>
+                                <div className="saved-filters-dropdown">
+                                    <select
+                                        onChange={(e) => {
+                                            const preset = savedPresets.find(p => p.id.toString() === e.target.value);
+                                            if (preset) loadPreset(preset);
+                                        }}
+                                        defaultValue=""
+                                    >
+                                        <option value="" disabled>Load Saved Filter...</option>
+                                        {savedPresets.map(p => (
+                                            <option key={p.id} value={p.id}>{p.name}</option>
+                                        ))}
+                                    </select>
+                                </div>
+
+                                {isSaving ? (
+                                    <div className="save-controls">
+                                        <input
+                                            type="text"
+                                            placeholder="Filter Name"
+                                            value={newPresetName}
+                                            onChange={e => setNewPresetName(e.target.value)}
+                                            className="save-input"
+                                        />
+                                        <button onClick={handleSavePreset} className="page-button">Save</button>
+                                        <button onClick={() => setIsSaving(false)} className="page-button" style={{ background: '#666' }}>Cancel</button>
+                                    </div>
+                                ) : (
+                                    <button onClick={() => setIsSaving(true)} className="page-button">Save Current</button>
+                                )}
+
+                                <button className="clear-filters" onClick={resetFilters}>Clear Filters</button>
+                            </>
+                        )}
+                    </div>
                 </div>
 
                 {showFilters && (
@@ -360,55 +362,55 @@ export const ItemList: React.FC<ItemListProps> = ({ defaultShowFavorites = false
                         <div className="filter-group">
                             <label>Buy Price</label>
                             <div className="filter-inputs">
-                                <input type="number" className="filter-input" placeholder="Min" value={minBuy} onChange={e => setMinBuy(e.target.value ? Number(e.target.value) : "")} />
-                                <input type="number" className="filter-input" placeholder="Max" value={maxBuy} onChange={e => setMaxBuy(e.target.value ? Number(e.target.value) : "")} />
+                                <input type="number" className="filter-input" placeholder="Min" value={minBuy} onChange={e => updateFilter({ minBuy: e.target.value ? Number(e.target.value) : "" })} />
+                                <input type="number" className="filter-input" placeholder="Max" value={maxBuy} onChange={e => updateFilter({ maxBuy: e.target.value ? Number(e.target.value) : "" })} />
                             </div>
                         </div>
                         <div className="filter-group">
                             <label>Sell Price</label>
                             <div className="filter-inputs">
-                                <input type="number" className="filter-input" placeholder="Min" value={minSell} onChange={e => setMinSell(e.target.value ? Number(e.target.value) : "")} />
-                                <input type="number" className="filter-input" placeholder="Max" value={maxSell} onChange={e => setMaxSell(e.target.value ? Number(e.target.value) : "")} />
+                                <input type="number" className="filter-input" placeholder="Min" value={minSell} onChange={e => updateFilter({ minSell: e.target.value ? Number(e.target.value) : "" })} />
+                                <input type="number" className="filter-input" placeholder="Max" value={maxSell} onChange={e => updateFilter({ maxSell: e.target.value ? Number(e.target.value) : "" })} />
                             </div>
                         </div>
                         <div className="filter-group">
                             <label>Margin</label>
                             <div className="filter-inputs">
-                                <input type="number" className="filter-input" placeholder="Min" value={minMargin} onChange={e => setMinMargin(e.target.value ? Number(e.target.value) : "")} />
-                                <input type="number" className="filter-input" placeholder="Max" value={maxMargin} onChange={e => setMaxMargin(e.target.value ? Number(e.target.value) : "")} />
+                                <input type="number" className="filter-input" placeholder="Min" value={minMargin} onChange={e => updateFilter({ minMargin: e.target.value ? Number(e.target.value) : "" })} />
+                                <input type="number" className="filter-input" placeholder="Max" value={maxMargin} onChange={e => updateFilter({ maxMargin: e.target.value ? Number(e.target.value) : "" })} />
                             </div>
                         </div>
                         <div className="filter-group">
                             <label>Volume</label>
                             <div className="filter-inputs">
-                                <input type="number" className="filter-input" placeholder="Min" value={minVolume} onChange={e => setMinVolume(e.target.value ? Number(e.target.value) : "")} />
-                                <input type="number" className="filter-input" placeholder="Max" value={maxVolume} onChange={e => setMaxVolume(e.target.value ? Number(e.target.value) : "")} />
+                                <input type="number" className="filter-input" placeholder="Min" value={minVolume} onChange={e => updateFilter({ minVolume: e.target.value ? Number(e.target.value) : "" })} />
+                                <input type="number" className="filter-input" placeholder="Max" value={maxVolume} onChange={e => updateFilter({ maxVolume: e.target.value ? Number(e.target.value) : "" })} />
                             </div>
                         </div>
                         <div className="filter-group">
                             <label>24h Change (%)</label>
                             <div className="filter-inputs">
-                                <input type="number" className="filter-input" placeholder="Min" value={minDayChange} onChange={e => setMinDayChange(e.target.value ? Number(e.target.value) : "")} />
-                                <input type="number" className="filter-input" placeholder="Max" value={maxDayChange} onChange={e => setMaxDayChange(e.target.value ? Number(e.target.value) : "")} />
+                                <input type="number" className="filter-input" placeholder="Min" value={minDayChange} onChange={e => updateFilter({ minDayChange: e.target.value ? Number(e.target.value) : "" })} />
+                                <input type="number" className="filter-input" placeholder="Max" value={maxDayChange} onChange={e => updateFilter({ maxDayChange: e.target.value ? Number(e.target.value) : "" })} />
                             </div>
                         </div>
                         <div className="filter-group">
                             <label>Margin × Volume</label>
                             <div className="filter-inputs">
-                                <input type="number" className="filter-input" placeholder="Min" value={minMarginVolume} onChange={e => setMinMarginVolume(e.target.value ? Number(e.target.value) : "")} />
-                                <input type="number" className="filter-input" placeholder="Max" value={maxMarginVolume} onChange={e => setMaxMarginVolume(e.target.value ? Number(e.target.value) : "")} />
+                                <input type="number" className="filter-input" placeholder="Min" value={minMarginVolume} onChange={e => updateFilter({ minMarginVolume: e.target.value ? Number(e.target.value) : "" })} />
+                                <input type="number" className="filter-input" placeholder="Max" value={maxMarginVolume} onChange={e => updateFilter({ maxMarginVolume: e.target.value ? Number(e.target.value) : "" })} />
                             </div>
                         </div>
                         <div className="filter-group">
                             <label>Limit</label>
                             <div className="filter-inputs">
-                                <input type="number" className="filter-input" placeholder="Min" value={minLimit} onChange={e => setMinLimit(e.target.value ? Number(e.target.value) : "")} />
-                                <input type="number" className="filter-input" placeholder="Max" value={maxLimit} onChange={e => setMaxLimit(e.target.value ? Number(e.target.value) : "")} />
+                                <input type="number" className="filter-input" placeholder="Min" value={minLimit} onChange={e => updateFilter({ minLimit: e.target.value ? Number(e.target.value) : "" })} />
+                                <input type="number" className="filter-input" placeholder="Max" value={maxLimit} onChange={e => updateFilter({ maxLimit: e.target.value ? Number(e.target.value) : "" })} />
                             </div>
                         </div>
                         <div className="filter-group">
                             <label>Members</label>
-                            <select className="filter-select" value={membersFilter} onChange={(e) => setMembersFilter(e.target.value as any)}>
+                            <select className="filter-select" value={membersFilter} onChange={(e) => updateFilter({ membersFilter: e.target.value as any })}>
                                 <option value="all">All</option>
                                 <option value="members">Members</option>
                                 <option value="f2p">Free to Play</option>
@@ -426,7 +428,7 @@ export const ItemList: React.FC<ItemListProps> = ({ defaultShowFavorites = false
                     </span>
                     <button
                         className="page-button"
-                        onClick={() => setPage((p) => Math.max(1, p - 1))}
+                        onClick={() => setFilterState(p => ({ ...p, page: Math.max(1, p.page - 1) }))}
                         disabled={currentPage === 1}
                     >
                         Prev
@@ -436,7 +438,7 @@ export const ItemList: React.FC<ItemListProps> = ({ defaultShowFavorites = false
                     </span>
                     <button
                         className="page-button"
-                        onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                        onClick={() => setFilterState(p => ({ ...p, page: Math.min(totalPages, p.page + 1) }))}
                         disabled={currentPage === totalPages}
                     >
                         Next
@@ -444,7 +446,7 @@ export const ItemList: React.FC<ItemListProps> = ({ defaultShowFavorites = false
                     <select
                         className="page-size-select"
                         value={pageSize}
-                        onChange={(e) => setPageSize(Number(e.target.value))}
+                        onChange={(e) => setFilterState(p => ({ ...p, pageSize: Number(e.target.value), page: 1 }))}
                     >
                         <option value={50}>50 / page</option>
                         <option value={100}>100 / page</option>

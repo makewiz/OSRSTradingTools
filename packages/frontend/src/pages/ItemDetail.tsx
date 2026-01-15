@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
+import { AutoRefreshControls } from "../components/AutoRefreshControls";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { PriceChart } from "../components/PriceChart";
 import { useAuth } from "../contexts/AuthContext";
@@ -59,6 +60,15 @@ export const ItemDetail: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [timeRange, setTimeRange] = useState<"24h" | "7d" | "30d" | "1y">("24h");
+
+  // Analysis logic
+  const [analysis, setAnalysis] = useState<{ riskScore: number; rating: string; reasoning: string } | null>(null);
+  const [analyzing, setAnalyzing] = useState(false);
+
+  useEffect(() => {
+    setAnalysis(null);
+    setAnalyzing(false);
+  }, [id]);
 
   // Watch logic
   const [watches, setWatches] = useState<number[]>([]);
@@ -154,70 +164,78 @@ export const ItemDetail: React.FC = () => {
     loadWatches();
   }, [user, token, id]);
 
-  useEffect(() => {
-    const fetchItem = async () => {
-      if (!id) return;
+  const fetchItem = useCallback(async (isAutoRefresh = false) => {
+    if (!id) return;
 
+    if (!isAutoRefresh) {
       setLoading(true);
       setError(null);
+    }
 
-      try {
-        const res = await fetchWithAuth(`${API_BASE_URL}/api/items/${id}`);
-        if (!res.ok) {
-          throw new Error(`HTTP ${res.status}`);
-        }
-        const data = await res.json();
-        setItem(data.item);
-      } catch (err) {
-        setError("Failed to load item details");
-        // eslint-disable-next-line no-console
-        console.error(err);
-      } finally {
-        setLoading(false);
+    try {
+      const res = await fetchWithAuth(`${API_BASE_URL}/api/items/${id}`);
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status}`);
       }
-    };
+      const data = await res.json();
+      setItem(data.item);
+      setError(null);
+    } catch (err) {
+      if (!isAutoRefresh) setError("Failed to load item details");
+      // eslint-disable-next-line no-console
+      console.error(err);
+    } finally {
+      if (!isAutoRefresh) setLoading(false);
+    }
+  }, [id, fetchWithAuth]);
 
-    fetchItem();
-  }, [id]);
+  const fetchHistory = useCallback(async () => {
+    if (!id) return;
+
+    try {
+      const now = Math.floor(Date.now() / 1000);
+
+      const timeRanges: Record<string, number> = {
+        "24h": 24 * 60 * 60,
+        "7d": 7 * 24 * 60 * 60,
+        "30d": 30 * 24 * 60 * 60,
+        "1y": 365 * 24 * 60 * 60,
+      };
+      const rangeSeconds = timeRanges[timeRange] || timeRanges["24h"];
+      const startTime = now - rangeSeconds;
+
+      const url = `${API_BASE_URL}/api/items/${id}/history?startTime=${startTime}&endTime=${now}`;
+      const res = await fetchWithAuth(url);
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status}`);
+      }
+      const data = await res.json();
+
+      // Always expect high fidelity format (split arrays)
+      if (data.highFidelity) {
+        setPriceHistory(data);
+      } else {
+        // Fallback for any legacy cached responses
+        setPriceHistory(data.history || []);
+      }
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error("Failed to load price history:", err);
+    }
+  }, [id, timeRange, fetchWithAuth]);
+
+  const refreshData = useCallback(() => {
+    fetchItem(true);
+    fetchHistory();
+  }, [fetchItem, fetchHistory]);
 
   useEffect(() => {
-    const fetchHistory = async () => {
-      if (!id) return;
+    fetchItem();
+  }, [fetchItem]);
 
-      try {
-        const now = Math.floor(Date.now() / 1000);
-
-        const timeRanges: Record<string, number> = {
-          "24h": 24 * 60 * 60,
-          "7d": 7 * 24 * 60 * 60,
-          "30d": 30 * 24 * 60 * 60,
-          "1y": 365 * 24 * 60 * 60,
-        };
-        const rangeSeconds = timeRanges[timeRange] || timeRanges["24h"];
-        const startTime = now - rangeSeconds;
-
-        const url = `${API_BASE_URL}/api/items/${id}/history?startTime=${startTime}&endTime=${now}`;
-        const res = await fetchWithAuth(url);
-        if (!res.ok) {
-          throw new Error(`HTTP ${res.status}`);
-        }
-        const data = await res.json();
-
-        // Always expect high fidelity format (split arrays)
-        if (data.highFidelity) {
-          setPriceHistory(data);
-        } else {
-          // Fallback for any legacy cached responses
-          setPriceHistory(data.history || []);
-        }
-      } catch (err) {
-        // eslint-disable-next-line no-console
-        console.error("Failed to load price history:", err);
-      }
-    };
-
+  useEffect(() => {
     fetchHistory();
-  }, [id, timeRange]);
+  }, [fetchHistory]);
 
   const toggleWatch = async () => {
     if (!item || !user || !discordLinked) {
@@ -252,6 +270,27 @@ export const ItemDetail: React.FC = () => {
     }
   };
 
+  const fetchAnalysis = async () => {
+    if (!item || !user || !token) {
+      alert("Please login to use AI Trade Advisor");
+      return;
+    }
+
+    setAnalyzing(true);
+    try {
+      const res = await fetchWithAuth(`${API_BASE_URL}/api/analysis/risk/${item.id}`);
+      if (!res.ok) throw new Error("Analysis failed");
+      const data = await res.json();
+      setAnalysis(data);
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error("AI Analysis Error", err);
+      alert("Failed to generate AI analysis. Please try again later.");
+    } finally {
+      setAnalyzing(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="item-detail-container">
@@ -280,6 +319,10 @@ export const ItemDetail: React.FC = () => {
         <Link to="/items" className="back-link">
           ← Back to items
         </Link>
+
+        <div className="start-row-apart" style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '15px', marginBottom: '10px' }}>
+          <AutoRefreshControls onRefresh={refreshData} />
+        </div>
 
         <div className="item-header">
           <img
@@ -449,6 +492,48 @@ export const ItemDetail: React.FC = () => {
             <div className="stat-value text-gold">
               {item.potentialProfit?.toLocaleString() ?? "-"}
             </div>
+          </div>
+
+          {/* AI Advisor Section - Spans Full Width */}
+          <div className="stat-card" style={{ gridColumn: '1 / -1', background: 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)', border: '1px solid #3b82f6' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+              <div className="stat-label" style={{ color: '#60a5fa', fontWeight: 'bold' }}>🤖 AI Trade Advisor</div>
+              {!analysis && !analyzing && (
+                <button
+                  onClick={fetchAnalysis}
+                  style={{
+                    background: '#3b82f6', color: 'white', border: 'none',
+                    padding: '5px 15px', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold'
+                  }}
+                >
+                  Analyze Risk
+                </button>
+              )}
+            </div>
+
+            {analyzing && <div style={{ color: '#94a3b8', fontStyle: 'italic' }}>Analyzing market data... (this takes ~3s)</div>}
+
+            {analysis && (
+              <div style={{ display: 'flex', gap: '20px', alignItems: 'flex-start' }}>
+                <div style={{ textAlign: 'center', minWidth: '80px' }}>
+                  <div style={{
+                    fontSize: '2rem', fontWeight: 'bold',
+                    color: analysis.riskScore >= 7 ? '#ef4444' : analysis.riskScore >= 4 ? '#f59e0b' : '#22c55e'
+                  }}>
+                    {analysis.riskScore}/10
+                  </div>
+                  <div style={{ fontSize: '0.8rem', color: '#cbd5e1' }}>Risk Score</div>
+                </div>
+                <div>
+                  <div style={{ fontWeight: 'bold', fontSize: '1.1rem', marginBottom: '5px', color: '#e2e8f0' }}>
+                    Rating: {analysis.rating}
+                  </div>
+                  <p style={{ margin: 0, color: '#cbd5e1', lineHeight: '1.4' }}>
+                    {analysis.reasoning}
+                  </p>
+                </div>
+              </div>
+            )}
           </div>
 
 

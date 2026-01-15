@@ -104,7 +104,7 @@ export class AnalysisService {
         spikes: HighlightItem[],
         drops: HighlightItem[]
     ): Promise<string> {
-        const apiKey = process.env.OPENAI_API_KEY;
+        const apiKey = process.env.GEMINI_API_KEY;
 
         let promptContext = `Market Report:\n`;
 
@@ -123,26 +123,26 @@ export class AnalysisService {
             promptContext += `Other notable items: ${notable}.\n`;
         }
 
+        // Add prompt instruction
+        promptContext += "\nSummarize the market highlights in 2-3 concise, engaging sentences as a specialized OSRS trading assistant.";
+
         if (apiKey) {
             try {
-                const response = await fetch("https://api.openai.com/v1/chat/completions", {
+                const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${apiKey}`, {
                     method: "POST",
                     headers: {
-                        "Content-Type": "application/json",
-                        "Authorization": `Bearer ${apiKey}`
+                        "Content-Type": "application/json"
                     },
                     body: JSON.stringify({
-                        model: "gpt-3.5-turbo",
-                        messages: [
-                            { role: "system", content: "You are a specialized OSRS trading assistant. Summarize the market highlights in 2-3 concise, engaging sentences." },
-                            { role: "user", content: promptContext }
-                        ]
+                        contents: [{
+                            parts: [{ text: promptContext }]
+                        }]
                     })
                 });
 
                 const data = await response.json();
-                if (data.choices && data.choices[0]?.message?.content) {
-                    return data.choices[0].message.content;
+                if (data.candidates && data.candidates[0]?.content?.parts?.[0]?.text) {
+                    return data.candidates[0].content.parts[0].text;
                 }
             } catch (error) {
                 console.error("Error generating AI summary:", error);
