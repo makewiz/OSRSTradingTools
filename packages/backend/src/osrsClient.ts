@@ -4,6 +4,7 @@ import { calculateTax, calculateProfit, calculateROI } from "./tax";
 const MAPPING_URL = "https://prices.runescape.wiki/api/v1/osrs/mapping";
 const LATEST_URL = "https://prices.runescape.wiki/api/v1/osrs/latest";
 const FIVE_MIN_URL = "https://prices.runescape.wiki/api/v1/osrs/5m";
+const TIMESERIES_URL = "https://prices.runescape.wiki/api/v1/osrs/timeseries";
 const VOLUMES_URL =
   "https://oldschool.runescape.wiki/?title=Module:GEVolumes/data.json&action=raw&ctype=application%2Fjson";
 
@@ -41,6 +42,14 @@ export interface Osrs5mResponse {
 }
 
 export type OsrsVolumesResponse = Record<string, number>;
+
+export interface WikiTimeSeriesItem {
+  timestamp: number;
+  avgHighPrice: number | null;
+  avgLowPrice: number | null;
+  highPriceVolume: number | null;
+  lowPriceVolume: number | null;
+}
 
 export interface CombinedItem {
   id: number;
@@ -138,6 +147,13 @@ async function getVolumes(): Promise<OsrsVolumesResponse> {
   const data = await fetchJson<OsrsVolumesResponse>(VOLUMES_URL);
   volumesCache = { data, fetchedAt: now };
   return data;
+}
+
+export async function fetchWikiTimeSeries(id: number, timestep: string): Promise<WikiTimeSeriesItem[]> {
+  const url = `${TIMESERIES_URL}?id=${id}&timestep=${timestep}`;
+  // The timeseries endpoint returns { data: [...] }
+  const response = await fetchJson<{ data: WikiTimeSeriesItem[] }>(url);
+  return response.data;
 }
 
 export async function getCombinedItems(): Promise<CombinedItem[]> {

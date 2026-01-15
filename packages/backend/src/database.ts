@@ -1,5 +1,6 @@
 import { Pool } from "pg";
 import dotenv from "dotenv";
+import { fetchWikiTimeSeries } from "./osrsClient";
 
 dotenv.config();
 
@@ -364,23 +365,72 @@ export async function getPriceHistory(
 
   const result = await pool.query(query, [itemId, startTime, endTime]);
 
+  // Fallback to Wiki API if coverage is low (< 80%)
+  let rows = result.rows;
+
+  // Determine granularity in seconds for expected count calculation
+  let stepSeconds = 300; // 5m
+  let timestep = '5m';
+  if (table === 'item_history_24h') {
+    stepSeconds = 24 * 3600;
+    timestep = '24h';
+  } else if (table === 'item_history_6h') {
+    stepSeconds = 6 * 3600;
+    timestep = '6h';
+  } else if (table === 'item_history_1h') {
+    stepSeconds = 3600;
+    timestep = '1h';
+  }
+
+  const expectedPoints = Math.ceil(duration / stepSeconds);
+  const coverage = expectedPoints > 0 ? rows.length / expectedPoints : 1;
+
+  if (coverage < 0.8) {
+    console.log(`[PriceHistory] Insufficient data for item ${itemId} (Coverage: ${(coverage * 100).toFixed(1)}%). Fetching from Wiki API...`);
+    try {
+      const apiData = await fetchWikiTimeSeries(itemId, timestep);
+
+      // Filter and map API data to row format
+      // API Timestamp is in seconds.
+      const apiRows = apiData
+        .filter(d => d.timestamp >= startTime && d.timestamp <= endTime)
+        .map(d => ({
+          timestamp: d.timestamp.toString(), // consistency with DB result (string) for parsing below
+          avg_high_price: d.avgHighPrice,
+          avg_low_price: d.avgLowPrice,
+          high_price_volume: d.highPriceVolume,
+          low_price_volume: d.lowPriceVolume
+        }));
+
+      if (apiRows.length > 0) {
+        rows = apiRows;
+        console.log(`[PriceHistory] Fetched ${rows.length} points from Wiki API.`);
+      } else {
+        console.warn(`[PriceHistory] Wiki API returned no data for range.`);
+      }
+    } catch (err) {
+      console.error(`[PriceHistory] Failed to fetch from Wiki API:`, err);
+      // Proceed with existing DB rows if API fails
+    }
+  }
+
   const buy = [];
   const sell = [];
   const volume = [];
 
-  for (const row of result.rows) {
+  for (const row of rows) {
     const ts = parseInt(row.timestamp);
-    if (row.avg_low_price !== null) {
+    if (row.avg_low_price !== null && row.avg_low_price !== undefined) {
       buy.push({ timestamp: ts, price: row.avg_low_price });
     }
-    if (row.avg_high_price !== null) {
+    if (row.avg_high_price !== null && row.avg_high_price !== undefined) {
       sell.push({ timestamp: ts, price: row.avg_high_price });
     }
     if (row.high_price_volume !== null || row.low_price_volume !== null) {
       volume.push({
         timestamp: ts,
-        buy_volume: row.low_price_volume,
-        sell_volume: row.high_price_volume
+        buy_volume: row.low_price_volume ?? null,
+        sell_volume: row.high_price_volume ?? null
       });
     }
   }
