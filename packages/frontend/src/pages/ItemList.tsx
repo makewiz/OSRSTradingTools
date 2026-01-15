@@ -106,7 +106,6 @@ export const ItemList: React.FC<ItemListProps> = ({ defaultShowFavorites = false
 
     const fetchItems = useCallback(async (isAutoRefresh = false) => {
         if (!isAutoRefresh) setLoading(true);
-        setError(null);
         try {
             const res = await fetchWithAuth(`${API_BASE_URL}/api/items`);
             if (!res.ok) {
@@ -114,6 +113,7 @@ export const ItemList: React.FC<ItemListProps> = ({ defaultShowFavorites = false
             }
             const data = await res.json();
             setItems(data.items ?? []);
+            setError(null);
         } catch (err) {
             if (!isAutoRefresh) setError("Failed to load items. Try again in a moment.");
             console.error(err);
