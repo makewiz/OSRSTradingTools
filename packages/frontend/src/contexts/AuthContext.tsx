@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
+import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from "react";
 
 interface User {
     id: number;
@@ -47,22 +47,22 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             .catch(console.error);
     }, []);
 
-    const login = (newToken: string, newUser: User) => {
+    const login = useCallback((newToken: string, newUser: User) => {
         setToken(newToken);
         setUser(newUser);
         localStorage.setItem("auth_token", newToken);
         localStorage.setItem("auth_user", JSON.stringify(newUser));
-    };
+    }, []);
 
-    const logout = () => {
+    const logout = useCallback(() => {
         setToken(null);
         setUser(null);
         localStorage.removeItem("auth_token");
         localStorage.removeItem("auth_user");
         navigate("/login");
-    };
+    }, [navigate]);
 
-    const fetchWithAuth = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+    const fetchWithAuth = useCallback(async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
         const headers = new Headers(init?.headers);
 
         if (token) {
@@ -81,7 +81,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         }
 
         return response;
-    };
+    }, [token, logout]);
 
     return (
         <AuthContext.Provider

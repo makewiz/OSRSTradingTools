@@ -1,6 +1,6 @@
 import cron from "node-cron";
 import { Client, EmbedBuilder, TextChannel } from "discord.js";
-import { getAllActiveWatches, updateLastNotified, getSystemSetting } from "./database";
+import { getAllActiveWatches, updateLastNotified, getSystemSetting, getAllActiveAdvancedWatches, getAdvancedWatchHistory, updateAdvancedWatchHistory } from "./database";
 import { logger } from "@osrstradingtools/shared";
 
 const COOLDOWN_1H_SECONDS = 60 * 60; // 1 hour cooldown for 1h change
@@ -147,16 +147,29 @@ async function checkNotifications(client: Client) {
     const itemMap = new Map(items.map(i => [i.id, i]));
 
     // Group by user to batch messages
-    const notificationsToSend: { discordId: string; messages: string[] }[] = [];
+    interface NotificationBatch {
+        header: string;
+        items: string[];
+    }
+    const notificationsToSend = new Map<string, NotificationBatch[]>();
 
     // Helper to add to batch
-    const addToBatch = (discordId: string, msg: string) => {
-        let userBatch = notificationsToSend.find(n => n.discordId === discordId);
-        if (!userBatch) {
-            userBatch = { discordId, messages: [] };
-            notificationsToSend.push(userBatch);
+    const addToBatch = (discordId: string, header: string, items: string[]) => {
+        let userBatches = notificationsToSend.get(discordId);
+        if (!userBatches) {
+            userBatches = [];
+            notificationsToSend.set(discordId, userBatches);
         }
-        userBatch.messages.push(msg);
+        // Aggressive helper to merge if exact same header? 
+        // Or just push new batch. Since advanced watches have unique names, separate batches is fine.
+        // For Legacy, we use one generic header.
+
+        let existingBatch = userBatches.find(b => b.header === header);
+        if (existingBatch) {
+            existingBatch.items.push(...items);
+        } else {
+            userBatches.push({ header, items });
+        }
     };
 
     for (const watch of watches) {
@@ -177,7 +190,7 @@ async function checkNotifications(client: Client) {
                     const msg = `**${item.name}** (1H): ${direction} ${hourChange.toFixed(2)}% (Buy: ${item.buyPrice}, Sell: ${item.sellPrice})\n[View Item](${link})`;
 
                     await updateLastNotified(watch.id, '1h');
-                    addToBatch(watch.discord_id, msg);
+                    addToBatch(watch.discord_id, "🚨 **OSRS Price Alerts**", [msg]);
                 }
             }
         }
@@ -206,22 +219,135 @@ async function checkNotifications(client: Client) {
                     const msg = `**${item.name}** (24H): ${direction} ${dayChange.toFixed(2)}% (Buy: ${item.buyPrice}, Sell: ${item.sellPrice})\n[View Item](${link})`;
 
                     await updateLastNotified(watch.id, '24h');
-                    addToBatch(watch.discord_id, msg);
+                    addToBatch(watch.discord_id, "🚨 **OSRS Price Alerts**", [msg]);
+                }
+            }
+        }
+    }
+
+    // --- CHECK ADVANCED WATCHES ---
+    const advancedWatches = await getAllActiveAdvancedWatches();
+    if (advancedWatches.length > 0) {
+        for (const watch of advancedWatches) {
+            let potentialMatches: any[] = [];
+
+            // 1. Filter items
+            for (const item of items) {
+                // strict null checks
+                if (watch.min_buy_price !== null && (item.buyPrice === null || item.buyPrice < watch.min_buy_price)) continue;
+                if (watch.max_buy_price !== null && (item.buyPrice === null || item.buyPrice > watch.max_buy_price)) continue;
+                if (watch.min_sell_price !== null && (item.sellPrice === null || item.sellPrice < watch.min_sell_price)) continue;
+                if (watch.max_sell_price !== null && (item.sellPrice === null || item.sellPrice > watch.max_sell_price)) continue;
+                if (watch.min_volume !== null && (item.volume === null || item.volume < watch.min_volume)) continue;
+
+                // Change filters
+                if (watch.min_change_1h !== null && (item.oneHourChange === null || Math.abs(item.oneHourChange) < watch.min_change_1h)) continue;
+                if (watch.min_change_24h !== null && (item.dayChange === null || Math.abs(item.dayChange) < watch.min_change_24h)) continue;
+
+                // New Filters
+                if (watch.is_members !== null && item.members !== watch.is_members) continue;
+                if (watch.min_buy_limit !== null && (item.limit === null || item.limit < watch.min_buy_limit)) continue;
+                if (watch.max_buy_limit !== null && (item.limit === null || item.limit > watch.max_buy_limit)) continue;
+                if (watch.min_margin !== null && (item.margin === null || item.margin < watch.min_margin)) continue;
+                if (watch.max_margin !== null && (item.margin === null || item.margin > watch.max_margin)) continue;
+                if (watch.min_profit !== null && (item.profit === null || item.profit < watch.min_profit)) continue;
+                if (watch.max_profit !== null && (item.profit === null || item.profit > watch.max_profit)) continue;
+                if (watch.min_roi !== null && (item.roi === null || item.roi < watch.min_roi)) continue;
+                if (watch.min_potential_profit !== null && (item.potentialProfit === null || item.potentialProfit < watch.min_potential_profit)) continue;
+
+                potentialMatches.push(item);
+            }
+
+            // 2. Sort Items
+            if (potentialMatches.length > 0) {
+                const orderBy = watch.order_by || 'profit';
+                const direction = watch.direction === 'asc' ? 1 : -1;
+
+                potentialMatches.sort((a, b) => {
+                    let valA = 0;
+                    let valB = 0;
+
+                    switch (orderBy) {
+                        case 'profit': valA = a.profit ?? 0; valB = b.profit ?? 0; break;
+                        case 'roi': valA = a.roi ?? 0; valB = b.roi ?? 0; break;
+                        case 'margin': valA = a.margin ?? 0; valB = b.margin ?? 0; break;
+                        case 'volume': valA = a.volume ?? 0; valB = b.volume ?? 0; break;
+                        case 'oneHourChange': valA = Math.abs(a.oneHourChange ?? 0); valB = Math.abs(b.oneHourChange ?? 0); break; // Magnitude? Or value? Usually magnitude for volatility. Let's use Raw value for Asc/Desc flexibility, unless it's 'change' then magnitude implies volatility. Let's start with raw.
+                        case 'dayChange': valA = a.dayChange ?? 0; valB = b.dayChange ?? 0; break;
+                        default: valA = a.profit ?? 0; valB = b.profit ?? 0;
+                    }
+
+                    if (valA < valB) return -1 * direction;
+                    if (valA > valB) return 1 * direction;
+                    return 0;
+                });
+
+                // 3. Max Count
+                const maxCount = watch.max_count || 10;
+                potentialMatches = potentialMatches.slice(0, maxCount);
+
+                // 4. Cooldown & Notification Construction
+                const cooldownSeconds = (watch.cooldown_minutes || 60) * 60;
+                const itemsToSend: string[] = [];
+
+                for (const item of potentialMatches) {
+                    const lastTriggered = await getAdvancedWatchHistory(watch.id, item.id);
+                    if (!lastTriggered || (now - lastTriggered) >= cooldownSeconds) {
+                        // Add to list
+                        const link = `${frontendUrl}/item/${item.id}`;
+                        // Simplified Item Message (No "matched filter" text)
+                        const msg = `**${item.name}**: ${item.buyPrice?.toLocaleString()} GP | Profit: ${item.profit?.toLocaleString()} | ROI: ${item.roi?.toFixed(2)}%\n` +
+                            `[View Item](${link})`;
+
+                        itemsToSend.push(msg);
+                        await updateAdvancedWatchHistory(watch.id, item.id);
+                    }
+                }
+
+                if (itemsToSend.length > 0) {
+                    const header = `🔎 **${watch.name || "Advanced Watch"}**`;
+                    addToBatch(watch.discord_id, header, itemsToSend);
                 }
             }
         }
     }
 
     // Send Messages
-    for (const batch of notificationsToSend) {
+    for (const [discordId, batches] of notificationsToSend.entries()) {
         try {
-            const user = await client.users.fetch(batch.discordId);
+            const user = await client.users.fetch(discordId);
             if (user) {
-                await user.send(`🚨 **OSRS Price Alerts**\n${batch.messages.join("\n")}`);
-                logger.info(`[Notifier] Sent alert to ${batch.discordId} for ${batch.messages.length} items`);
+                // Construct one big message or multiple?
+                // Discord limit is 2000 chars (not 4000). Embeds have more but simple text is 2000.
+                // We should try to group.
+
+                let messageBuffer = "";
+
+                for (const batch of batches) {
+                    const header = batch.header;
+                    const items = batch.items;
+
+                    let batchText = `${header}\n`;
+                    batchText += items.join("\n");
+                    batchText += "\n\n";
+
+                    if (messageBuffer.length + batchText.length > 1900) {
+                        // Flush
+                        await user.send(messageBuffer);
+                        messageBuffer = "";
+                    }
+                    messageBuffer += batchText;
+                }
+
+                if (messageBuffer.trim().length > 0) {
+                    await user.send(messageBuffer);
+                }
+
+                const totalItems = batches.reduce((acc, b) => acc + b.items.length, 0);
+                logger.info(`[Notifier] Sent alert to ${discordId} for ${totalItems} items`);
             }
         } catch (err) {
-            logger.error(`[Notifier] Failed to dm ${batch.discordId}`, err);
+            logger.error(`[Notifier] Failed to dm ${discordId}`, err);
         }
     }
 }

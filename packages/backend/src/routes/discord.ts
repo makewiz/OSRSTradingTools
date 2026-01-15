@@ -1,4 +1,5 @@
 import express from "express";
+import { z } from "zod";
 import { authenticateToken } from "../auth";
 import {
     linkDiscordUser,
@@ -6,7 +7,11 @@ import {
     updateDiscordSettings,
     addBackendWatch,
     removeBackendWatch,
-    getBackendWatches
+    getBackendWatches,
+    addAdvancedWatch,
+    removeAdvancedWatch,
+    getAdvancedWatches,
+    updateAdvancedWatch
 } from "../database";
 import { exchangeCodeForToken, getDiscordUser } from "../oauth";
 import { getCombinedItems } from "../osrsClient";
@@ -267,5 +272,173 @@ router.delete("/watch/:itemId", async (req, res) => {
         res.status(500).json({ error: "Failed to remove watch" });
     }
 });
+
+/**
+ * Advanced Watches Routes
+ */
+
+/**
+ * Get Advanced Watches
+ * GET /api/discord/advanced-watches
+ */
+router.get("/advanced-watches", async (req, res) => {
+    const userId = req.user!.id;
+    try {
+        const discordUser = await getDiscordUserByUserId(userId);
+        if (!discordUser) return res.json({ watches: [] });
+
+        const watches = await getAdvancedWatches(discordUser.discord_id);
+        res.json({ watches });
+    } catch (err) {
+        // eslint-disable-next-line no-console
+        console.error(err);
+        res.status(500).json({ error: "Failed to fetch advanced watches" });
+    }
+});
+
+/**
+ * Create Advanced Watch
+ * POST /api/discord/advanced-watches
+ */
+const createAdvancedWatchSchema = z.object({
+    name: z.string().nullable().optional().transform(v => v ?? null),
+    min_buy_price: z.number().int().nonnegative().nullable().optional().transform(v => v ?? null),
+    max_buy_price: z.number().int().nonnegative().nullable().optional().transform(v => v ?? null),
+    min_sell_price: z.number().int().nonnegative().nullable().optional().transform(v => v ?? null),
+    max_sell_price: z.number().int().nonnegative().nullable().optional().transform(v => v ?? null),
+    min_volume: z.number().int().nonnegative().nullable().optional().transform(v => v ?? null),
+    min_change_1h: z.number().nullable().optional().transform(v => v ?? null),
+    min_change_24h: z.number().nullable().optional().transform(v => v ?? null),
+    is_members: z.boolean().nullable().optional().transform(v => v ?? null),
+    min_buy_limit: z.number().int().nonnegative().nullable().optional().transform(v => v ?? null),
+    max_buy_limit: z.number().int().nonnegative().nullable().optional().transform(v => v ?? null),
+    min_margin: z.number().int().nullable().optional().transform(v => v ?? null),
+    max_margin: z.number().int().nullable().optional().transform(v => v ?? null),
+    min_profit: z.number().int().nullable().optional().transform(v => v ?? null),
+    max_profit: z.number().int().nullable().optional().transform(v => v ?? null),
+    min_roi: z.number().nullable().optional().transform(v => v ?? null),
+    min_potential_profit: z.number().int().nullable().optional().transform(v => v ?? null),
+    cooldown_minutes: z.number().int().min(1).default(60),
+    order_by: z.enum(['profit', 'margin', 'roi', 'volume']).default('profit'),
+    direction: z.enum(['asc', 'desc']).default('desc'),
+    max_count: z.number().int().min(1).max(100).default(10)
+});
+
+router.post("/advanced-watches", async (req, res) => {
+    const userId = req.user!.id;
+
+    try {
+        const discordUser = await getDiscordUserByUserId(userId);
+        if (!discordUser) {
+            return res.status(404).json({ error: "No Discord account linked" });
+        }
+
+        // Validate and sanitize input
+        const validationResult = createAdvancedWatchSchema.safeParse(req.body);
+
+        if (!validationResult.success) {
+            return res.status(400).json({
+                error: "Invalid input",
+                details: validationResult.error.format()
+            });
+        }
+
+        const watchData = {
+            discord_id: discordUser.discord_id,
+            ...validationResult.data
+        };
+
+        const newWatch = await addAdvancedWatch(watchData);
+        res.status(201).json({ success: true, watch: newWatch });
+    } catch (err) {
+        // eslint-disable-next-line no-console
+        console.error(err);
+        res.status(500).json({ error: "Failed to create advanced watch" });
+    }
+});
+
+/**
+ * Update Advanced Watch
+ * PUT /api/discord/advanced-watches/:id
+ */
+const updateAdvancedWatchSchema = z.object({
+    name: z.string().nullable().optional(),
+    min_buy_price: z.number().int().nonnegative().nullable().optional(),
+    max_buy_price: z.number().int().nonnegative().nullable().optional(),
+    min_sell_price: z.number().int().nonnegative().nullable().optional(),
+    max_sell_price: z.number().int().nonnegative().nullable().optional(),
+    min_volume: z.number().int().nonnegative().nullable().optional(),
+    min_change_1h: z.number().nullable().optional(),
+    min_change_24h: z.number().nullable().optional(),
+    is_members: z.boolean().nullable().optional(),
+    min_buy_limit: z.number().int().nonnegative().nullable().optional(),
+    max_buy_limit: z.number().int().nonnegative().nullable().optional(),
+    min_margin: z.number().int().nullable().optional(),
+    max_margin: z.number().int().nullable().optional(),
+    min_profit: z.number().int().nullable().optional(),
+    max_profit: z.number().int().nullable().optional(),
+    min_roi: z.number().nullable().optional(),
+    min_potential_profit: z.number().int().nullable().optional(),
+    cooldown_minutes: z.number().int().min(1).optional(),
+    order_by: z.enum(['profit', 'margin', 'roi', 'volume']).optional(),
+    direction: z.enum(['asc', 'desc']).optional(),
+    max_count: z.number().int().min(1).max(100).optional(),
+    enabled: z.boolean().optional()
+});
+
+router.put("/advanced-watches/:id", async (req, res) => {
+    const userId = req.user!.id;
+    const id = parseInt(req.params.id, 10);
+
+    if (isNaN(id)) return res.status(400).json({ error: "Invalid ID" });
+
+    try {
+        const discordUser = await getDiscordUserByUserId(userId);
+        if (!discordUser) return res.status(404).json({ error: "No Discord linked" });
+
+        // Validate and sanitize input
+        const validationResult = updateAdvancedWatchSchema.safeParse(req.body);
+
+        if (!validationResult.success) {
+            return res.status(400).json({
+                error: "Invalid input",
+                details: validationResult.error.format()
+            });
+        }
+
+        const updated = await updateAdvancedWatch(id, discordUser.discord_id, validationResult.data);
+        if (!updated) return res.status(404).json({ error: "Watch not found" });
+
+        res.json({ success: true, watch: updated });
+    } catch (err) {
+        // eslint-disable-next-line no-console
+        console.error(err);
+        res.status(500).json({ error: "Failed to update advanced watch" });
+    }
+});
+
+/**
+ * Delete Advanced Watch
+ * DELETE /api/discord/advanced-watches/:id
+ */
+router.delete("/advanced-watches/:id", async (req, res) => {
+    const userId = req.user!.id;
+    const id = parseInt(req.params.id, 10);
+
+    if (isNaN(id)) return res.status(400).json({ error: "Invalid ID" });
+
+    try {
+        const discordUser = await getDiscordUserByUserId(userId);
+        if (!discordUser) return res.status(404).json({ error: "No Discord linked" });
+
+        await removeAdvancedWatch(id, discordUser.discord_id);
+        res.json({ success: true, id });
+    } catch (err) {
+        // eslint-disable-next-line no-console
+        console.error(err);
+        res.status(500).json({ error: "Failed to delete advanced watch" });
+    }
+});
+
 
 export default router;
