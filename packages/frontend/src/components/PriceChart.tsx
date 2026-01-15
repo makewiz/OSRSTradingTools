@@ -8,8 +8,7 @@ import {
   CartesianGrid,
   Tooltip,
   Legend,
-  ResponsiveContainer,
-  Area
+  ResponsiveContainer
 } from "recharts";
 
 interface PriceDataPoint {
@@ -25,22 +24,13 @@ interface HighFidelityData {
   volume: { timestamp: number; buy_volume: number | null; sell_volume: number | null }[];
 }
 
-export interface ForecastPoint {
-  x: number;
-  y: number;
-  isForecast: boolean;
-  lowerBound: number;
-  upperBound: number;
-}
-
 interface PriceChartProps {
   data: PriceDataPoint[] | HighFidelityData;
-  forecastData?: ForecastPoint[];
   isHighFidelity?: boolean;
   graphType?: 'price' | 'volume';
 }
 
-export const PriceChart: React.FC<PriceChartProps> = ({ data, forecastData, isHighFidelity, graphType = 'price' }) => {
+export const PriceChart: React.FC<PriceChartProps> = ({ data, isHighFidelity, graphType = 'price' }) => {
   let chartData: any[] = [];
 
   if (isHighFidelity && data) {
@@ -75,23 +65,6 @@ export const PriceChart: React.FC<PriceChartProps> = ({ data, forecastData, isHi
       sellPrice: point.sellPrice,
       volume: point.volume
     }));
-  }
-
-  // Merge Forecast Data if available and only for price graph
-  if (forecastData && forecastData.length > 0 && graphType === 'price') {
-    const forecastChartData = forecastData.map(p => ({
-      timestamp: p.x,
-      time: new Date(p.x * 1000).toLocaleString(),
-      forecastPrice: p.y,
-      forecastLower: p.lowerBound,
-      forecastUpper: p.upperBound,
-      isForecast: true
-    }));
-    // Append forecast data to chartData
-    chartData = [...chartData, ...forecastChartData];
-
-    // Sort again just in case overlap exists
-    chartData.sort((a, b) => a.timestamp - b.timestamp);
   }
 
   if (chartData.length === 0) {
@@ -134,11 +107,7 @@ export const PriceChart: React.FC<PriceChartProps> = ({ data, forecastData, isHi
             borderRadius: "0.4rem",
             color: "#f5f5f5"
           }}
-          formatter={(value: any, name: any) => {
-            if (name === 'forecastLower' || name === 'forecastUpper') return [null, null]; // Hide bounds from default tooltip if desired, or show range
-            return (typeof value === 'number' ? value.toLocaleString() : value) ?? "N/A";
-          }}
-          labelFormatter={(label) => label}
+          formatter={(value: any) => (typeof value === 'number' ? value.toLocaleString() : value) ?? "N/A"}
         />
         <Legend verticalAlign="top" height={36} />
 
@@ -163,37 +132,6 @@ export const PriceChart: React.FC<PriceChartProps> = ({ data, forecastData, isHi
               dot={false}
               name="Sell Price"
               connectNulls
-            />
-            {/* Forecast Line */}
-            <Line
-              yAxisId="left"
-              type="monotone"
-              dataKey="forecastPrice"
-              stroke="#8b5cf6" // Violet color for forecast
-              strokeWidth={2}
-              strokeDasharray="5 5"
-              dot={false}
-              name="Forecast"
-              connectNulls
-            />
-            {/* Confidence Interval (Optional: could use Area) */}
-            <Area
-              yAxisId="left"
-              dataKey="forecastUpper"
-              stroke="none"
-              fill="#8b5cf6"
-              fillOpacity={0.1}
-              name="Confidence Range"
-              connectNulls
-            />
-            <Area
-              yAxisId="left"
-              dataKey="forecastLower" // Trick: Area usually does range, but simple stacking might not work for bounds efficiently without 'range' prop in Area (recharts 2.x). 
-              // Simplified: Just showing the line is good enough for MVP, but Area with baseValue is tricky.
-              // Better approach for confidence interval in composed chart:
-              // Calculate 'confidence' as [low, high] array if supported, or just omit for now to keep it clean.
-              stroke="none"
-              fill="none" // Hidden for now, just using it to scale axis if needed
             />
           </>
         )}
