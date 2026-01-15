@@ -65,6 +65,11 @@ export const ItemDetail: React.FC = () => {
   const [analysis, setAnalysis] = useState<{ riskScore: number; rating: string; reasoning: string } | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
 
+  useEffect(() => {
+    setAnalysis(null);
+    setAnalyzing(false);
+  }, [id]);
+
   // Watch logic
   const [watches, setWatches] = useState<number[]>([]);
   const [discordLinked, setDiscordLinked] = useState(false);
