@@ -162,8 +162,10 @@ export const ItemDetail: React.FC = () => {
   const fetchItem = useCallback(async (isAutoRefresh = false) => {
     if (!id) return;
 
-    if (!isAutoRefresh) setLoading(true);
-    setError(null);
+    if (!isAutoRefresh) {
+      setLoading(true);
+      setError(null);
+    }
 
     try {
       const res = await fetchWithAuth(`${API_BASE_URL}/api/items/${id}`);
@@ -172,6 +174,7 @@ export const ItemDetail: React.FC = () => {
       }
       const data = await res.json();
       setItem(data.item);
+      setError(null);
     } catch (err) {
       if (!isAutoRefresh) setError("Failed to load item details");
       // eslint-disable-next-line no-console
