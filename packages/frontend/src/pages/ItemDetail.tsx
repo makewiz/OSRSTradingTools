@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
+import { AutoRefreshControls } from "../components/AutoRefreshControls";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { PriceChart } from "../components/PriceChart";
 import { useAuth } from "../contexts/AuthContext";
@@ -158,70 +159,75 @@ export const ItemDetail: React.FC = () => {
     loadWatches();
   }, [user, token, id]);
 
-  useEffect(() => {
-    const fetchItem = async () => {
-      if (!id) return;
+  const fetchItem = useCallback(async (isAutoRefresh = false) => {
+    if (!id) return;
 
-      setLoading(true);
-      setError(null);
+    if (!isAutoRefresh) setLoading(true);
+    setError(null);
 
-      try {
-        const res = await fetchWithAuth(`${API_BASE_URL}/api/items/${id}`);
-        if (!res.ok) {
-          throw new Error(`HTTP ${res.status}`);
-        }
-        const data = await res.json();
-        setItem(data.item);
-      } catch (err) {
-        setError("Failed to load item details");
-        // eslint-disable-next-line no-console
-        console.error(err);
-      } finally {
-        setLoading(false);
+    try {
+      const res = await fetchWithAuth(`${API_BASE_URL}/api/items/${id}`);
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status}`);
       }
-    };
+      const data = await res.json();
+      setItem(data.item);
+    } catch (err) {
+      if (!isAutoRefresh) setError("Failed to load item details");
+      // eslint-disable-next-line no-console
+      console.error(err);
+    } finally {
+      if (!isAutoRefresh) setLoading(false);
+    }
+  }, [id, fetchWithAuth]);
 
-    fetchItem();
-  }, [id]);
+  const fetchHistory = useCallback(async () => {
+    if (!id) return;
 
-  useEffect(() => {
-    const fetchHistory = async () => {
-      if (!id) return;
+    try {
+      const now = Math.floor(Date.now() / 1000);
 
-      try {
-        const now = Math.floor(Date.now() / 1000);
+      const timeRanges: Record<string, number> = {
+        "24h": 24 * 60 * 60,
+        "7d": 7 * 24 * 60 * 60,
+        "30d": 30 * 24 * 60 * 60,
+        "1y": 365 * 24 * 60 * 60,
+      };
+      const rangeSeconds = timeRanges[timeRange] || timeRanges["24h"];
+      const startTime = now - rangeSeconds;
 
-        const timeRanges: Record<string, number> = {
-          "24h": 24 * 60 * 60,
-          "7d": 7 * 24 * 60 * 60,
-          "30d": 30 * 24 * 60 * 60,
-          "1y": 365 * 24 * 60 * 60,
-        };
-        const rangeSeconds = timeRanges[timeRange] || timeRanges["24h"];
-        const startTime = now - rangeSeconds;
-
-        const url = `${API_BASE_URL}/api/items/${id}/history?startTime=${startTime}&endTime=${now}`;
-        const res = await fetchWithAuth(url);
-        if (!res.ok) {
-          throw new Error(`HTTP ${res.status}`);
-        }
-        const data = await res.json();
-
-        // Always expect high fidelity format (split arrays)
-        if (data.highFidelity) {
-          setPriceHistory(data);
-        } else {
-          // Fallback for any legacy cached responses
-          setPriceHistory(data.history || []);
-        }
-      } catch (err) {
-        // eslint-disable-next-line no-console
-        console.error("Failed to load price history:", err);
+      const url = `${API_BASE_URL}/api/items/${id}/history?startTime=${startTime}&endTime=${now}`;
+      const res = await fetchWithAuth(url);
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status}`);
       }
-    };
+      const data = await res.json();
 
+      // Always expect high fidelity format (split arrays)
+      if (data.highFidelity) {
+        setPriceHistory(data);
+      } else {
+        // Fallback for any legacy cached responses
+        setPriceHistory(data.history || []);
+      }
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error("Failed to load price history:", err);
+    }
+  }, [id, timeRange, fetchWithAuth]);
+
+  const refreshData = useCallback(() => {
+    fetchItem(true);
     fetchHistory();
-  }, [id, timeRange]);
+  }, [fetchItem, fetchHistory]);
+
+  useEffect(() => {
+    fetchItem();
+  }, [fetchItem]);
+
+  useEffect(() => {
+    fetchHistory();
+  }, [fetchHistory]);
 
   const toggleWatch = async () => {
     if (!item || !user || !discordLinked) {
@@ -305,6 +311,10 @@ export const ItemDetail: React.FC = () => {
         <Link to="/items" className="back-link">
           ← Back to items
         </Link>
+
+        <div className="start-row-apart" style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '15px', marginBottom: '10px' }}>
+          <AutoRefreshControls onRefresh={refreshData} />
+        </div>
 
         <div className="item-header">
           <img

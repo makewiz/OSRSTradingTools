@@ -1,5 +1,6 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState, useCallback } from "react";
 import { Link } from "react-router-dom";
+import { AutoRefreshControls } from "../components/AutoRefreshControls";
 import { useAuth } from "../contexts/AuthContext";
 import { API_BASE_URL } from "../config";
 
@@ -133,27 +134,27 @@ export const ItemList: React.FC<ItemListProps> = ({ defaultShowFavorites = false
         }
     }, [favorites, user]);
 
-    useEffect(() => {
-        const fetchItems = async () => {
-            setLoading(true);
-            setError(null);
-            try {
-                const res = await fetchWithAuth(`${API_BASE_URL}/api/items`);
-                if (!res.ok) {
-                    throw new Error(`HTTP ${res.status}`);
-                }
-                const data = await res.json();
-                setItems(data.items ?? []);
-            } catch (err) {
-                setError("Failed to load items. Try again in a moment.");
-                console.error(err);
-            } finally {
-                setLoading(false);
+    const fetchItems = useCallback(async (isAutoRefresh = false) => {
+        if (!isAutoRefresh) setLoading(true);
+        setError(null);
+        try {
+            const res = await fetchWithAuth(`${API_BASE_URL}/api/items`);
+            if (!res.ok) {
+                throw new Error(`HTTP ${res.status}`);
             }
-        };
+            const data = await res.json();
+            setItems(data.items ?? []);
+        } catch (err) {
+            if (!isAutoRefresh) setError("Failed to load items. Try again in a moment.");
+            console.error(err);
+        } finally {
+            if (!isAutoRefresh) setLoading(false);
+        }
+    }, [fetchWithAuth]);
 
+    useEffect(() => {
         fetchItems();
-    }, []);
+    }, [fetchItems]);
 
     const toggleFavorite = async (id: number) => {
         const isFav = favorites.includes(id);
@@ -347,6 +348,10 @@ export const ItemList: React.FC<ItemListProps> = ({ defaultShowFavorites = false
                 />
 
 
+            </section>
+
+            <section className="controls" style={{ marginTop: '10px', display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '15px' }}>
+                <AutoRefreshControls onRefresh={() => fetchItems(true)} />
             </section>
 
             <section className="filters-section">
