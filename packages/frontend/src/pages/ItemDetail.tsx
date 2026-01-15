@@ -60,6 +60,10 @@ export const ItemDetail: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [timeRange, setTimeRange] = useState<"24h" | "7d" | "30d" | "1y">("24h");
 
+  // Analysis logic
+  const [analysis, setAnalysis] = useState<{ riskScore: number; rating: string; reasoning: string } | null>(null);
+  const [analyzing, setAnalyzing] = useState(false);
+
   // Watch logic
   const [watches, setWatches] = useState<number[]>([]);
   const [discordLinked, setDiscordLinked] = useState(false);
@@ -249,6 +253,27 @@ export const ItemDetail: React.FC = () => {
     } catch (err) {
       // eslint-disable-next-line no-console
       console.error("Failed to sync watch", err);
+    }
+  };
+
+  const fetchAnalysis = async () => {
+    if (!item || !user || !token) {
+      alert("Please login to use AI Trade Advisor");
+      return;
+    }
+
+    setAnalyzing(true);
+    try {
+      const res = await fetchWithAuth(`${API_BASE_URL}/api/analysis/risk/${item.id}`);
+      if (!res.ok) throw new Error("Analysis failed");
+      const data = await res.json();
+      setAnalysis(data);
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error("AI Analysis Error", err);
+      alert("Failed to generate AI analysis. Please try again later.");
+    } finally {
+      setAnalyzing(false);
     }
   };
 
@@ -449,6 +474,48 @@ export const ItemDetail: React.FC = () => {
             <div className="stat-value text-gold">
               {item.potentialProfit?.toLocaleString() ?? "-"}
             </div>
+          </div>
+
+          {/* AI Advisor Section - Spans Full Width */}
+          <div className="stat-card" style={{ gridColumn: '1 / -1', background: 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)', border: '1px solid #3b82f6' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+              <div className="stat-label" style={{ color: '#60a5fa', fontWeight: 'bold' }}>🤖 AI Trade Advisor</div>
+              {!analysis && !analyzing && (
+                <button
+                  onClick={fetchAnalysis}
+                  style={{
+                    background: '#3b82f6', color: 'white', border: 'none',
+                    padding: '5px 15px', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold'
+                  }}
+                >
+                  Analyze Risk
+                </button>
+              )}
+            </div>
+
+            {analyzing && <div style={{ color: '#94a3b8', fontStyle: 'italic' }}>Analyzing market data... (this takes ~3s)</div>}
+
+            {analysis && (
+              <div style={{ display: 'flex', gap: '20px', alignItems: 'flex-start' }}>
+                <div style={{ textAlign: 'center', minWidth: '80px' }}>
+                  <div style={{
+                    fontSize: '2rem', fontWeight: 'bold',
+                    color: analysis.riskScore >= 7 ? '#ef4444' : analysis.riskScore >= 4 ? '#f59e0b' : '#22c55e'
+                  }}>
+                    {analysis.riskScore}/10
+                  </div>
+                  <div style={{ fontSize: '0.8rem', color: '#cbd5e1' }}>Risk Score</div>
+                </div>
+                <div>
+                  <div style={{ fontWeight: 'bold', fontSize: '1.1rem', marginBottom: '5px', color: '#e2e8f0' }}>
+                    Rating: {analysis.rating}
+                  </div>
+                  <p style={{ margin: 0, color: '#cbd5e1', lineHeight: '1.4' }}>
+                    {analysis.reasoning}
+                  </p>
+                </div>
+              </div>
+            )}
           </div>
 
 

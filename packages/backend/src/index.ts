@@ -14,6 +14,7 @@ import discordRouter from "./routes/discord";
 import highlightsRouter from "./routes/highlights";
 import adminRouter from "./routes/admin";
 import configRouter from "./routes/config";
+import analysisRouter from "./routes/analysis";
 
 // Initialize database
 // Initialize database
@@ -50,6 +51,8 @@ app.use("/api/highlights", highlightsRouter);
 app.use("/api/admin", adminRouter);
 // Config routes
 app.use("/api/config", configRouter);
+// Analysis routes
+app.use("/api/analysis", analysisRouter);
 
 
 import { authenticateToken } from "./auth";
