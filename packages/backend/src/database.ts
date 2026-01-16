@@ -345,6 +345,44 @@ export async function insertItemHistory(
   await pool.query(query, [itemId, timestamp, avgHighPrice, avgLowPrice, highPriceVolume, lowPriceVolume]);
 }
 
+export async function bulkInsertItemHistory(
+  table: string,
+  items: {
+    itemId: number;
+    timestamp: number;
+    avgHighPrice: number | null;
+    avgLowPrice: number | null;
+    highPriceVolume: number | null;
+    lowPriceVolume: number | null;
+  }[]
+): Promise<void> {
+  const validTables = ['item_history_5m', 'item_history_1h', 'item_history_6h', 'item_history_24h'];
+  if (!validTables.includes(table)) {
+    throw new Error(`Invalid table name: ${table}`);
+  }
+
+  if (items.length === 0) return;
+
+  const query = `
+    INSERT INTO ${table} (item_id, timestamp, avg_high_price, avg_low_price, high_price_volume, low_price_volume)
+    SELECT * FROM UNNEST($1::int[], $2::bigint[], $3::int[], $4::int[], $5::int[], $6::int[])
+    ON CONFLICT (item_id, timestamp) DO UPDATE SET
+      avg_high_price = COALESCE(EXCLUDED.avg_high_price, ${table}.avg_high_price),
+      avg_low_price = COALESCE(EXCLUDED.avg_low_price, ${table}.avg_low_price),
+      high_price_volume = COALESCE(EXCLUDED.high_price_volume, ${table}.high_price_volume),
+      low_price_volume = COALESCE(EXCLUDED.low_price_volume, ${table}.low_price_volume)
+  `;
+
+  const itemIds = items.map(i => i.itemId);
+  const timestamps = items.map(i => i.timestamp);
+  const avgHighPrices = items.map(i => i.avgHighPrice);
+  const avgLowPrices = items.map(i => i.avgLowPrice);
+  const highPriceVolumes = items.map(i => i.highPriceVolume);
+  const lowPriceVolumes = items.map(i => i.lowPriceVolume);
+
+  await pool.query(query, [itemIds, timestamps, avgHighPrices, avgLowPrices, highPriceVolumes, lowPriceVolumes]);
+}
+
 
 export async function getPriceHistory(
   itemId: number,
@@ -411,22 +449,23 @@ export async function getPriceHistory(
       const apiData = await fetchWikiTimeSeries(itemId, timestep);
 
       // Save to database asynchronously to populate history for future requests
-      const savePromises = apiData.map(d =>
-        insertItemHistory(
-          table,
-          itemId,
-          d.timestamp,
-          d.avgHighPrice,
-          d.avgLowPrice,
-          d.highPriceVolume,
-          d.lowPriceVolume
-        ).catch(e => console.error(`[PriceHistory] Failed to insert history point ${d.timestamp}:`, e))
-      );
+      // Save to database using bulk insert
+      const historyPoints = apiData.map(d => ({
+        itemId,
+        timestamp: d.timestamp,
+        avgHighPrice: d.avgHighPrice,
+        avgLowPrice: d.avgLowPrice,
+        highPriceVolume: d.highPriceVolume,
+        lowPriceVolume: d.lowPriceVolume
+      }));
 
-      // We await the save to ensure consistency before returning, 
-      // or we could let it run in background. User asked to "save... so we dont have to fetch again".
-      // Awaiting ensures it's done. 
-      await Promise.all(savePromises);
+      // Split into chunks of 1000 to be safe (though UNNEST handles large arrays well, 
+      // we want to avoid massive memory spikes in Node or PG)
+      const chunkSize = 1000;
+      for (let i = 0; i < historyPoints.length; i += chunkSize) {
+        await bulkInsertItemHistory(table, historyPoints.slice(i, i + chunkSize));
+      }
+
       console.log(`[PriceHistory] Persisted ${apiData.length} points to ${table} from Wiki API.`);
 
       // Filter and map API data to row format

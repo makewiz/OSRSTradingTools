@@ -1,6 +1,6 @@
 import cron from "node-cron";
 import { getCombinedItems, CombinedItem, get5m, Osrs5mItem } from "./osrsClient";
-import { insertItemHistory, pool } from "./database";
+import { insertItemHistory, bulkInsertItemHistory, pool } from "./database";
 import { logger } from "@osrstradingtools/shared";
 
 let isRunningLatest = false;
@@ -49,8 +49,8 @@ async function fetchHistoryJob(): Promise<void> {
       return;
     }
 
-    // Insert into DB
-    let count = 0;
+    // Prepare items for bulk insert
+    const historyPoints = [];
     for (const [idStr, itemVal] of Object.entries(data)) {
       const item = itemVal as Osrs5mItem;
       const itemId = parseInt(idStr, 10);
@@ -60,19 +60,25 @@ async function fetchHistoryJob(): Promise<void> {
         item.highPriceVolume !== null ||
         item.lowPriceVolume !== null
       ) {
-        await insertItemHistory(
-          "item_history_5m",
+        historyPoints.push({
           itemId,
           timestamp,
-          item.avgHighPrice,
-          item.avgLowPrice,
-          item.highPriceVolume,
-          item.lowPriceVolume
-        );
-        count++;
+          avgHighPrice: item.avgHighPrice,
+          avgLowPrice: item.avgLowPrice,
+          highPriceVolume: item.highPriceVolume,
+          lowPriceVolume: item.lowPriceVolume
+        });
       }
     }
-    logger.debug(`[Scheduler] Stored ${count} item prices (5m resolution)`);
+
+    if (historyPoints.length > 0) {
+      // Split into chunks of 1000
+      const chunkSize = 1000;
+      for (let i = 0; i < historyPoints.length; i += chunkSize) {
+        await bulkInsertItemHistory("item_history_5m", historyPoints.slice(i, i + chunkSize));
+      }
+      logger.debug(`[Scheduler] Stored ${historyPoints.length} item prices (5m resolution)`);
+    }
   } catch (error) {
     logger.error("[Scheduler] Error in history job:", error);
   } finally {
