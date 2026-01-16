@@ -154,7 +154,7 @@ async function checkNotifications(client: Client) {
     const notificationsToSend = new Map<string, NotificationBatch[]>();
 
     // Helper to add to batch
-    const addToBatch = (discordId: string, header: string, items: string[]) => {
+    const addToBatch = (discordId: string, header: string, items: string[], allowMerge = true) => {
         let userBatches = notificationsToSend.get(discordId);
         if (!userBatches) {
             userBatches = [];
@@ -164,7 +164,7 @@ async function checkNotifications(client: Client) {
         // Or just push new batch. Since advanced watches have unique names, separate batches is fine.
         // For Legacy, we use one generic header.
 
-        let existingBatch = userBatches.find(b => b.header === header);
+        let existingBatch = allowMerge ? userBatches.find(b => b.header === header) : undefined;
         if (existingBatch) {
             existingBatch.items.push(...items);
         } else {
@@ -289,24 +289,35 @@ async function checkNotifications(client: Client) {
                 // 4. Cooldown & Notification Construction
                 const cooldownSeconds = (watch.cooldown_minutes || 60) * 60;
                 const itemsToSend: string[] = [];
+                let hasTriggeredItem = false;
+                const evaluatedItems: { item: any, msg: string }[] = [];
 
                 for (const item of potentialMatches) {
                     const lastTriggered = await getAdvancedWatchHistory(watch.id, item.id);
-                    if (!lastTriggered || (now - lastTriggered) >= cooldownSeconds) {
-                        // Add to list
-                        const link = `${frontendUrl}/item/${item.id}`;
-                        // Simplified Item Message (No "matched filter" text)
-                        const msg = `**${item.name}**: ${item.buyPrice?.toLocaleString()} GP | Profit: ${item.profit?.toLocaleString()} | ROI: ${item.roi?.toFixed(2)}%\n` +
-                            `[View Item](${link})`;
+                    const isTriggered = !lastTriggered || (now - lastTriggered) >= cooldownSeconds;
 
-                        itemsToSend.push(msg);
-                        await updateAdvancedWatchHistory(watch.id, item.id);
+                    if (isTriggered) hasTriggeredItem = true;
+
+                    const link = `${frontendUrl}/item/${item.id}`;
+                    // Only highlight strictly new items (no history)
+                    const prefix = !lastTriggered ? "🆕 " : "";
+                    const msg = `${prefix}**${item.name}**: ${item.buyPrice?.toLocaleString()} GP | Profit: ${item.profit?.toLocaleString()} | ROI: ${item.roi?.toFixed(2)}%\n` +
+                        `[View Item](${link})`;
+
+                    evaluatedItems.push({ item, msg });
+                }
+
+                if (hasTriggeredItem) {
+                    for (const evaluated of evaluatedItems) {
+                        itemsToSend.push(evaluated.msg);
+                        // Update history for all items sent to prevent immediate re-notification of the same list
+                        await updateAdvancedWatchHistory(watch.id, evaluated.item.id);
                     }
                 }
 
                 if (itemsToSend.length > 0) {
                     const header = `🔎 **${watch.name || "Advanced Watch"}**`;
-                    addToBatch(watch.discord_id, header, itemsToSend);
+                    addToBatch(watch.discord_id, header, itemsToSend, false);
                 }
             }
         }

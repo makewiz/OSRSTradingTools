@@ -1,5 +1,6 @@
 
 import { Router } from "express";
+import { authenticateToken } from "../auth";
 import { getCombinedItems } from "../osrsClient";
 import { getPriceHistory } from "../database";
 import { logger } from "@osrstradingtools/shared";
@@ -8,6 +9,10 @@ import dotenv from "dotenv";
 dotenv.config();
 
 const router = Router();
+
+if (process.env.REQUIRE_AUTH === "true") {
+    router.use(authenticateToken);
+}
 
 interface RiskAnalysisCache {
     [itemId: number]: {
