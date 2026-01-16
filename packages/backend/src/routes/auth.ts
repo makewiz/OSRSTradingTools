@@ -15,6 +15,7 @@ import {
 import { exchangeCodeForToken, getDiscordUser, checkGuildMembership } from "../oauth";
 import crypto from "crypto";
 import { authLimiter } from "../middleware/rateLimiter";
+import { logger } from "@osrstradingtools/shared";
 
 const router = express.Router();
 
@@ -73,7 +74,7 @@ router.post("/register", authLimiter, async (req, res) => {
         res.status(201).json({ user: userSafe, token });
     } catch (err: any) {
         // eslint-disable-next-line no-console
-        console.error(err);
+        logger.error("Failed to register user:", err);
         res.status(500).json({ error: "Failed to register user" });
     }
 });
@@ -106,7 +107,7 @@ router.post("/login", authLimiter, async (req, res) => {
         res.json({ user: userSafe, token });
     } catch (err) {
         // eslint-disable-next-line no-console
-        console.error(err);
+        logger.error("Failed to login:", err);
         res.status(500).json({ error: "Failed to login" });
     }
 });
@@ -138,7 +139,7 @@ router.post("/discord/login", authLimiter, async (req, res) => {
                     }
                 } catch (err) {
                     // eslint-disable-next-line no-console
-                    console.error("Guild check failed during registration:", err);
+                    logger.error("Guild check failed during registration:", err);
                     return res.status(503).json({ error: "Registration temporarily unavailable" });
                 }
             }
@@ -174,7 +175,7 @@ router.post("/discord/login", authLimiter, async (req, res) => {
 
     } catch (err: any) {
         // eslint-disable-next-line no-console
-        console.error(err);
+        logger.error("Failed to login with Discord:", err);
         res.status(500).json({ error: "Failed to login with Discord" });
     }
 });
@@ -217,7 +218,7 @@ router.post("/change-password", authLimiter, authenticateToken, async (req, res)
         res.json({ success: true, message: "Password updated successfully" });
     } catch (err) {
         // eslint-disable-next-line no-console
-        console.error(err);
+        logger.error("Failed to update password:", err);
         res.status(500).json({ error: "Failed to update password" });
     }
 });
@@ -233,7 +234,7 @@ router.delete("/account", authenticateToken, async (req, res) => {
         res.json({ success: true, message: "Account deleted successfully" });
     } catch (err) {
         // eslint-disable-next-line no-console
-        console.error(err);
+        logger.error("Failed to delete account:", err);
         res.status(500).json({ error: "Failed to delete account" });
     }
 });

@@ -9,6 +9,7 @@ import {
 } from "../database";
 import { requireAdmin } from "../middleware/admin";
 import { authenticateToken, hashPassword } from "../auth";
+import { logger } from "@osrstradingtools/shared";
 
 const router = express.Router();
 
@@ -41,7 +42,7 @@ router.get("/settings", async (req, res) => {
 
         res.json({ settings: settingsMap });
     } catch (err) {
-        console.error(err);
+        logger.error("Failed to fetch settings:", err);
         res.status(500).json({ error: "Failed to fetch settings" });
     }
 });
@@ -70,7 +71,7 @@ router.post("/settings", async (req, res) => {
 
         res.json({ success: true, message: "Settings updated" });
     } catch (err) {
-        console.error(err);
+        logger.error("Failed to update settings:", err);
         res.status(500).json({ error: "Failed to update settings" });
     }
 });
@@ -100,7 +101,7 @@ router.post("/users", async (req, res) => {
 
 
     } catch (err) {
-        console.error(err);
+        logger.error("Failed to create user:", err);
         res.status(500).json({ error: "Failed to create user" });
     }
 });

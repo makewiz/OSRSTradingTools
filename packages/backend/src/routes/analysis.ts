@@ -2,6 +2,7 @@
 import { Router } from "express";
 import { getCombinedItems } from "../osrsClient";
 import { getPriceHistory } from "../database";
+import { logger } from "@osrstradingtools/shared";
 import dotenv from "dotenv";
 
 dotenv.config();
@@ -141,7 +142,7 @@ router.get("/risk/:id", async (req, res) => {
 
         // Debug logging
         if (!response.ok || !aiData.candidates) {
-            console.error("Gemini API Error:", JSON.stringify(aiData, null, 2));
+            logger.error("Gemini API Error:", JSON.stringify(aiData, null, 2));
         }
 
         let result: RiskAnalysisResponse;
@@ -155,7 +156,7 @@ router.get("/risk/:id", async (req, res) => {
 
             result = JSON.parse(cleanContent);
         } catch (parseError) {
-            console.error("AI Parse Error", parseError);
+            logger.error("AI Parse Error", parseError);
             // Fallback if AI fails to return JSON
             result = {
                 riskScore: 5,
@@ -173,7 +174,7 @@ router.get("/risk/:id", async (req, res) => {
         res.json(result);
 
     } catch (error) {
-        console.error("Risk Analysis Error:", error);
+        logger.error("Risk Analysis Error:", error);
         res.status(500).json({ error: "Internal Server Error" });
     }
 });
