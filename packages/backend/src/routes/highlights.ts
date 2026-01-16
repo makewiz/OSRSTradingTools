@@ -2,6 +2,7 @@
 import { Router } from "express";
 import { AnalysisService } from "../analysis";
 import { authenticateToken } from "../auth";
+import { logger } from "@osrstradingtools/shared";
 
 const router = Router();
 
@@ -15,7 +16,7 @@ router.get("/", async (req, res) => {
         const analysis = await AnalysisService.getAnalysis();
         res.json(analysis);
     } catch (error) {
-        console.error("Error fetching analysis:", error);
+        logger.error("Error fetching analysis:", error);
         res.status(500).json({ error: "Failed to fetch market analysis" });
     }
 });

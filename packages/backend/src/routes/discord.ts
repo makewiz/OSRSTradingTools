@@ -17,6 +17,7 @@ import { exchangeCodeForToken, getDiscordUser } from "../oauth";
 import { getCombinedItems } from "../osrsClient";
 import { getLatestItems, touchActivity, getLastFetchTime } from "../scheduler";
 import { AnalysisService } from "../analysis";
+import { logger } from "@osrstradingtools/shared";
 
 const router = express.Router();
 
@@ -50,7 +51,7 @@ router.get("/bot/items", async (req, res) => {
         res.json({ items });
     } catch (err) {
         // eslint-disable-next-line no-console
-        console.error("[Bot API] Error fetching items:", err);
+        logger.error("[Bot API] Error fetching items:", err);
         res.status(500).json({ error: "Internal Server Error" });
     }
 });
@@ -73,7 +74,7 @@ router.get("/bot/highlights", async (req, res) => {
         res.json(analysis);
     } catch (err) {
         // eslint-disable-next-line no-console
-        console.error("[Bot API] Error fetching highlights:", err);
+        logger.error("[Bot API] Error fetching highlights:", err);
         res.status(500).json({ error: "Internal Server Error" });
     }
 });
@@ -103,9 +104,9 @@ router.post("/link-oauth", async (req, res) => {
         res.json({ success: true });
     } catch (err: any) {
         // eslint-disable-next-line no-console
-        console.error("Link OAuth Error:", err.message);
+        logger.error("Link OAuth Error:", err.message);
         // eslint-disable-next-line no-console
-        if (err.response) console.error(err.response.data);
+        if (err.response) logger.error("Link OAuth Error Response:", err.response.data);
 
         res.status(500).json({ error: "Failed to link Discord account" });
     }
@@ -149,7 +150,7 @@ router.get("/settings", async (req, res) => {
         });
     } catch (err) {
         // eslint-disable-next-line no-console
-        console.error(err);
+        logger.error("Failed to fetch settings:", err);
         res.status(500).json({ error: "Failed to fetch settings" });
     }
 });
@@ -176,7 +177,7 @@ router.post("/settings", async (req, res) => {
         res.json({ success: true, enabled });
     } catch (err) {
         // eslint-disable-next-line no-console
-        console.error(err);
+        logger.error("Failed to update settings:", err);
         res.status(500).json({ error: "Failed to update settings" });
     }
 });
@@ -206,7 +207,7 @@ router.post("/watch", async (req, res) => {
         res.status(201).json({ success: true, itemId });
     } catch (err) {
         // eslint-disable-next-line no-console
-        console.error(err);
+        logger.error("Failed to add watch:", err);
         res.status(500).json({ error: "Failed to add watch" });
     }
 });
@@ -240,7 +241,7 @@ router.put("/watch/:itemId", async (req, res) => {
         res.json({ success: true, itemId, threshold, period, cooldown });
     } catch (err) {
         // eslint-disable-next-line no-console
-        console.error(err);
+        logger.error("Failed to update watch:", err);
         res.status(500).json({ error: "Failed to update watch" });
     }
 });
@@ -268,7 +269,7 @@ router.delete("/watch/:itemId", async (req, res) => {
         res.json({ success: true, itemId });
     } catch (err) {
         // eslint-disable-next-line no-console
-        console.error(err);
+        logger.error("Failed to remove watch:", err);
         res.status(500).json({ error: "Failed to remove watch" });
     }
 });
@@ -291,7 +292,7 @@ router.get("/advanced-watches", async (req, res) => {
         res.json({ watches });
     } catch (err) {
         // eslint-disable-next-line no-console
-        console.error(err);
+        logger.error("Failed to fetch advanced watches:", err);
         res.status(500).json({ error: "Failed to fetch advanced watches" });
     }
 });
@@ -352,7 +353,7 @@ router.post("/advanced-watches", async (req, res) => {
         res.status(201).json({ success: true, watch: newWatch });
     } catch (err) {
         // eslint-disable-next-line no-console
-        console.error(err);
+        logger.error("Failed to create advanced watch:", err);
         res.status(500).json({ error: "Failed to create advanced watch" });
     }
 });
@@ -412,7 +413,7 @@ router.put("/advanced-watches/:id", async (req, res) => {
         res.json({ success: true, watch: updated });
     } catch (err) {
         // eslint-disable-next-line no-console
-        console.error(err);
+        logger.error("Failed to update advanced watch:", err);
         res.status(500).json({ error: "Failed to update advanced watch" });
     }
 });
@@ -435,7 +436,7 @@ router.delete("/advanced-watches/:id", async (req, res) => {
         res.json({ success: true, id });
     } catch (err) {
         // eslint-disable-next-line no-console
-        console.error(err);
+        logger.error("Failed to delete advanced watch:", err);
         res.status(500).json({ error: "Failed to delete advanced watch" });
     }
 });
