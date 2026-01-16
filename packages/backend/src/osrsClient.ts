@@ -98,7 +98,7 @@ let volumesCache: CacheEntry<OsrsVolumesResponse> | null = null;
 async function fetchJson<T>(url: string): Promise<T> {
   const res = await fetch(url, {
     headers: {
-      "User-Agent": "OSRSTradingTools hobby app (contact: unknown)"
+      "User-Agent": `OSRSTradingTools hobby app (contact: ${process.env.WIKI_CONTACT_INFO || "unknown"})`
     }
   });
 
