@@ -12,6 +12,7 @@ export interface Item {
     dayChange: number | null;
     marginVolume: number | null;
     limit: number | null;
+    potentialProfit: number | null;
 }
 
 export type SortKey =
@@ -22,7 +23,8 @@ export type SortKey =
     | "volume"
     | "dayChange"
     | "marginVolume"
-    | "limit";
+    | "limit"
+    | "potentialProfit";
 
 export interface FilterState {
     search: string;
@@ -40,6 +42,8 @@ export interface FilterState {
     maxMarginVolume: number | "";
     minLimit: number | "";
     maxLimit: number | "";
+    minPotentialProfit: number | "";
+    maxPotentialProfit: number | "";
     membersFilter: "all" | "members" | "f2p";
     sortKey: SortKey;
     sortDir: "asc" | "desc";

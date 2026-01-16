@@ -15,6 +15,7 @@ const defaultFilterState: FilterState = {
     minDayChange: "", maxDayChange: "",
     minMarginVolume: "", maxMarginVolume: "",
     minLimit: "", maxLimit: "",
+    minPotentialProfit: "", maxPotentialProfit: "",
     membersFilter: "all",
     sortKey: "marginVolume",
     sortDir: "desc",

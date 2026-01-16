@@ -37,6 +37,7 @@ export const ItemList: React.FC<ItemListProps> = ({ defaultShowFavorites = false
         minBuy, maxBuy, minSell, maxSell, minMargin, maxMargin,
         minVolume, maxVolume, minDayChange, maxDayChange,
         minMarginVolume, maxMarginVolume, minLimit, maxLimit,
+        minPotentialProfit, maxPotentialProfit,
         membersFilter
     } = filterState;
 
@@ -250,6 +251,9 @@ export const ItemList: React.FC<ItemListProps> = ({ defaultShowFavorites = false
         if (minLimit !== "" || maxLimit !== "") {
             list = list.filter((i) => checkRange(i.limit, minLimit, maxLimit));
         }
+        if (minPotentialProfit !== "" || maxPotentialProfit !== "") {
+            list = list.filter((i) => checkRange(i.potentialProfit, minPotentialProfit, maxPotentialProfit));
+        }
 
         list = [...list].sort((a, b) => {
             const dir = sortDir === "asc" ? 1 : -1;
@@ -271,6 +275,8 @@ export const ItemList: React.FC<ItemListProps> = ({ defaultShowFavorites = false
                         return item.marginVolume ?? -Infinity;
                     case "limit":
                         return item.limit ?? -Infinity;
+                    case "potentialProfit":
+                        return item.potentialProfit ?? -Infinity;
                 }
             };
 
@@ -285,7 +291,7 @@ export const ItemList: React.FC<ItemListProps> = ({ defaultShowFavorites = false
         });
 
         return list;
-    }, [items, search, sortKey, sortDir, favorites, defaultShowFavorites, minBuy, maxBuy, minSell, maxSell, minMargin, maxMargin, minVolume, maxVolume, minDayChange, maxDayChange, minMarginVolume, maxMarginVolume, minLimit, maxLimit, membersFilter]);
+    }, [items, search, sortKey, sortDir, favorites, defaultShowFavorites, minBuy, maxBuy, minSell, maxSell, minMargin, maxMargin, minVolume, maxVolume, minDayChange, maxDayChange, minMarginVolume, maxMarginVolume, minLimit, maxLimit, minPotentialProfit, maxPotentialProfit, membersFilter]);
 
     const totalItems = filteredAndSorted.length;
     const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
@@ -409,6 +415,13 @@ export const ItemList: React.FC<ItemListProps> = ({ defaultShowFavorites = false
                             </div>
                         </div>
                         <div className="filter-group">
+                            <label>Potential Profit</label>
+                            <div className="filter-inputs">
+                                <input type="number" className="filter-input" placeholder="Min" value={minPotentialProfit} onChange={e => updateFilter({ minPotentialProfit: e.target.value ? Number(e.target.value) : "" })} />
+                                <input type="number" className="filter-input" placeholder="Max" value={maxPotentialProfit} onChange={e => updateFilter({ maxPotentialProfit: e.target.value ? Number(e.target.value) : "" })} />
+                            </div>
+                        </div>
+                        <div className="filter-group">
                             <label>Members</label>
                             <select className="filter-select" value={membersFilter} onChange={(e) => updateFilter({ membersFilter: e.target.value as any })}>
                                 <option value="all">All</option>
@@ -490,6 +503,9 @@ export const ItemList: React.FC<ItemListProps> = ({ defaultShowFavorites = false
                                 <th onClick={() => handleSortChange("limit")}>
                                     Limit {sortKey === "limit" ? (sortDir === "asc" ? "▲" : "▼") : ""}
                                 </th>
+                                <th onClick={() => handleSortChange("potentialProfit")}>
+                                    Potential Profit {sortKey === "potentialProfit" ? (sortDir === "asc" ? "▲" : "▼") : ""}
+                                </th>
                                 <th>Watch</th>
                             </tr>
                         </thead>
@@ -546,9 +562,13 @@ export const ItemList: React.FC<ItemListProps> = ({ defaultShowFavorites = false
                                                 ? item.marginVolume.toLocaleString()
                                                 : "-"}
                                         </td>
-
                                         <td>
                                             {item.limit?.toLocaleString() ?? "-"}
+                                        </td>
+                                        <td>
+                                            {item.potentialProfit !== null
+                                                ? item.potentialProfit.toLocaleString()
+                                                : "-"}
                                         </td>
                                         <td>
                                             {discordLinked ? (
@@ -584,7 +604,8 @@ export const ItemList: React.FC<ItemListProps> = ({ defaultShowFavorites = false
                         </tbody>
                     </table>
                 </div>
-            )}
-        </main>
+            )
+            }
+        </main >
     );
 };
