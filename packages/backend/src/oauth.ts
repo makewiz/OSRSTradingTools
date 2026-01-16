@@ -1,4 +1,5 @@
 import axios from "axios";
+import { logger } from "@osrstradingtools/shared";
 
 const DISCORD_API_URL = "https://discord.com/api/v10";
 
@@ -33,15 +34,15 @@ export async function exchangeCodeForToken(code: string): Promise<DiscordTokenRe
         return response.data;
     } catch (err: any) {
         // eslint-disable-next-line no-console
-        console.error("Discord Token Exchange Failed:");
+        logger.error("Discord Token Exchange Failed:");
         if (err.response) {
             // eslint-disable-next-line no-console
-            console.error("Status:", err.response.status);
+            logger.error("Status:", err.response.status);
             // eslint-disable-next-line no-console
-            console.error("Data:", err.response.data);
+            logger.error("Data:", err.response.data);
         } else {
             // eslint-disable-next-line no-console
-            console.error(err.message);
+            logger.error(err.message);
         }
         throw new Error("Failed to exchange code for token");
     }
@@ -55,15 +56,15 @@ export async function getDiscordUser(accessToken: string): Promise<DiscordUser> 
         return response.data;
     } catch (err: any) {
         // eslint-disable-next-line no-console
-        console.error("Discord User Fetch Failed:");
+        logger.error("Discord User Fetch Failed:");
         if (err.response) {
             // eslint-disable-next-line no-console
-            console.error("Status:", err.response.status);
+            logger.error("Status:", err.response.status);
             // eslint-disable-next-line no-console
-            console.error("Data:", err.response.data);
+            logger.error("Data:", err.response.data);
         } else {
             // eslint-disable-next-line no-console
-            console.error(err.message);
+            logger.error(err.message);
         }
         throw new Error("Failed to fetch Discord user");
     }
@@ -75,7 +76,8 @@ export async function checkGuildMembership(userId: string): Promise<boolean> {
 
     if (!guildId || !botToken) {
         // eslint-disable-next-line no-console
-        console.warn("DISCORD_GUILD_ID or DISCORD_BOT_TOKEN not set. Cannot check guild membership.");
+        // eslint-disable-next-line no-console
+        logger.warn("DISCORD_GUILD_ID or DISCORD_BOT_TOKEN not set. Cannot check guild membership.");
         return false;
     }
 
@@ -91,10 +93,11 @@ export async function checkGuildMembership(userId: string): Promise<boolean> {
                 return false; // User not in guild
             }
             // eslint-disable-next-line no-console
-            console.error("Failed to check guild membership. Status:", err.response.status, "Data:", err.response.data);
+            // eslint-disable-next-line no-console
+            logger.error("Failed to check guild membership. Status:", err.response.status, "Data:", err.response.data);
         } else {
             // eslint-disable-next-line no-console
-            console.error("Failed to check guild membership:", err.message);
+            logger.error("Failed to check guild membership:", err.message);
         }
         throw err; // Rethrow so caller knows it was a transient/upstream error
     }

@@ -3,6 +3,7 @@ import { getCombinedItems } from "../osrsClient";
 import { getLatestItems, touchActivity, getLastFetchTime } from "../scheduler";
 import { getPriceHistory, getLatestPrice } from "../database";
 import { authenticateToken } from "../auth";
+import { logger } from "@osrstradingtools/shared";
 
 const router = express.Router();
 if (process.env.REQUIRE_AUTH === "true") {
@@ -33,8 +34,7 @@ router.get("/:id", async (req, res) => {
 
     res.json({ item });
   } catch (err) {
-    // eslint-disable-next-line no-console
-    console.error(err);
+    logger.error("Failed to fetch item details:", err);
     res.status(502).json({ error: "Failed to fetch item details" });
   }
 });
@@ -85,8 +85,7 @@ router.get("/:id/history", async (req, res) => {
       volume: history.volume
     });
   } catch (err) {
-    // eslint-disable-next-line no-console
-    console.error(err);
+    logger.error("Failed to fetch price history:", err);
     res.status(502).json({ error: "Failed to fetch price history" });
   }
 });
