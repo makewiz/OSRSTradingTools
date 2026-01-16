@@ -1,5 +1,6 @@
 import express from "express";
 import { authenticateToken } from "../auth";
+import { logger } from "@osrstradingtools/shared";
 import { getUserFavorites, addFavorite, removeFavorite } from "../database";
 
 const router = express.Router();
@@ -17,8 +18,7 @@ router.get("/", async (req, res) => {
         const favorites = await getUserFavorites(userId);
         res.json({ favorites });
     } catch (err) {
-        // eslint-disable-next-line no-console
-        console.error(err);
+        logger.error("Failed to fetch favorites:", err);
         res.status(500).json({ error: "Failed to fetch favorites" });
     }
 });
@@ -39,8 +39,7 @@ router.post("/", async (req, res) => {
         await addFavorite(userId, itemId);
         res.status(201).json({ success: true, itemId });
     } catch (err) {
-        // eslint-disable-next-line no-console
-        console.error(err);
+        logger.error("Failed to add favorite:", err);
         res.status(500).json({ error: "Failed to add favorite" });
     }
 });
@@ -61,8 +60,7 @@ router.delete("/:itemId", async (req, res) => {
         await removeFavorite(userId, itemId);
         res.json({ success: true, itemId });
     } catch (err) {
-        // eslint-disable-next-line no-console
-        console.error(err);
+        logger.error("Failed to remove favorite:", err);
         res.status(500).json({ error: "Failed to remove favorite" });
     }
 });

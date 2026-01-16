@@ -6,6 +6,7 @@ import cors from "cors";
 import { getCombinedItems } from "./osrsClient";
 import { initializeDatabase, closeDatabase } from "./database";
 import { startPriceScheduler, getLatestItems, touchActivity, getLastFetchTime } from "./scheduler";
+import { logger } from "@osrstradingtools/shared";
 
 import itemsRouter from "./routes/items";
 import authRouter from "./routes/auth";
@@ -21,10 +22,9 @@ import analysisRouter from "./routes/analysis";
 (async () => {
   try {
     await initializeDatabase();
-    // eslint-disable-next-line no-console
-    console.log("[Database] Initialized");
+    logger.info("[Database] Initialized");
   } catch (err) {
-    console.error("[Database] Failed to initialize:", err);
+    logger.error("[Database] Failed to initialize:", err);
     process.exit(1);
   }
 })();
@@ -79,8 +79,7 @@ app.get("/api/items", async (req, res, next) => {
       res.json({ items });
     }
   } catch (err) {
-    // eslint-disable-next-line no-console
-    console.error(err);
+    logger.error("Failed to fetch OSRS prices:", err);
     res.status(502).json({ error: "Failed to fetch OSRS prices" });
   }
 });
@@ -93,29 +92,24 @@ startPriceScheduler();
 
 
 const server = app.listen(port, () => {
-  // eslint-disable-next-line no-console
-  console.log(`Backend listening on http://localhost:${port}`);
+  logger.info(`Backend listening on http://localhost:${port}`);
 });
 
 // Graceful shutdown
 process.on("SIGINT", () => {
-  // eslint-disable-next-line no-console
-  console.log("\n[SIGINT] Shutting down gracefully...");
+  logger.info("\n[SIGINT] Shutting down gracefully...");
   server.close(async () => {
     await closeDatabase();
-    // eslint-disable-next-line no-console
-    console.log("[Shutdown] Database closed");
+    logger.info("[Shutdown] Database closed");
     process.exit(0);
   });
 });
 
 process.on("SIGTERM", () => {
-  // eslint-disable-next-line no-console
-  console.log("\n[SIGTERM] Shutting down gracefully...");
+  logger.info("\n[SIGTERM] Shutting down gracefully...");
   server.close(async () => {
     await closeDatabase();
-    // eslint-disable-next-line no-console
-    console.log("[Shutdown] Database closed");
+    logger.info("[Shutdown] Database closed");
     process.exit(0);
   });
 });

@@ -1,12 +1,13 @@
 import { Pool } from "pg";
 import dotenv from "dotenv";
 import { fetchWikiTimeSeries } from "./osrsClient";
+import { logger } from "@osrstradingtools/shared";
 
 dotenv.config();
 
 // Ensure DATABASE_URL is provided
 if (!process.env.DATABASE_URL) {
-  console.warn("DATABASE_URL is not set. Please set it in your .env file.");
+  logger.warn("DATABASE_URL is not set. Please set it in your .env file.");
 }
 
 export const pool = new Pool({
@@ -444,7 +445,7 @@ export async function getPriceHistory(
   const coverage = expectedPoints > 0 ? rows.length / expectedPoints : 1;
 
   if (coverage < 0.8) {
-    console.log(`[PriceHistory] Insufficient data for item ${itemId} (Coverage: ${(coverage * 100).toFixed(1)}%). Fetching from Wiki API...`);
+    logger.info(`[PriceHistory] Insufficient data for item ${itemId} (Coverage: ${(coverage * 100).toFixed(1)}%). Fetching from Wiki API...`);
     try {
       const apiData = await fetchWikiTimeSeries(itemId, timestep);
 
@@ -466,7 +467,7 @@ export async function getPriceHistory(
         await bulkInsertItemHistory(table, historyPoints.slice(i, i + chunkSize));
       }
 
-      console.log(`[PriceHistory] Persisted ${apiData.length} points to ${table} from Wiki API.`);
+      logger.info(`[PriceHistory] Persisted ${apiData.length} points to ${table} from Wiki API.`);
 
       // Filter and map API data to row format
       // API Timestamp is in seconds.
@@ -482,12 +483,12 @@ export async function getPriceHistory(
 
       if (apiRows.length > 0) {
         rows = apiRows;
-        console.log(`[PriceHistory] Fetched ${rows.length} points from Wiki API.`);
+        logger.info(`[PriceHistory] Fetched ${rows.length} points from Wiki API.`);
       } else {
-        console.warn(`[PriceHistory] Wiki API returned no data for range.`);
+        logger.warn(`[PriceHistory] Wiki API returned no data for range.`);
       }
     } catch (err) {
-      console.error(`[PriceHistory] Failed to fetch from Wiki API:`, err);
+      logger.error(`[PriceHistory] Failed to fetch from Wiki API:`, err);
       // Proceed with existing DB rows if API fails
     }
   }
