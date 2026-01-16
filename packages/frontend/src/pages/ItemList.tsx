@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState, useCallback } from "react";
 import { Link } from "react-router-dom";
 import { AutoRefreshControls } from "../components/AutoRefreshControls";
+import { SearchWithSuggestions } from "../components/SearchWithSuggestions";
 import { useAuth } from "../contexts/AuthContext";
 import { useFilters } from "../contexts/FilterContext";
 import { API_BASE_URL } from "../config";
@@ -305,11 +306,11 @@ export const ItemList: React.FC<ItemListProps> = ({ defaultShowFavorites = false
     return (
         <main className="app-main">
             <section className="controls">
-                <input
-                    className="search-input"
-                    placeholder="Search items by name or examine..."
+                <SearchWithSuggestions
                     value={search}
-                    onChange={(e) => updateFilter({ search: e.target.value })}
+                    onChange={(val) => updateFilter({ search: val })}
+                    items={items}
+                    placeholder="Search items by name or examine..."
                 />
             </section>
 
