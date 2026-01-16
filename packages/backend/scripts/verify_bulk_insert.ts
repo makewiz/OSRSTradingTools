@@ -19,7 +19,7 @@ async function testBulkInsert() {
             });
         }
 
-        console.log(`db url: ${process.env.DATABASE_URL}`);
+        console.log(`db url: configured`);
         console.log(`Inserting ${testItems.length} items...`);
         await bulkInsertItemHistory('item_history_5m', testItems);
         console.log("Insert successful!");
