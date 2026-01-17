@@ -63,6 +63,7 @@ export class AnalysisService {
         const priceSpikes = items
             .filter(i => {
                 if (!i.dayChange) return false;
+                if (i.dayChange < 0) return false;
                 const highVolumeCheck = (i.buyPrice || 0) > 100 && (i.volume || 0) > 1000000;
                 const highValueCheck = (i.buyPrice || 0) > 1000000 && (i.volume || 0) > 100;
 
@@ -75,6 +76,7 @@ export class AnalysisService {
         const priceDrops = items
             .filter(i => {
                 if (!i.dayChange) return false;
+                if (i.dayChange > 0) return false;
                 const highVolumeCheck = (i.buyPrice || 0) > 100 && (i.volume || 0) > 1000000;
                 const highValueCheck = (i.buyPrice || 0) > 1000000 && (i.volume || 0) > 100;
 
