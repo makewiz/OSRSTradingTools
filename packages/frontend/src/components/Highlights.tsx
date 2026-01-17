@@ -66,10 +66,10 @@ export const Highlights: React.FC = () => {
             </div>
 
             <div className="highlights-grid">
-                <HighlightSection title="💰 High Margin" items={analysis.highMargin} type="success" />
+                <HighlightSection title="💰 Mid Price Profit" items={analysis.highMargin} type="success" />
                 <HighlightSection title="📈 Spikes" items={analysis.priceSpikes} type="warning" />
                 <HighlightSection title="📉 Drops" items={analysis.priceDrops} type="danger" />
-                <HighlightSection title="📦 High Volume" items={analysis.highVolume} type="info" />
+                <HighlightSection title="📦 Bulk Profit" items={analysis.highVolume} type="info" />
             </div>
         </div>
     );
