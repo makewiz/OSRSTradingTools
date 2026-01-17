@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { AutoRefreshControls } from "../components/AutoRefreshControls";
-import { useParams, Link, useNavigate } from "react-router-dom";
+import { useParams, Link, useNavigate, useLocation } from "react-router-dom";
 import { PriceChart } from "../components/PriceChart";
 import { useAuth } from "../contexts/AuthContext";
 import { API_BASE_URL } from "../config";
@@ -53,6 +53,7 @@ function formatTimeAgo(timestamp: number | null): string {
 export const ItemDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   const { user, token, fetchWithAuth } = useAuth();
 
   const [item, setItem] = useState<Item | null>(null);
@@ -303,8 +304,8 @@ export const ItemDetail: React.FC = () => {
     return (
       <div className="item-detail-container">
         <p className="error">{error || "Item not found"}</p>
-        <Link to="/items" className="back-link">
-          ← Back to items
+        <Link to={location.state?.from === "highlights" ? "/highlights" : "/items"} className="back-link">
+          {location.state?.from === "highlights" ? "← Back to highlights" : "← Back to items"}
         </Link>
       </div>
     );
@@ -316,8 +317,8 @@ export const ItemDetail: React.FC = () => {
   return (
     <main className="app-main">
       <div className="item-detail-container">
-        <Link to="/items" className="back-link">
-          ← Back to items
+        <Link to={location.state?.from === "highlights" ? "/highlights" : "/items"} className="back-link">
+          {location.state?.from === "highlights" ? "← Back to highlights" : "← Back to items"}
         </Link>
 
         <div className="start-row-apart" style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '15px', marginBottom: '10px' }}>

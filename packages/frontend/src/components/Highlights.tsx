@@ -85,7 +85,7 @@ const HighlightSection: React.FC<{
         <ul className="highlight-list">
             {items.map((item) => (
                 <li key={item.id}>
-                    <Link to={`/item/${item.id}`} className="highlight-item-link">
+                    <Link to={`/item/${item.id}`} state={{ from: 'highlights' }} className="highlight-item-link">
                         <img src={item.iconUrl} alt={item.name} className="highlight-icon" />
                         <div className="highlight-info">
                             <span className="highlight-name">{item.name}</span>
