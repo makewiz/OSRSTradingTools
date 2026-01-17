@@ -66,10 +66,10 @@ export const Highlights: React.FC = () => {
             </div>
 
             <div className="highlights-grid">
-                <HighlightSection title="💰 High Margin" items={analysis.highMargin} type="success" />
+                <HighlightSection title="💰 Mid Price Profit" items={analysis.highMargin} type="success" />
                 <HighlightSection title="📈 Spikes" items={analysis.priceSpikes} type="warning" />
                 <HighlightSection title="📉 Drops" items={analysis.priceDrops} type="danger" />
-                <HighlightSection title="📦 High Volume" items={analysis.highVolume} type="info" />
+                <HighlightSection title="📦 Bulk Profit" items={analysis.highVolume} type="info" />
             </div>
         </div>
     );
@@ -85,7 +85,7 @@ const HighlightSection: React.FC<{
         <ul className="highlight-list">
             {items.map((item) => (
                 <li key={item.id}>
-                    <Link to={`/item/${item.id}`} className="highlight-item-link">
+                    <Link to={`/item/${item.id}`} state={{ from: 'highlights' }} className="highlight-item-link">
                         <img src={item.iconUrl} alt={item.name} className="highlight-icon" />
                         <div className="highlight-info">
                             <span className="highlight-name">{item.name}</span>

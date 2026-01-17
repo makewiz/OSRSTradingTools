@@ -1,5 +1,5 @@
 import cron from "node-cron";
-import { Client, EmbedBuilder, TextChannel } from "discord.js";
+import { Client, EmbedBuilder, TextChannel, NewsChannel } from "discord.js";
 import { getAllActiveWatches, updateLastNotified, getSystemSetting, getAllActiveAdvancedWatches, getAdvancedWatchHistory, updateAdvancedWatchHistory } from "./database";
 import { logger } from "@osrstradingtools/shared";
 
@@ -44,7 +44,7 @@ async function broadcastHighlights(client: Client) {
 
     try {
         const channel = await client.channels.fetch(channelId);
-        if (!channel || !(channel instanceof TextChannel)) return;
+        if (!channel || (!(channel instanceof TextChannel) && !(channel instanceof NewsChannel))) return;
 
         const backendUrl = process.env.BACKEND_URL || "http://localhost:4000";
         const res = await fetch(`${backendUrl}/api/discord/bot/highlights`, {
@@ -113,9 +113,10 @@ async function checkNotifications(client: Client) {
     }
 
     const watches = await getAllActiveWatches();
+    const advancedWatches = await getAllActiveAdvancedWatches();
 
-    // Explicitly optimize: If no watches, do not fetch backend
-    if (watches.length === 0) return;
+    // Explicitly optimize: If no watches of either type, do not fetch backend
+    if (watches.length === 0 && advancedWatches.length === 0) return;
 
     // Fetch latest items from backend
     let items: any[] = [];
@@ -226,7 +227,6 @@ async function checkNotifications(client: Client) {
     }
 
     // --- CHECK ADVANCED WATCHES ---
-    const advancedWatches = await getAllActiveAdvancedWatches();
     if (advancedWatches.length > 0) {
         for (const watch of advancedWatches) {
             let potentialMatches: any[] = [];

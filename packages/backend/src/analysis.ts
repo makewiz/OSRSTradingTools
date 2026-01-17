@@ -46,45 +46,61 @@ export class AnalysisService {
             items = await getCombinedItems();
         }
 
-        // Sort logic can be improved, for now just filtering
+        // High Margin -> Mid Price logic
         const highMargin = items
             .filter(i =>
-                (i.roi || 0) >= MIN_ROI &&
-                (i.volume || 0) >= MIN_VOLUME_FOR_MARGIN &&
-                (i.profit || 0) >= MIN_PROFIT
+                (i.volume || 0) >= 100 &&
+                (i.buyPrice || 0) <= 10000000
             )
-            .sort((a, b) => (b.potentialProfit || 0) - (a.potentialProfit || 0))
+            .sort((a, b) => (b.profit || 0) - (a.profit || 0))
             .slice(0, 5)
-            .map(i => ({ ...i, reason: `High Margin: ${i.roi?.toFixed(1)}% ROI with ${i.profit?.toLocaleString()}gp profit per item` }));
+            .map(i => {
+                return {
+                    ...i,
+                    reason: `Profit: ${i.profit?.toLocaleString()}gp, Buy: ${i.buyPrice?.toLocaleString()}gp, Vol: ${i.volume?.toLocaleString()}`
+                };
+            });
 
         const highVolume = items
             .filter(i =>
-                (i.volume || 0) >= HIGH_VOLUME_THRESHOLD &&
-                (i.margin || 0) >= MIN_MARGIN_FOR_VOLUME
+                (i.volume || 0) >= 1000000
             )
-            .sort((a, b) => (b.volume || 0) - (a.volume || 0))
+            .sort((a, b) => (b.potentialProfit || 0) - (a.potentialProfit || 0))
             .slice(0, 5)
-            .map(i => ({ ...i, reason: `High Volume: ${i.volume?.toLocaleString()} daily trades` }));
+            .map(i => ({
+                ...i,
+                reason: `Pot. Profit: ${i.potentialProfit?.toLocaleString()}gp, Buy: ${i.buyPrice?.toLocaleString()}gp, Vol: ${i.volume?.toLocaleString()}`
+            }));
 
         const priceSpikes = items
-            .filter(i =>
-                (i.dayChange || 0) >= PRICE_SPIKE_THRESHOLD &&
-                (i.buyPrice || 0) > MIN_PRICE_FOR_CHANGE
-            )
+            .filter(i => {
+                const isSpike = (i.dayChange || 0) >= PRICE_SPIKE_THRESHOLD;
+                if (!isSpike) return false;
+
+                const highVolumeCheck = (i.buyPrice || 0) > 100 && (i.volume || 0) > 1000000;
+                const highValueCheck = (i.buyPrice || 0) > 1000000 && (i.volume || 0) > 100;
+
+                return highVolumeCheck || highValueCheck;
+            })
             .sort((a, b) => (b.dayChange || 0) - (a.dayChange || 0))
             .slice(0, 5)
-            .map(i => ({ ...i, reason: `Spike: +${i.dayChange?.toFixed(1)}% in 24h` }));
+            .map(i => ({ ...i, reason: `Spike: +${i.dayChange?.toFixed(1)}% (Buy: ${i.buyPrice?.toLocaleString()}gp, Vol: ${i.volume?.toLocaleString()})` }));
 
         const priceDrops = items
-            .filter(i =>
-                (i.dayChange || 0) <= PRICE_DROP_THRESHOLD &&
-                (i.buyPrice || 0) > MIN_PRICE_FOR_CHANGE
-            )
+            .filter(i => {
+                const isDrop = (i.dayChange || 0) <= PRICE_DROP_THRESHOLD;
+                if (!isDrop) return false;
+
+                const highVolumeCheck = (i.buyPrice || 0) > 100 && (i.volume || 0) > 1000000;
+                const highValueCheck = (i.buyPrice || 0) > 1000000 && (i.volume || 0) > 100;
+
+                return highVolumeCheck || highValueCheck;
+            })
             .sort((a, b) => (a.dayChange || 0) - (b.dayChange || 0))
             .slice(0, 5)
-            .map(i => ({ ...i, reason: `Drop: ${i.dayChange?.toFixed(1)}% in 24h` }));
+            .map(i => ({ ...i, reason: `Drop: ${i.dayChange?.toFixed(1)}% (Buy: ${i.buyPrice?.toLocaleString()}gp, Vol: ${i.volume?.toLocaleString()})` }));
 
-        const summary = await this.generateSummary(highMargin, priceSpikes, priceDrops);
+        const summary = await this.generateSummary(highMargin, highVolume, priceSpikes, priceDrops);
 
         this.lastAnalysis = {
             timestamp: now,
@@ -101,6 +117,7 @@ export class AnalysisService {
 
     private static async generateSummary(
         highMargin: HighlightItem[],
+        bulk: HighlightItem[],
         spikes: HighlightItem[],
         drops: HighlightItem[]
     ): Promise<string> {
@@ -109,7 +126,10 @@ export class AnalysisService {
         let promptContext = `Market Report:\n`;
 
         if (highMargin.length > 0) {
-            promptContext += `Top Money Maker: ${highMargin[0].name} (${highMargin[0].roi?.toFixed(1)}% ROI)\n`;
+            promptContext += `Top Mid Price Profit: ${highMargin[0].name} (${highMargin[0].profit?.toLocaleString()}gp profit per item)\n`;
+        }
+        if (bulk.length > 0) {
+            promptContext += `Top Bulk Profit: ${bulk[0].name} (${bulk[0].potentialProfit?.toLocaleString()}gp potential profit at buy limit)\n`;
         }
         if (spikes.length > 0) {
             promptContext += `Top Spike: ${spikes[0].name} (+${spikes[0].dayChange?.toFixed(1)}%)\n`;
@@ -152,9 +172,13 @@ export class AnalysisService {
         // Fallback template
         const parts = [];
         if (highMargin.length > 0) {
-            parts.push(`Today's top money maker is ${highMargin[0].name}.`);
+            parts.push(`Today's top mid price flip is ${highMargin[0].name}.`);
         } else {
-            parts.push("No significant high-margin items found currently.");
+            parts.push("No significant mid price items found currently.");
+        }
+
+        if (bulk.length > 0) {
+            parts.push(`For bulk trading, ${bulk[0].name} offers the best potential profit.`);
         }
 
         if (spikes.length > 0) {

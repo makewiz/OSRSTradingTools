@@ -640,6 +640,13 @@ a:hover {
   font-weight: 600;
 }
 
+.item-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 20px;
+  margin-bottom: 20px;
+}
+
 .chart-container {
   margin-top: 30px;
   height: 400px;

@@ -161,7 +161,8 @@ client.on("interactionCreate", async (interaction) => {
     } else if (commandName === "highlights") {
       await interaction.deferReply(); // Fetch might take a moment
       try {
-        const res = await fetch("http://localhost:4000/api/highlights");
+        const backendUrl = process.env.BACKEND_URL || "http://localhost:4000";
+        const res = await fetch(`${backendUrl}/api/highlights`);
         if (!res.ok) throw new Error("API Error");
         const data = await res.json();
 

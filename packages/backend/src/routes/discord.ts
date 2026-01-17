@@ -236,9 +236,10 @@ router.put("/watch/:itemId", async (req, res) => {
 
         const period = req.body.period || '1h';
         const cooldown = req.body.cooldown || 3600;
+        const enabled = req.body.enabled !== undefined ? req.body.enabled : true;
 
-        await addBackendWatch(discordUser.discord_id, itemId, threshold, period, cooldown);
-        res.json({ success: true, itemId, threshold, period, cooldown });
+        await addBackendWatch(discordUser.discord_id, itemId, threshold, period, cooldown, enabled);
+        res.json({ success: true, itemId, threshold, period, cooldown, enabled });
     } catch (err) {
         // eslint-disable-next-line no-console
         logger.error("Failed to update watch:", err);

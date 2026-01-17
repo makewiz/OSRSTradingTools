@@ -812,7 +812,8 @@ export async function addBackendWatch(
   itemId: number,
   threshold: number,
   period: '24h' | '1h' = '1h',
-  cooldownSeconds: number = 3600
+  cooldownSeconds: number = 3600,
+  enabled: boolean = true
 ): Promise<void> {
   const is24h = period === '24h';
 
@@ -821,26 +822,28 @@ export async function addBackendWatch(
   // If user sets 24h watch, we update day_change_threshold.
   // We also update cooldown_seconds (global for the item watch).
 
+  const enabledVal = enabled ? 1 : 0;
+
   if (is24h) {
     const query = `
         INSERT INTO notification_settings (discord_id, item_id, day_change_threshold, cooldown_seconds, enabled)
-        VALUES ($1, $2, $3, $4, 1)
+        VALUES ($1, $2, $3, $4, $5)
         ON CONFLICT(discord_id, item_id) DO UPDATE SET
           day_change_threshold = EXCLUDED.day_change_threshold,
           cooldown_seconds = EXCLUDED.cooldown_seconds,
-          enabled = 1
+          enabled = EXCLUDED.enabled
       `;
-    await pool.query(query, [discordId, itemId, threshold, cooldownSeconds]);
+    await pool.query(query, [discordId, itemId, threshold, cooldownSeconds, enabledVal]);
   } else {
     const query = `
         INSERT INTO notification_settings (discord_id, item_id, one_hour_change_threshold, cooldown_seconds, enabled)
-        VALUES ($1, $2, $3, $4, 1)
+        VALUES ($1, $2, $3, $4, $5)
         ON CONFLICT(discord_id, item_id) DO UPDATE SET
           one_hour_change_threshold = EXCLUDED.one_hour_change_threshold,
           cooldown_seconds = EXCLUDED.cooldown_seconds,
-          enabled = 1
+          enabled = EXCLUDED.enabled
       `;
-    await pool.query(query, [discordId, itemId, threshold, cooldownSeconds]);
+    await pool.query(query, [discordId, itemId, threshold, cooldownSeconds, enabledVal]);
   }
 }
 
