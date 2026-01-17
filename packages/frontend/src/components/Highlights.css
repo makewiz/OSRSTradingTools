@@ -83,7 +83,8 @@
     transition: transform 0.2s;
 }
 
-.highlight-card:hover {
+
+.highlights-container .highlight-card:hover {
     transform: translateY(-2px);
 }
 
