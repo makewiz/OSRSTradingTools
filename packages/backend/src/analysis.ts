@@ -18,18 +18,6 @@ export interface MarketAnalysis {
     summary: string;
 }
 
-// Heuristic Constants
-const MIN_ROI = 5; // 5%
-const MIN_VOLUME_FOR_MARGIN = 500;
-const MIN_PROFIT = 5000;
-
-const HIGH_VOLUME_THRESHOLD = 50000;
-const MIN_MARGIN_FOR_VOLUME = 10;
-
-const PRICE_SPIKE_THRESHOLD = 15; // +15%
-const PRICE_DROP_THRESHOLD = -15; // -15%
-const MIN_PRICE_FOR_CHANGE = 100; // Ignore cheap items for drops/spikes
-
 export class AnalysisService {
     private static lastAnalysis: MarketAnalysis | null = null;
     private static lastAnalysisTime: number = 0;
@@ -74,9 +62,8 @@ export class AnalysisService {
 
         const priceSpikes = items
             .filter(i => {
-                const isSpike = (i.dayChange || 0) >= PRICE_SPIKE_THRESHOLD;
-                if (!isSpike) return false;
-
+                if (!i.dayChange) return false;
+                if (i.dayChange < 0) return false;
                 const highVolumeCheck = (i.buyPrice || 0) > 100 && (i.volume || 0) > 1000000;
                 const highValueCheck = (i.buyPrice || 0) > 1000000 && (i.volume || 0) > 100;
 
@@ -88,9 +75,8 @@ export class AnalysisService {
 
         const priceDrops = items
             .filter(i => {
-                const isDrop = (i.dayChange || 0) <= PRICE_DROP_THRESHOLD;
-                if (!isDrop) return false;
-
+                if (!i.dayChange) return false;
+                if (i.dayChange > 0) return false;
                 const highVolumeCheck = (i.buyPrice || 0) > 100 && (i.volume || 0) > 1000000;
                 const highValueCheck = (i.buyPrice || 0) > 1000000 && (i.volume || 0) > 100;
 
