@@ -1,5 +1,5 @@
 import cron from "node-cron";
-import { Client, EmbedBuilder, TextChannel } from "discord.js";
+import { Client, EmbedBuilder, TextChannel, NewsChannel } from "discord.js";
 import { getAllActiveWatches, updateLastNotified, getSystemSetting, getAllActiveAdvancedWatches, getAdvancedWatchHistory, updateAdvancedWatchHistory } from "./database";
 import { logger } from "@osrstradingtools/shared";
 
@@ -44,7 +44,7 @@ async function broadcastHighlights(client: Client) {
 
     try {
         const channel = await client.channels.fetch(channelId);
-        if (!channel || !(channel instanceof TextChannel)) return;
+        if (!channel || (!(channel instanceof TextChannel) && !(channel instanceof NewsChannel))) return;
 
         const backendUrl = process.env.BACKEND_URL || "http://localhost:4000";
         const res = await fetch(`${backendUrl}/api/discord/bot/highlights`, {
