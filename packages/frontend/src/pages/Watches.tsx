@@ -120,22 +120,26 @@ export const Watches: React.FC = () => {
             setEditPeriod('24h');
             setEditThreshold(watch.day_change_threshold?.toString() || "");
         }
-        setEditCooldown((watch.cooldown_seconds || 3600).toString());
+        // Convert seconds (DB) to minutes (Display)
+        const mins = Math.floor((watch.cooldown_seconds || 3600) / 60);
+        setEditCooldown(mins.toString());
     };
 
     const saveEdit = async (itemId: number) => {
         const threshold = parseFloat(editThreshold);
-        const cooldown = parseInt(editCooldown, 10);
+        const cooldownMins = parseInt(editCooldown, 10);
 
         if (isNaN(threshold) || threshold < 0) return alert("Invalid threshold");
-        if (isNaN(cooldown) || cooldown < 0) return alert("Invalid cooldown");
+        if (isNaN(cooldownMins) || cooldownMins < 0) return alert("Invalid cooldown");
+
+        const cooldownSeconds = cooldownMins * 60;
 
         try {
             setWatches(prev => prev.map(w => {
                 if (w.item_id === itemId) {
                     return {
                         ...w,
-                        cooldown_seconds: cooldown,
+                        cooldown_seconds: cooldownSeconds,
                         one_hour_change_threshold: editPeriod === '1h' ? threshold : null,
                         day_change_threshold: editPeriod === '24h' ? threshold : null
                     };
@@ -147,11 +151,39 @@ export const Watches: React.FC = () => {
             await fetchWithAuth(`${API_BASE_URL}/api/discord/watch/${itemId}`, {
                 method: "PUT",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ threshold, period: editPeriod, cooldown })
+                body: JSON.stringify({ threshold, period: editPeriod, cooldown: cooldownSeconds })
             });
         } catch (err) {
             setError("Failed to update watch");
             fetchDat();
+        }
+    };
+
+    const toggleStandardWatch = async (watch: Watch) => {
+        const newEnabled = !watch.enabled;
+        // Optimistic update
+        setWatches(prev => prev.map(w => w.item_id === watch.item_id ? { ...w, enabled: newEnabled } : w));
+
+        try {
+            const activeThreshold = watch.one_hour_change_threshold !== null ? watch.one_hour_change_threshold : watch.day_change_threshold;
+            const period = watch.one_hour_change_threshold !== null ? '1h' : '24h';
+
+            const res = await fetchWithAuth(`${API_BASE_URL}/api/discord/watch/${watch.item_id}`, {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    threshold: activeThreshold,
+                    period,
+                    cooldown: watch.cooldown_seconds,
+                    enabled: newEnabled
+                })
+            });
+
+            if (!res.ok) throw new Error("Failed to toggle watch");
+        } catch (err) {
+            // Revert if failed
+            setWatches(prev => prev.map(w => w.item_id === watch.item_id ? { ...w, enabled: !newEnabled } : w));
+            setError("Failed to update watch status");
         }
     };
 
@@ -338,7 +370,8 @@ export const Watches: React.FC = () => {
                                             <th>Item</th>
                                             <th>Type</th>
                                             <th>Threshold</th>
-                                            <th>Cooldown</th>
+                                            <th>Cooldown (m)</th>
+                                            <th>Status</th>
                                             <th style={{ textAlign: 'right' }}>Action</th>
                                         </tr>
                                     </thead>
@@ -370,7 +403,17 @@ export const Watches: React.FC = () => {
                                                     <td>
                                                         {isEditing ? (
                                                             <input type="number" value={editCooldown} onChange={e => setEditCooldown(e.target.value)} className="dark-input" style={{ width: '80px' }} />
-                                                        ) : `${w.cooldown_seconds || 3600}s`}
+                                                        ) : `${Math.floor((w.cooldown_seconds || 3600) / 60)}m`}
+                                                    </td>
+                                                    <td>
+                                                        <label className="switch">
+                                                            <input
+                                                                type="checkbox"
+                                                                checked={w.enabled}
+                                                                onChange={() => toggleStandardWatch(w)}
+                                                            />
+                                                            <span className="slider round"></span>
+                                                        </label>
                                                     </td>
                                                     <td style={{ textAlign: 'right' }}>
                                                         {isEditing ? (
