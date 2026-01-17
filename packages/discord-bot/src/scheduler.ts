@@ -113,9 +113,10 @@ async function checkNotifications(client: Client) {
     }
 
     const watches = await getAllActiveWatches();
+    const advancedWatches = await getAllActiveAdvancedWatches();
 
-    // Explicitly optimize: If no watches, do not fetch backend
-    if (watches.length === 0) return;
+    // Explicitly optimize: If no watches of either type, do not fetch backend
+    if (watches.length === 0 && advancedWatches.length === 0) return;
 
     // Fetch latest items from backend
     let items: any[] = [];
@@ -226,7 +227,6 @@ async function checkNotifications(client: Client) {
     }
 
     // --- CHECK ADVANCED WATCHES ---
-    const advancedWatches = await getAllActiveAdvancedWatches();
     if (advancedWatches.length > 0) {
         for (const watch of advancedWatches) {
             let potentialMatches: any[] = [];
