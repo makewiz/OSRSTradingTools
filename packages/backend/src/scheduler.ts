@@ -1,6 +1,7 @@
 import cron from "node-cron";
 import { getCombinedItems, CombinedItem, get5m, Osrs5mItem } from "./osrsClient";
 import { insertItemHistory, bulkInsertItemHistory, pool } from "./database";
+import { maintainPartitions } from "./db/partitions";
 import { logger } from "@osrstradingtools/shared";
 
 let isRunningLatest = false;
@@ -124,11 +125,6 @@ export async function runRetentionPolicy(): Promise<void> {
     const sixHours = 6 * 3600;
     const twentyFourHours = 24 * 3600;
 
-    const oneDayAgo = now - 24 * 3600;
-    const sevenDaysAgo = now - 7 * 24 * 3600;
-    const thirtyDaysAgo = now - 30 * 24 * 3600;
-    const oneYearAgo = now - 365 * 24 * 3600;
-
     /**
      * Helper to downsample from Source Table -> Target Table
      * Aggregation:
@@ -163,13 +159,6 @@ export async function runRetentionPolicy(): Promise<void> {
       `, [startTime, endTime, targetResolution]);
     };
 
-    /**
-     * Helper to clean up old data from a table
-     */
-    const cleanup = async (table: string, olderThan: number) => {
-      await client.query(`DELETE FROM ${table} WHERE timestamp < $1`, [olderThan]);
-    };
-
     // Optimization: Overlap windows to ensure boundary conditions are handled.
     // We process "finished" buckets.
     // E.g. for 1h resolution, we process data older than 1h (so the bucket is potentially complete).
@@ -189,15 +178,15 @@ export async function runRetentionPolicy(): Promise<void> {
     // Process last 3 days
     await downsample('item_history_6h', 'item_history_24h', twentyFourHours, now - 3 * 24 * oneHour, now);
 
-    // 4. Cleanup old data
-    // 5m: keep 24h
-    await cleanup('item_history_5m', oneDayAgo);
-    // 1h: keep 7 days
-    await cleanup('item_history_1h', sevenDaysAgo);
-    // 6h: keep 30 days
-    await cleanup('item_history_6h', thirtyDaysAgo);
-    // 24h: keep 1 year
-    await cleanup('item_history_24h', oneYearAgo);
+    // 4. Maintain Partitions (Create future, drop old)
+    // 5m: 24h retention, 1d partition
+    await maintainPartitions(pool, 'item_history_5m', 24 * 3600, 24 * 3600);
+    // 1h: 7d retention, 1d partition
+    await maintainPartitions(pool, 'item_history_1h', 7 * 24 * 3600, 24 * 3600);
+    // 6h: 30d retention, 7d partition
+    await maintainPartitions(pool, 'item_history_6h', 30 * 24 * 3600, 7 * 24 * 3600);
+    // 24h: 365d retention, 30d partition
+    await maintainPartitions(pool, 'item_history_24h', 365 * 24 * 3600, 30 * 24 * 3600);
 
     logger.info("[Scheduler] Retention policy completed.");
   } catch (err) {
