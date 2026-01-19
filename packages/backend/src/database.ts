@@ -388,7 +388,8 @@ export async function bulkInsertItemHistory(
 export async function getPriceHistory(
   itemId: number,
   startTime: number,
-  endTime: number
+  endTime: number,
+  dailyVolume: number | null = null
 ): Promise<{
   buy: { timestamp: number; price: number }[];
   sell: { timestamp: number; price: number }[];
@@ -441,7 +442,24 @@ export async function getPriceHistory(
     timestep = '1h';
   }
 
-  const expectedPoints = Math.ceil(duration / stepSeconds);
+  // Volume-adjusted expected points
+  let expectedPoints = Math.ceil(duration / stepSeconds);
+
+  if (dailyVolume !== null) {
+    // If we have daily volume data, we can be smarter about coverage.
+    // For low volume items, we shouldn't expect a datapoint for every time bucket.
+    // We estimate the theoretical max number of buckets that could be filled.
+    // We assume a minimum of 5 trades/day to ensure we still check for valid history on seemingly dead items.
+    const safeVolume = Math.max(dailyVolume, 5);
+    const durationDays = Math.max(duration / 86400, 1);
+    const volumeBasedExpectation = Math.ceil(safeVolume * durationDays);
+
+    if (volumeBasedExpectation < expectedPoints) {
+      // logger.debug(`[PriceHistory] Low volume item ${itemId} (Vol: ${dailyVolume}). Adj exp: ${volumeBasedExpectation} vs Time exp: ${expectedPoints}`);
+      expectedPoints = volumeBasedExpectation;
+    }
+  }
+
   const coverage = expectedPoints > 0 ? rows.length / expectedPoints : 1;
 
   if (coverage < 0.8) {

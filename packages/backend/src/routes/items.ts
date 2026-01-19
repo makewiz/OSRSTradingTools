@@ -68,7 +68,11 @@ router.get("/:id/history", async (req, res) => {
       return res.status(400).json({ error: "Invalid timestamp" });
     }
 
-    const history = await getPriceHistory(itemId, startTime, endTime);
+    let items = getLatestItems();
+    const item = items.find((i) => i.id === itemId);
+    const dailyVolume = item?.volume ?? null;
+
+    const history = await getPriceHistory(itemId, startTime, endTime, dailyVolume);
 
     // Frontend expects { buy: [], sell: [], volume: [] }
     // Or if it expects legacy array, I need to map it?
