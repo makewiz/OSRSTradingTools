@@ -619,6 +619,34 @@ export async function calculateHourChange(
   return { buyHourChange: buyChange, sellHourChange: sellChange, hourChange: avgChange };
 }
 
+export async function getLatestPricesBefore(
+  itemIds: number[],
+  timestamp: number,
+  table: string = 'item_history_5m'
+): Promise<Record<number, { avgHigh: number | null, avgLow: number | null }>> {
+  if (itemIds.length === 0) return {};
+
+  // We want the most recent price for each item BEFORE or AT the timestamp.
+  // Postgres DISTINCT ON is perfect for this.
+  const query = `
+    SELECT DISTINCT ON (item_id) item_id, avg_high_price, avg_low_price
+    FROM ${table}
+    WHERE item_id = ANY($1) AND timestamp <= $2
+    ORDER BY item_id, timestamp DESC
+  `;
+
+  const result = await pool.query(query, [itemIds, timestamp]);
+
+  const map: Record<number, { avgHigh: number | null, avgLow: number | null }> = {};
+  for (const row of result.rows) {
+    map[row.item_id] = {
+      avgHigh: row.avg_high_price,
+      avgLow: row.avg_low_price
+    };
+  }
+  return map;
+}
+
 /**
  * User Management Functions
  */
