@@ -1,4 +1,4 @@
-import { calculateDayChange, calculateHourChange } from "./database";
+import { calculateDayChange, calculateHourChange, getLatestPricesBefore } from "./database";
 import { calculateTax, calculateProfit, calculateROI } from "./tax";
 
 const MAPPING_URL = "https://prices.runescape.wiki/api/v1/osrs/mapping";
@@ -164,7 +164,20 @@ export async function getCombinedItems(): Promise<CombinedItem[]> {
     getVolumes()
   ]);
 
-  const items = await Promise.all(mapping.map(async (m) => {
+  // Batch fetch historical prices to avoid N+1 queries
+  const itemIds = mapping.map(m => m.id);
+  const now = Math.floor(Date.now() / 1000);
+  const timeAgo24h = now - 24 * 60 * 60;
+  const timeAgo1h = now - 60 * 60;
+
+  // Fetch 24h history (using 1h table for safety against 24h retention on 5m table)
+  // Fetch 1h history (using 5m table for best granularity)
+  const prices24hPromise = getLatestPricesBefore(itemIds, timeAgo24h, 'item_history_1h');
+  const prices1hPromise = getLatestPricesBefore(itemIds, timeAgo1h, 'item_history_5m');
+
+  const [prices24h, prices1h] = await Promise.all([prices24hPromise, prices1hPromise]);
+
+  const items = mapping.map((m) => {
     const latestEntry = latest.data[String(m.id)];
     const fiveMinEntry = fiveMin.data[String(m.id)];
     const volume = volumes[m.name];
@@ -174,9 +187,51 @@ export async function getCombinedItems(): Promise<CombinedItem[]> {
     const margin =
       buyPrice !== null && sellPrice !== null ? sellPrice - buyPrice : null;
 
-    // Calculate day change from database
-    const { dayChange } = await calculateDayChange(m.id, buyPrice, sellPrice);
-    const { hourChange } = await calculateHourChange(m.id, buyPrice, sellPrice);
+    // --- Calculate Day Change (24h) ---
+    // Was: calculateDayChange(m.id, buyPrice, sellPrice)
+    // Now: use prices24h map
+    let dayChange: number | null = null;
+    const oldPrice24h = prices24h[m.id];
+    if (oldPrice24h) {
+      let buyChange: number | null = null;
+      if (buyPrice !== null && oldPrice24h.avgLow) {
+        buyChange = ((buyPrice - oldPrice24h.avgLow) / oldPrice24h.avgLow) * 100;
+      }
+      let sellChange: number | null = null;
+      if (sellPrice !== null && oldPrice24h.avgHigh) {
+        sellChange = ((sellPrice - oldPrice24h.avgHigh) / oldPrice24h.avgHigh) * 100;
+      }
+      if (buyChange !== null && sellChange !== null) {
+        dayChange = (buyChange + sellChange) / 2;
+      } else if (buyChange !== null) {
+        dayChange = buyChange;
+      } else if (sellChange !== null) {
+        dayChange = sellChange;
+      }
+    }
+
+    // --- Calculate Hour Change (1h) ---
+    // Was: calculateHourChange(m.id, buyPrice, sellPrice)
+    // Now: use prices1h map
+    let hourChange: number | null = null;
+    const oldPrice1h = prices1h[m.id];
+    if (oldPrice1h) {
+      let buyChange: number | null = null;
+      if (buyPrice !== null && oldPrice1h.avgLow) {
+        buyChange = ((buyPrice - oldPrice1h.avgLow) / oldPrice1h.avgLow) * 100;
+      }
+      let sellChange: number | null = null;
+      if (sellPrice !== null && oldPrice1h.avgHigh) {
+        sellChange = ((sellPrice - oldPrice1h.avgHigh) / oldPrice1h.avgHigh) * 100;
+      }
+      if (buyChange !== null && sellChange !== null) {
+        hourChange = (buyChange + sellChange) / 2;
+      } else if (buyChange !== null) {
+        hourChange = buyChange;
+      } else if (sellChange !== null) {
+        hourChange = sellChange;
+      }
+    }
 
     // Calculate margin * volume (Gross)
     const marginVolume =
@@ -229,7 +284,7 @@ export async function getCombinedItems(): Promise<CombinedItem[]> {
       roi,
       potentialProfit
     };
-  }));
+  });
 
   return items;
 }

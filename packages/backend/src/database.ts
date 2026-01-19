@@ -2,6 +2,7 @@ import { Pool } from "pg";
 import dotenv from "dotenv";
 import { fetchWikiTimeSeries } from "./osrsClient";
 import { logger } from "@osrstradingtools/shared";
+import { ensurePartitionedHistoryTable } from "./db/partitions";
 
 dotenv.config();
 
@@ -191,63 +192,18 @@ export async function initializeDatabase(): Promise<void> {
       ADD COLUMN IF NOT EXISTS cooldown_seconds INTEGER DEFAULT 3600
     `);
 
-    // --- NEW HISTORY TABLES ---
+    // --- NEW HISTORY TABLES (PARTITIONED) ---
+    // Migration and initialization handled by helper
+    // Definitions:
+    // 5m:  Retention 24h,  Partition 1d (86400s)
+    // 1h:  Retention 7d,   Partition 1d (86400s)
+    // 6h:  Retention 30d,  Partition 7d (604800s)
+    // 24h: Retention 365d, Partition 30d (2592000s)
 
-    // 5 Minute History (Base resolution)
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS item_history_5m (
-        item_id INTEGER NOT NULL,
-        timestamp BIGINT NOT NULL,
-        avg_high_price INTEGER,
-        avg_low_price INTEGER,
-        high_price_volume INTEGER,
-        low_price_volume INTEGER,
-        PRIMARY KEY (item_id, timestamp)
-      )
-    `);
-    await client.query(`CREATE INDEX IF NOT EXISTS idx_item_history_5m_time ON item_history_5m(item_id, timestamp DESC)`);
-
-    // 1 Hour History
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS item_history_1h (
-        item_id INTEGER NOT NULL,
-        timestamp BIGINT NOT NULL,
-        avg_high_price INTEGER,
-        avg_low_price INTEGER,
-        high_price_volume INTEGER,
-        low_price_volume INTEGER,
-        PRIMARY KEY (item_id, timestamp)
-      )
-    `);
-    await client.query(`CREATE INDEX IF NOT EXISTS idx_item_history_1h_time ON item_history_1h(item_id, timestamp DESC)`);
-
-    // 6 Hour History
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS item_history_6h (
-        item_id INTEGER NOT NULL,
-        timestamp BIGINT NOT NULL,
-        avg_high_price INTEGER,
-        avg_low_price INTEGER,
-        high_price_volume INTEGER,
-        low_price_volume INTEGER,
-        PRIMARY KEY (item_id, timestamp)
-      )
-    `);
-    await client.query(`CREATE INDEX IF NOT EXISTS idx_item_history_6h_time ON item_history_6h(item_id, timestamp DESC)`);
-
-    // 24 Hour History
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS item_history_24h (
-        item_id INTEGER NOT NULL,
-        timestamp BIGINT NOT NULL,
-        avg_high_price INTEGER,
-        avg_low_price INTEGER,
-        high_price_volume INTEGER,
-        low_price_volume INTEGER,
-        PRIMARY KEY (item_id, timestamp)
-      )
-    `);
-    await client.query(`CREATE INDEX IF NOT EXISTS idx_item_history_24h_time ON item_history_24h(item_id, timestamp DESC)`);
+    await ensurePartitionedHistoryTable(client, 'item_history_5m', 24 * 3600, 24 * 3600);
+    await ensurePartitionedHistoryTable(client, 'item_history_1h', 7 * 24 * 3600, 24 * 3600);
+    await ensurePartitionedHistoryTable(client, 'item_history_6h', 30 * 24 * 3600, 7 * 24 * 3600);
+    await ensurePartitionedHistoryTable(client, 'item_history_24h', 365 * 24 * 3600, 30 * 24 * 3600);
 
     // --- ADVANCED WATCHES ---
     await client.query(`
@@ -388,7 +344,8 @@ export async function bulkInsertItemHistory(
 export async function getPriceHistory(
   itemId: number,
   startTime: number,
-  endTime: number
+  endTime: number,
+  dailyVolume: number | null = null
 ): Promise<{
   buy: { timestamp: number; price: number }[];
   sell: { timestamp: number; price: number }[];
@@ -441,7 +398,24 @@ export async function getPriceHistory(
     timestep = '1h';
   }
 
-  const expectedPoints = Math.ceil(duration / stepSeconds);
+  // Volume-adjusted expected points
+  let expectedPoints = Math.ceil(duration / stepSeconds);
+
+  if (dailyVolume !== null) {
+    // If we have daily volume data, we can be smarter about coverage.
+    // For low volume items, we shouldn't expect a datapoint for every time bucket.
+    // We estimate the theoretical max number of buckets that could be filled.
+    // We assume a minimum of 5 trades/day to ensure we still check for valid history on seemingly dead items.
+    const safeVolume = Math.max(dailyVolume, 5);
+    const durationDays = Math.max(duration / 86400, 1);
+    const volumeBasedExpectation = Math.ceil(safeVolume * durationDays);
+
+    if (volumeBasedExpectation < expectedPoints) {
+      // logger.debug(`[PriceHistory] Low volume item ${itemId} (Vol: ${dailyVolume}). Adj exp: ${volumeBasedExpectation} vs Time exp: ${expectedPoints}`);
+      expectedPoints = volumeBasedExpectation;
+    }
+  }
+
   const coverage = expectedPoints > 0 ? rows.length / expectedPoints : 1;
 
   if (coverage < 0.8) {
@@ -451,23 +425,37 @@ export async function getPriceHistory(
 
       // Save to database asynchronously to populate history for future requests
       // Save to database using bulk insert
-      const historyPoints = apiData.map(d => ({
-        itemId,
-        timestamp: d.timestamp,
-        avgHighPrice: d.avgHighPrice,
-        avgLowPrice: d.avgLowPrice,
-        highPriceVolume: d.highPriceVolume,
-        lowPriceVolume: d.lowPriceVolume
-      }));
+      // Determine retention cutoff for the target table
+      const now = Math.floor(Date.now() / 1000);
+      let retentionSeconds = 24 * 3600; // default 5m
+      if (table === 'item_history_1h') retentionSeconds = 7 * 24 * 3600;
+      else if (table === 'item_history_6h') retentionSeconds = 30 * 24 * 3600;
+      else if (table === 'item_history_24h') retentionSeconds = 365 * 24 * 3600;
 
-      // Split into chunks of 1000 to be safe (though UNNEST handles large arrays well, 
-      // we want to avoid massive memory spikes in Node or PG)
-      const chunkSize = 1000;
-      for (let i = 0; i < historyPoints.length; i += chunkSize) {
-        await bulkInsertItemHistory(table, historyPoints.slice(i, i + chunkSize));
+      const retentionCutoff = now - retentionSeconds;
+
+      // Filter points to only insert those that fit in the table's retention window
+      const historyPoints = apiData
+        .filter(d => d.timestamp >= retentionCutoff)
+        .map(d => ({
+          itemId,
+          timestamp: d.timestamp,
+          avgHighPrice: d.avgHighPrice,
+          avgLowPrice: d.avgLowPrice,
+          highPriceVolume: d.highPriceVolume,
+          lowPriceVolume: d.lowPriceVolume
+        }));
+
+      // Split into chunks of 1000
+      if (historyPoints.length > 0) {
+        const chunkSize = 1000;
+        for (let i = 0; i < historyPoints.length; i += chunkSize) {
+          await bulkInsertItemHistory(table, historyPoints.slice(i, i + chunkSize));
+        }
+        logger.info(`[PriceHistory] Persisted ${historyPoints.length} points to ${table} from Wiki API (Filtered from ${apiData.length}).`);
+      } else {
+        logger.info(`[PriceHistory] All Wiki API data was older than retention for ${table}. Skiping insert.`);
       }
-
-      logger.info(`[PriceHistory] Persisted ${apiData.length} points to ${table} from Wiki API.`);
 
       // Filter and map API data to row format
       // API Timestamp is in seconds.
@@ -629,6 +617,34 @@ export async function calculateHourChange(
     60 * 60
   );
   return { buyHourChange: buyChange, sellHourChange: sellChange, hourChange: avgChange };
+}
+
+export async function getLatestPricesBefore(
+  itemIds: number[],
+  timestamp: number,
+  table: string = 'item_history_5m'
+): Promise<Record<number, { avgHigh: number | null, avgLow: number | null }>> {
+  if (itemIds.length === 0) return {};
+
+  // We want the most recent price for each item BEFORE or AT the timestamp.
+  // Postgres DISTINCT ON is perfect for this.
+  const query = `
+    SELECT DISTINCT ON (item_id) item_id, avg_high_price, avg_low_price
+    FROM ${table}
+    WHERE item_id = ANY($1) AND timestamp <= $2
+    ORDER BY item_id, timestamp DESC
+  `;
+
+  const result = await pool.query(query, [itemIds, timestamp]);
+
+  const map: Record<number, { avgHigh: number | null, avgLow: number | null }> = {};
+  for (const row of result.rows) {
+    map[row.item_id] = {
+      avgHigh: row.avg_high_price,
+      avgLow: row.avg_low_price
+    };
+  }
+  return map;
 }
 
 /**
