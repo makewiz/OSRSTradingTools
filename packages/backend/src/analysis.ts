@@ -1,6 +1,7 @@
 
 import { getCombinedItems, CombinedItem } from "./osrsClient";
 import { getLatestItems } from "./scheduler";
+import { NewsService, NewsItem } from "./news";
 import dotenv from "dotenv";
 
 dotenv.config();
@@ -16,6 +17,7 @@ export interface MarketAnalysis {
     priceSpikes: HighlightItem[];
     priceDrops: HighlightItem[];
     summary: string;
+    news?: NewsItem[];
 }
 
 export class AnalysisService {
@@ -33,6 +35,9 @@ export class AnalysisService {
         if (!items || items.length === 0) {
             items = await getCombinedItems();
         }
+
+        // Fetch news
+        const news = await NewsService.fetchNewestNews();
 
         // High Margin -> Mid Price logic
         const highMargin = items
@@ -86,7 +91,7 @@ export class AnalysisService {
             .slice(0, 5)
             .map(i => ({ ...i, reason: `Drop: ${i.dayChange?.toFixed(1)}% (Buy: ${i.buyPrice?.toLocaleString()}gp, Vol: ${i.volume?.toLocaleString()})` }));
 
-        const summary = await this.generateSummary(highMargin, highVolume, priceSpikes, priceDrops);
+        const summary = await this.generateSummary(highMargin, highVolume, priceSpikes, priceDrops, news);
 
         this.lastAnalysis = {
             timestamp: now,
@@ -94,7 +99,8 @@ export class AnalysisService {
             highVolume,
             priceSpikes,
             priceDrops,
-            summary
+            summary,
+            news
         };
         this.lastAnalysisTime = now;
 
@@ -105,11 +111,20 @@ export class AnalysisService {
         highMargin: HighlightItem[],
         bulk: HighlightItem[],
         spikes: HighlightItem[],
-        drops: HighlightItem[]
+        drops: HighlightItem[],
+        news: NewsItem[]
     ): Promise<string> {
         const apiKey = process.env.GEMINI_API_KEY;
 
         let promptContext = `Market Report:\n`;
+
+        if (news.length > 0) {
+            promptContext += `Recent News Updates:\n`;
+            news.forEach(n => {
+                promptContext += `- ${n.title} (${n.date}) - ${n.category}\n`;
+            });
+            promptContext += `\n`;
+        }
 
         if (highMargin.length > 0) {
             promptContext += `Top Mid Price Profit: ${highMargin[0].name} (${highMargin[0].profit?.toLocaleString()}gp profit per item)\n`;
@@ -131,6 +146,9 @@ export class AnalysisService {
 
         // Add prompt instruction
         promptContext += "\nSummarize the market highlights in 2-3 concise, engaging sentences as a specialized OSRS trading assistant.";
+        if (news.length > 0) {
+            promptContext += " Briefly mention if any specific recent news might be relevant to the market activity, but focus on the trading opportunities.";
+        }
 
         if (apiKey) {
             try {
