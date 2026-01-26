@@ -103,3 +103,67 @@ export async function checkGuildMembership(userId: string): Promise<boolean> {
     }
 }
 
+export interface DiscordRole {
+    id: string;
+    name: string;
+}
+
+export async function getGuildRoles(): Promise<DiscordRole[]> {
+    const guildId = process.env.DISCORD_GUILD_ID;
+    const botToken = process.env.DISCORD_BOT_TOKEN;
+
+    if (!guildId || !botToken) {
+        logger.warn("DISCORD_GUILD_ID or DISCORD_BOT_TOKEN not set. Cannot fetch guild roles.");
+        return [];
+    }
+
+    try {
+        const response = await axios.get(`${DISCORD_API_URL}/guilds/${guildId}/roles`, {
+            headers: { Authorization: `Bot ${botToken}` },
+        });
+        return response.data;
+    } catch (err: any) {
+        logger.error("Failed to fetch guild roles:", err.response?.data || err.message);
+        return [];
+    }
+}
+
+export async function addGuildMemberRole(userId: string, roleId: string): Promise<boolean> {
+    const guildId = process.env.DISCORD_GUILD_ID;
+    const botToken = process.env.DISCORD_BOT_TOKEN;
+
+    if (!guildId || !botToken) {
+        logger.warn("DISCORD_GUILD_ID or DISCORD_BOT_TOKEN not set. Cannot add guild role.");
+        return false;
+    }
+
+    try {
+        await axios.put(`${DISCORD_API_URL}/guilds/${guildId}/members/${userId}/roles/${roleId}`, {}, {
+            headers: { Authorization: `Bot ${botToken}` },
+        });
+        return true;
+    } catch (err: any) {
+        logger.error(`Failed to add guild member role (User: ${userId}, Role: ${roleId}):`, err.response?.data || err.message);
+        return false;
+    }
+}
+
+export async function assignLinkedRole(discordUserId: string, username: string): Promise<void> {
+    try {
+        const roles = await getGuildRoles();
+        const linkedRole = roles.find(r => r.name === "Linked User");
+        if (linkedRole) {
+            const assigned = await addGuildMemberRole(discordUserId, linkedRole.id);
+            if (assigned) {
+                logger.info(`Assigned 'Linked User' to user ${username} (${discordUserId})`);
+            } else {
+                logger.warn(`Failed to assign 'Linked User' to user ${username}`);
+            }
+        } else {
+            logger.warn("Role 'Linked User' not found in guild. Cannot assign.");
+        }
+    } catch (roleErr) {
+        logger.error("Error managing roles during link:", roleErr);
+    }
+}
+

@@ -13,7 +13,7 @@ import {
     getAdvancedWatches,
     updateAdvancedWatch
 } from "../database";
-import { exchangeCodeForToken, getDiscordUser } from "../oauth";
+import { exchangeCodeForToken, getDiscordUser, assignLinkedRole } from "../oauth";
 import { getCombinedItems } from "../osrsClient";
 import { getLatestItems, touchActivity, getLastFetchTime } from "../scheduler";
 import { AnalysisService } from "../analysis";
@@ -101,6 +101,10 @@ router.post("/link-oauth", async (req, res) => {
         const discordProfile = await getDiscordUser(tokenData.access_token);
 
         await linkDiscordUser(userId, discordProfile.id);
+
+        // Assign "Linked User"
+        await assignLinkedRole(discordProfile.id, discordProfile.username);
+
         res.json({ success: true });
     } catch (err: any) {
         // eslint-disable-next-line no-console

@@ -12,7 +12,7 @@ import {
     generateToken,
     authenticateToken
 } from "../auth";
-import { exchangeCodeForToken, getDiscordUser, checkGuildMembership } from "../oauth";
+import { exchangeCodeForToken, getDiscordUser, checkGuildMembership, assignLinkedRole } from "../oauth";
 import crypto from "crypto";
 import { authLimiter } from "../middleware/rateLimiter";
 import { logger } from "@osrstradingtools/shared";
@@ -164,6 +164,9 @@ router.post("/discord/login", authLimiter, async (req, res) => {
 
             // Link Immediately
             await linkDiscordUser(user.id, discordProfile.id);
+
+            // Assign "Linked User" role
+            await assignLinkedRole(discordProfile.id, discordProfile.username);
         }
 
         // 4. Generate Token
