@@ -7,6 +7,7 @@ const FIVE_MIN_URL = "https://prices.runescape.wiki/api/v1/osrs/5m";
 const TIMESERIES_URL = "https://prices.runescape.wiki/api/v1/osrs/timeseries";
 const VOLUMES_URL =
   "https://oldschool.runescape.wiki/?title=Module:GEVolumes/data.json&action=raw&ctype=application%2Fjson";
+const WIKI_API_URL = "https://oldschool.runescape.wiki/api.php";
 
 export interface OsrsItemMapping {
   id: number;
@@ -287,4 +288,22 @@ export async function getCombinedItems(): Promise<CombinedItem[]> {
   });
 
   return items;
+}
+
+export async function fetchWikiDescription(itemName: string): Promise<string | null> {
+  const url = `${WIKI_API_URL}?action=query&prop=extracts&exintro&explaintext&titles=${encodeURIComponent(itemName)}&format=json`;
+  try {
+    const response = await fetchJson<any>(url);
+    const pages = response?.query?.pages;
+    if (!pages) return null;
+
+    // keys are page IDs, e.g. "54321": { ... }
+    const pageId = Object.keys(pages)[0];
+    if (pageId === "-1") return null; // Page not found
+
+    return pages[pageId].extract || null;
+  } catch (err) {
+    // console.error("Error fetching wiki description:", err);
+    return null;
+  }
 }

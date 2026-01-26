@@ -1,5 +1,5 @@
 
-import { getCombinedItems, CombinedItem } from "./osrsClient";
+import { getCombinedItems, CombinedItem, fetchWikiDescription } from "./osrsClient";
 import { getLatestItems } from "./scheduler";
 import { NewsService, NewsItem } from "./news";
 import dotenv from "dotenv";
@@ -91,7 +91,23 @@ export class AnalysisService {
             .slice(0, 5)
             .map(i => ({ ...i, reason: `Drop: ${i.dayChange?.toFixed(1)}% (Buy: ${i.buyPrice?.toLocaleString()}gp, Vol: ${i.volume?.toLocaleString()})` }));
 
-        const summary = await this.generateSummary(highMargin, highVolume, priceSpikes, priceDrops, news);
+        // Fetch Wiki context for top items
+        const itemsToFetch = new Set<string>();
+        if (highMargin.length > 0) itemsToFetch.add(highMargin[0].name);
+        if (highVolume.length > 0) itemsToFetch.add(highVolume[0].name);
+        if (priceSpikes.length > 0) itemsToFetch.add(priceSpikes[0].name);
+        if (priceDrops.length > 0) itemsToFetch.add(priceDrops[0].name);
+
+        const itemContext: Record<string, string> = {};
+        await Promise.all(Array.from(itemsToFetch).map(async (name) => {
+            const desc = await fetchWikiDescription(name);
+            if (desc) {
+                // Truncate to save tokens, keep first 300 chars usually contains the "uses"
+                itemContext[name] = desc.length > 300 ? desc.substring(0, 300) + "..." : desc;
+            }
+        }));
+
+        const summary = await this.generateSummary(highMargin, highVolume, priceSpikes, priceDrops, news, itemContext);
 
         this.lastAnalysis = {
             timestamp: now,
@@ -112,7 +128,8 @@ export class AnalysisService {
         bulk: HighlightItem[],
         spikes: HighlightItem[],
         drops: HighlightItem[],
-        news: NewsItem[]
+        news: NewsItem[],
+        itemContext?: Record<string, string>
     ): Promise<string> {
         const apiKey = process.env.GEMINI_API_KEY;
 
@@ -144,8 +161,21 @@ export class AnalysisService {
             promptContext += `Other notable items: ${notable}.\n`;
         }
 
+        // --- Add Item Context from Wiki ---
+        if (itemContext && Object.keys(itemContext).length > 0) {
+            promptContext += `\nItem Context (Uses/Lore from Wiki):\n`;
+            for (const [name, desc] of Object.entries(itemContext)) {
+                if (desc) {
+                    promptContext += `- **${name}**: ${desc}\n`;
+                }
+            }
+        }
+
         // Add prompt instruction
         promptContext += "\nSummarize the market highlights in 2-3 concise, engaging sentences as a specialized OSRS trading assistant.";
+        if (itemContext && Object.keys(itemContext).length > 0) {
+            promptContext += " Use the provided Item Context to explain *why* an item might be valuable or volatile (e.g. mention its uses).";
+        }
         if (news.length > 0) {
             promptContext += " Briefly mention if any specific recent news might be relevant to the market activity, but focus on the trading opportunities.";
         }
