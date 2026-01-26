@@ -1,7 +1,7 @@
 
 import { Router } from "express";
 import { authenticateToken } from "../auth";
-import { getCombinedItems } from "../osrsClient";
+import { getCombinedItems, fetchWikiDescription } from "../osrsClient";
 import { getPriceHistory } from "../database";
 import { logger } from "@osrstradingtools/shared";
 import dotenv from "dotenv";
@@ -92,6 +92,8 @@ router.get("/risk/:id", async (req, res) => {
             volatilityPercent = (stdDev / meanPrice) * 100;
         }
 
+        const wikiDescription = await fetchWikiDescription(item.name);
+
         const context = {
             name: item.name,
             currentPrice: item.buyPrice,
@@ -101,7 +103,8 @@ router.get("/risk/:id", async (req, res) => {
             avgDailyVolume: Math.round(avgVolume),
             priceVolatility30d: `${volatilityPercent.toFixed(2)}%`,
             priceRange30d: `${lowPrice} - ${highPrice}`,
-            isMembers: item.members
+            isMembers: item.members,
+            wikiDescription: wikiDescription ? (wikiDescription.length > 500 ? wikiDescription.substring(0, 500) + "..." : wikiDescription) : "No description available."
         };
 
         const prompt = `
@@ -110,6 +113,9 @@ router.get("/risk/:id", async (req, res) => {
       
       Item Data:
       ${JSON.stringify(context, null, 2)}
+
+      Use the 'wikiDescription' to understand the item's actual utility (e.g. is it a useful weapon, a quest item, or junk?).
+      Items with high utility are safer than "junk" items even if volatile.
 
       Rules:
       1. High Volatility (>10%) is risky but profitable.
