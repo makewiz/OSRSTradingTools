@@ -427,10 +427,18 @@ export async function getPriceHistory(
       // Save to database using bulk insert
       // Determine retention cutoff for the target table
       const now = Math.floor(Date.now() / 1000);
+      const maxRetentionDays = process.env.DATA_RETENTION_DAYS
+        ? parseInt(process.env.DATA_RETENTION_DAYS, 10)
+        : 3650;
+      const maxRetentionSeconds = maxRetentionDays * 24 * 3600;
+
       let retentionSeconds = 24 * 3600; // default 5m
       if (table === 'item_history_1h') retentionSeconds = 7 * 24 * 3600;
       else if (table === 'item_history_6h') retentionSeconds = 30 * 24 * 3600;
       else if (table === 'item_history_24h') retentionSeconds = 365 * 24 * 3600;
+
+      // Apply global cap
+      retentionSeconds = Math.min(retentionSeconds, maxRetentionSeconds);
 
       const retentionCutoff = now - retentionSeconds;
 
