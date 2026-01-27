@@ -1,6 +1,7 @@
-import { pool, getLatestPricesBefore, getLatestPrice, getLatestPricesFallback } from "../database";
+import { pool } from "../database";
 import { logger } from "@osrstradingtools/shared";
-import { getMapping, getVolumes } from "../osrsClient";
+import { getCombinedItems } from "../osrsClient";
+import { getLatestItems, getLastFetchTime, touchActivity } from "../scheduler";
 
 export interface RecipeInput {
     itemId: number;
@@ -174,22 +175,32 @@ export async function getProfitableRecipes(minProfit: number = 0, limit: number 
 
     if (itemIds.size === 0) return [];
 
-    // Optimize: fetch all latest prices in one go
-    // We can use getLatestPricesBefore with current timestamp, or a dedicated map function if available.
-    // getLatestPricesBefore returns { [id]: { avgHigh, avgLow } } from history tables.
-    // For live profitability, we might prefer 'getLatest' (from API cache) or 'getLatestPrice' (DB).
-    // Let's use getLatestPrice in bulk or reuse getLatestPricesBefore which uses the 5m table.
-    // The database.ts has 'getLatestPricesBefore'.
-    const now = Math.floor(Date.now() / 1000);
-    const [priceMap, mapping, volumes] = await Promise.all([
-        getLatestPricesFallback(Array.from(itemIds), now),
-        getMapping(),
-        getVolumes()
-    ]);
+    // Optimize: fetch all latest prices in one go using cache if available
+    const now = Date.now();
+    touchActivity(); // Ensure scheduler knows we are active
+    let items = getLatestItems();
+
+    // If cache is empty or stale (older than 2 mins), fetch fresh
+    if (!items || items.length === 0 || now - getLastFetchTime() > 120000) {
+        logger.info("[Recipes] Cache empty or stale, fetching fresh items...");
+        items = await getCombinedItems();
+    }
+
+    // Create Map for Price Lookup
+    // CombinedItem has buyPrice (Low), sellPrice (High) and volume (daily)
+    const priceMap = new Map<number, { buy: number, sell: number, volume: number }>();
+    for (const item of items) {
+        priceMap.set(item.id, {
+            buy: item.buyPrice || 0,
+            sell: item.sellPrice || 0,
+            volume: item.volume || 0
+        });
+    }
 
     // Create Map for Name Lookup
+    // Create Map for Name Lookup
     const nameMap = new Map<number, string>();
-    for (const item of mapping) {
+    for (const item of items) {
         nameMap.set(item.id, item.name);
     }
 
@@ -217,26 +228,13 @@ export async function getProfitableRecipes(minProfit: number = 0, limit: number 
                 continue;
             }
 
-            const priceData = priceMap[input.item_id];
-            // If no price data, assume 0 or skip? Let's skip to be safe, or use 0 if unlikely.
-            // Skipping is safer for "Profit" correctness.
-            // Some items might be untradeable (no price).
-            const price = priceData?.avgHigh ?? 0; // Buy at High (conservative/instant) or Low? 
-            // Usually for crafting: Buy at Ask (High), Sell at Bid (Low).
-            // Actually: Instant Buy = High, Slow Buy = Low.
-            // Instant Sell = Low, Slow Sell = High.
-            // Let's use Buy = AvgLow (Slow buys are typical for crafting) and Sell = AvgHigh (Slow sells).
-            // But to be conservative: Buy High, Sell Low.
-            // Let's stick to standard: Cost = Buy Price, Revenue = Sell Price.
-            // Most tools use "Active" prices. 
-            // Let's use avgLow for buying materials (patient buyer) and avgHigh for selling (patient seller)?
-            // Or avgHigh for buying (instant) and avgLow for selling (instant)?
-            // Let's use avgLow for Input and avgHigh for Output to represent "Trading Post / Merching" style (Patient).
-            // BUT for mass crafting, usually you Buy Instantly (High) and Sell Instantly (Low) if you want speed.
-            // Let's use avg_low_price for both to keep it consistent? No.
-            // Let's start with: Cost = Price to acquire. Revenue = Price to sell.
-            const costPrice = priceData?.avgLow ?? 0; // Buy at low (bid)
-            const revenuePrice = priceData?.avgHigh ?? 0; // Sell at high (ask)
+            const priceData = priceMap.get(input.item_id);
+            // If no price data, assume 0 or skip? Let's skip to be safe.
+
+            // Standard: Cost = Buy Price (Low), Revenue = Sell Price (High)
+            // Patient trader logic.
+            const costPrice = priceData?.buy ?? 0; // Buy at low (bid)
+            const revenuePrice = priceData?.sell ?? 0; // Sell at high (ask)
 
             // If price is missing or zero, we can't calculate profit accurately
             if ((!priceData || costPrice <= 0) && input.item_id !== 995) {
@@ -267,8 +265,8 @@ export async function getProfitableRecipes(minProfit: number = 0, limit: number 
                 continue;
             }
 
-            const priceData = priceMap[output.item_id];
-            const price = priceData?.avgHigh ?? 0;
+            const priceData = priceMap.get(output.item_id);
+            const price = priceData?.sell ?? 0;
             revenue += price * output.quantity;
             richOutputs.push({
                 itemId: output.item_id,
@@ -291,14 +289,20 @@ export async function getProfitableRecipes(minProfit: number = 0, limit: number 
         }
 
         // Determine Weekly/Daily Volume based on main output
-        // Try to match exact recipe name (often output name)
-        let volume = volumes[row.name];
+        // Try to match exact recipe name (often output name) inside price map if ID known?
+        // Actually, we need to map name to ID for the `volume` variable.
+        // But `priceMap` is by ID.
+        // The previous code had `volumes[row.name]` which is Name -> Volume.
+        // We removed `getVolumes()`.
+        // However, we have `priceMap` which has volumes by ID.
+        // We can check volume of the output items.
+        // The recipe volume is effectively the volume of the main output item.
 
-        // Fallback: Check outputs if recipe name doesn't match
-        if (volume === undefined && richOutputs.length > 0) {
-            // Use the item with the highest quantity or just the first?
-            // Usually first output is main.
-            volume = volumes[richOutputs[0].name];
+        let volume = 0;
+        if (richOutputs.length > 0) {
+            // Use the volume of the first output item
+            const outItem = priceMap.get(richOutputs[0].itemId);
+            volume = outItem?.volume || 0;
         }
 
         const dailyVolume = volume ?? 0;

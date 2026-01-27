@@ -41,7 +41,7 @@ interface ProfitableRecipe {
     dailyVolume?: number | null;
 }
 
-type SortKey = "skill" | "level" | "name" | "profitPerItem" | "roi" | "dailyVolume" | "potentialProfitPerHour" | "xp";
+type SortKey = "skill" | "level" | "name" | "cost" | "profitPerItem" | "roi" | "dailyVolume" | "potentialProfitPerHour" | "xp";
 
 export const Recipes: React.FC = () => {
     const { fetchWithAuth } = useAuth();
@@ -168,6 +168,7 @@ export const Recipes: React.FC = () => {
                     case "skill": return item.skill;
                     case "level": return item.level;
                     case "name": return item.name.toLowerCase();
+                    case "cost": return item.cost;
                     case "profitPerItem": return item.profit;
                     case "roi": return item.roi;
                     case "dailyVolume": return item.dailyVolume ?? -Infinity;
@@ -343,6 +344,9 @@ export const Recipes: React.FC = () => {
                                         Item / Output {sortKey === "name" ? (sortDir === "asc" ? "▲" : "▼") : ""}
                                     </th>
                                     <th>Inputs</th>
+                                    <th onClick={() => handleSortChange("cost")} style={{ cursor: "pointer" }}>
+                                        Input Cost {sortKey === "cost" ? (sortDir === "asc" ? "▲" : "▼") : ""}
+                                    </th>
                                     <th onClick={() => handleSortChange("profitPerItem")} style={{ cursor: "pointer" }}>
                                         Profit/Item {sortKey === "profitPerItem" ? (sortDir === "asc" ? "▲" : "▼") : ""}
                                     </th>
@@ -409,6 +413,9 @@ export const Recipes: React.FC = () => {
                                                     </div>
                                                 ))}
                                             </div>
+                                        </td>
+                                        <td>
+                                            {recipe.cost.toLocaleString()} gp
                                         </td>
                                         <td className={recipe.profit > 0 ? "day-change positive" : "day-change negative"}>
                                             {recipe.profit.toLocaleString()} gp
