@@ -14,6 +14,9 @@ export const Admin: React.FC = () => {
     const [userError, setUserError] = useState<string | null>(null);
     const [userSuccess, setUserSuccess] = useState<string | null>(null);
 
+    const [syncError, setSyncError] = useState<string | null>(null);
+    const [syncSuccess, setSyncSuccess] = useState<string | null>(null);
+
     // New User State
     const [newUserUsername, setNewUserUsername] = useState("");
     const [newUserPassword, setNewUserPassword] = useState("");
@@ -199,6 +202,35 @@ export const Admin: React.FC = () => {
                     </div>
                     <button type="submit" disabled={loading}>Create User</button>
                 </form>
+            </div>
+
+            <hr />
+
+            <div className="admin-section">
+                <h2>Recipe Management</h2>
+                {syncError && <div className="error-message">{syncError}</div>}
+                {syncSuccess && <div className="success-message">{syncSuccess}</div>}
+                <button
+                    onClick={async () => {
+                        setSyncError(null);
+                        setSyncSuccess(null);
+                        try {
+                            const res = await fetchWithAuth(`${API_BASE_URL}/api/recipes/sync`, { method: "POST" });
+                            if (res.ok) {
+                                setSyncSuccess("Recipe sync started successfully.");
+                            } else {
+                                const d = await res.json();
+                                setSyncError(d.error || "Failed to start sync.");
+                            }
+                        } catch (err) {
+                            setSyncError("Error starting sync.");
+                        }
+                    }}
+                    className="page-button"
+                    style={{ marginTop: 0 }}
+                >
+                    Trigger Recipe Sync
+                </button>
             </div>
 
             <style>{`

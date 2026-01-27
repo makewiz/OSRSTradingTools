@@ -16,6 +16,7 @@ import highlightsRouter from "./routes/highlights";
 import adminRouter from "./routes/admin";
 import configRouter from "./routes/config";
 import analysisRouter from "./routes/analysis";
+import recipesRouter from "./routes/recipes";
 
 // Initialize database
 // Initialize database
@@ -57,6 +58,11 @@ app.use("/api/analysis", analysisRouter);
 // Filter routes
 import filtersRouter from "./routes/filters";
 app.use("/api/filters", filtersRouter);
+// Recipe routes
+app.use("/api/recipes", recipesRouter);
+// Hiscore routes
+import hiscoresRouter from "./routes/hiscores";
+app.use("/api/hiscores", hiscoresRouter);
 
 
 import { authenticateToken } from "./auth";

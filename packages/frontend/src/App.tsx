@@ -16,6 +16,7 @@ import { Terms } from "./pages/Terms";
 import { Watches } from "./pages/Watches";
 import { Favorites } from "./pages/Favorites";
 import { HighlightsPage } from "./pages/HighlightsPage";
+import { Recipes } from "./pages/Recipes";
 
 export const App: React.FC = () => {
   return (
@@ -25,6 +26,7 @@ export const App: React.FC = () => {
           <Header />
           <Routes>
             <Route path="/" element={<HighlightsPage />} />
+            <Route path="/recipes" element={<Recipes />} />
             <Route path="/items" element={<ItemList />} />
             <Route path="/item/:id" element={<ItemDetail />} />
             <Route path="/login" element={<Login />} />

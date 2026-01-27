@@ -3,6 +3,7 @@ import { getCombinedItems, CombinedItem, get5m, Osrs5mItem } from "./osrsClient"
 import { insertItemHistory, bulkInsertItemHistory, pool } from "./database";
 import { maintainPartitions } from "./db/partitions";
 import { logger } from "@osrstradingtools/shared";
+import { recipeService } from "./services/recipeService";
 
 let isRunningLatest = false;
 let isRunningHistory = false;
@@ -252,7 +253,19 @@ export function startPriceScheduler(): void {
     logger.error("[Scheduler] Initial retention policy failed:", err);
   });
 
+  // Run Recipe Sync once a day (at 3 AM)
+  cron.schedule("0 3 * * *", () => {
+    logger.info("[Scheduler] Starting daily recipe sync...");
+    recipeService.syncRecipes().catch(err => logger.error("[Scheduler] Recipe sync failed:", err));
+  });
+
+  // Run initial recipe sync if table is empty? 
+  // For now, let's not block startup. Admin can trigger sync via API or we rely on daily job.
+  // Or we can check if table is empty and run.
+  // But that requires async check. Let's keep it simple: API trigger or Schedule.
+
   logger.info("[Scheduler] Price fetcher started (runs every minute)");
   logger.info("[Scheduler] Retention policy started (runs every hour)");
+  logger.info("[Scheduler] Recipe sync scheduled (runs daily at 03:00)");
 }
 

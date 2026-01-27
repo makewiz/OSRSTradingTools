@@ -3,6 +3,7 @@ import dotenv from "dotenv";
 import { fetchWikiTimeSeries } from "./osrsClient";
 import { logger } from "@osrstradingtools/shared";
 import { ensurePartitionedHistoryTable } from "./db/partitions";
+import { createRecipeTables } from "./database/recipes";
 
 dotenv.config();
 
@@ -252,6 +253,7 @@ export async function initializeDatabase(): Promise<void> {
       ADD COLUMN IF NOT EXISTS cooldown_minutes INTEGER DEFAULT 60
     `);
 
+
     // Saved Filters
     await client.query(`
       CREATE TABLE IF NOT EXISTS saved_filters (
@@ -263,6 +265,9 @@ export async function initializeDatabase(): Promise<void> {
         FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
       )
     `);
+
+    // Recipes
+    await createRecipeTables();
 
     // Deprecate cooldown_seconds (migrate data if needed, or just ignore it)
     // We will assume new watches use cooldown_minutes.
@@ -653,6 +658,32 @@ export async function getLatestPricesBefore(
     };
   }
   return map;
+}
+
+export async function getLatestPricesFallback(
+  itemIds: number[],
+  timestamp: number
+): Promise<Record<number, { avgHigh: number | null, avgLow: number | null }>> {
+  // 1. Try 5m table
+  const map5m = await getLatestPricesBefore(itemIds, timestamp, 'item_history_5m');
+
+  // Identify missing
+  const missing5m = itemIds.filter(id => !map5m[id]);
+  if (missing5m.length === 0) return map5m;
+
+  // 2. Try 1h table for missing
+  const map1h = await getLatestPricesBefore(missing5m, timestamp, 'item_history_1h');
+
+  // Identify missing
+  const missing1h = missing5m.filter(id => !map1h[id]);
+  const combined = { ...map5m, ...map1h };
+
+  if (missing1h.length === 0) return combined;
+
+  // 3. Try 24h table for missing
+  const map24h = await getLatestPricesBefore(missing1h, timestamp, 'item_history_24h');
+
+  return { ...combined, ...map24h };
 }
 
 /**

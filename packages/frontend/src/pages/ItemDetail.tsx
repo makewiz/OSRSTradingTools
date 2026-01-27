@@ -304,8 +304,8 @@ export const ItemDetail: React.FC = () => {
     return (
       <div className="item-detail-container">
         <p className="error">{error || "Item not found"}</p>
-        <Link to={location.state?.from === "highlights" ? "/highlights" : "/items"} className="back-link">
-          {location.state?.from === "highlights" ? "← Back to highlights" : "← Back to items"}
+        <Link to={location.state?.fromRecipes ? "/recipes" : location.state?.from === "highlights" ? "/highlights" : "/items"} className="back-link">
+          {location.state?.fromRecipes ? "← Back to Recipes" : location.state?.from === "highlights" ? "← Back to highlights" : "← Back to items"}
         </Link>
       </div>
     );
@@ -317,8 +317,8 @@ export const ItemDetail: React.FC = () => {
   return (
     <main className="app-main">
       <div className="item-detail-container">
-        <Link to={location.state?.from === "highlights" ? "/highlights" : "/items"} className="back-link">
-          {location.state?.from === "highlights" ? "← Back to highlights" : "← Back to items"}
+        <Link to={location.state?.fromRecipes ? "/recipes" : location.state?.from === "highlights" ? "/highlights" : "/items"} className="back-link">
+          {location.state?.fromRecipes ? "← Back to Recipes" : location.state?.from === "highlights" ? "← Back to highlights" : "← Back to items"}
         </Link>
 
         <div className="start-row-apart" style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '15px', marginBottom: '10px' }}>
