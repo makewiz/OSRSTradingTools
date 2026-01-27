@@ -41,6 +41,8 @@ interface ProfitableRecipe {
     dailyVolume?: number | null;
 }
 
+type SortKey = "skill" | "level" | "name" | "profitPerItem" | "roi" | "dailyVolume" | "potentialProfitPerHour" | "xp";
+
 export const Recipes: React.FC = () => {
     const { fetchWithAuth } = useAuth();
     const [recipes, setRecipes] = useState<ProfitableRecipe[]>([]);
@@ -49,8 +51,9 @@ export const Recipes: React.FC = () => {
     const [skillFilter, setSkillFilter] = useState("All");
     const [minProfit, setMinProfit] = useState(0);
     const [minVolume, setMinVolume] = useState(0);
-    const [maxLevel, setMaxLevel] = useState<number | null>(null);
     const [search, setSearch] = useState("");
+    const [sortKey, setSortKey] = useState<SortKey>("potentialProfitPerHour");
+    const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
 
     // Player Stats State
     const [username, setUsername] = useState(() => localStorage.getItem("rec_username") || "");
@@ -128,20 +131,26 @@ export const Recipes: React.FC = () => {
 
     useEffect(() => {
         setCurrentPage(1);
-    }, [skillFilter, search, minProfit, minVolume, maxLevel, playerStats]); // Add playerStats dep
+    }, [skillFilter, search, minProfit, minVolume, playerStats, sortKey, sortDir]); // Adjust pagination when filters/sort change
 
     const skills = useMemo(() => {
         const s = new Set(recipes.map(r => r.skill).filter(Boolean));
         return ["All", ...Array.from(s).sort()];
     }, [recipes]);
 
+    const handleSortChange = (key: SortKey) => {
+        if (key === sortKey) {
+            setSortDir(prev => prev === "asc" ? "desc" : "asc");
+        } else {
+            setSortKey(key);
+            setSortDir("desc");
+        }
+    };
+
     const filteredRecipes = useMemo(() => {
-        return recipes.filter(r => {
+        let list = recipes.filter(r => {
             if (skillFilter !== "All" && r.skill !== skillFilter) return false;
             if (search && !r.name.toLowerCase().includes(search.toLowerCase())) return false;
-
-            // Global Max Level Check
-            if (maxLevel !== null && r.level > maxLevel) return false;
 
             // Skill Specific Check (Player Stats)
             // Only apply if we have a stat for this skill
@@ -151,7 +160,33 @@ export const Recipes: React.FC = () => {
 
             return true;
         });
-    }, [recipes, skillFilter, search, maxLevel, playerStats]);
+
+        return list.sort((a, b) => {
+            const dir = sortDir === "asc" ? 1 : -1;
+            const getVal = (item: ProfitableRecipe) => {
+                switch (sortKey) {
+                    case "skill": return item.skill;
+                    case "level": return item.level;
+                    case "name": return item.name.toLowerCase();
+                    case "profitPerItem": return item.profit;
+                    case "roi": return item.roi;
+                    case "dailyVolume": return item.dailyVolume ?? -Infinity;
+                    case "potentialProfitPerHour": return item.potentialProfitPerHour ?? -Infinity;
+                    case "xp": return item.xp_ ?? -Infinity;
+                    default: return 0;
+                }
+            };
+
+            const va = getVal(a);
+            const vb = getVal(b);
+
+            if (typeof va === "string" && typeof vb === "string") {
+                return va.localeCompare(vb) * dir;
+            }
+
+            return ((va as number) - (vb as number)) * dir;
+        });
+    }, [recipes, skillFilter, search, playerStats, sortKey, sortDir]);
 
     // Pagination Logic ...
     const totalItems = filteredRecipes.length;
@@ -185,6 +220,7 @@ export const Recipes: React.FC = () => {
                         <label>Min Profit:</label>
                         <input
                             type="number"
+                            placeholder="0"
                             value={minProfit || ""}
                             onChange={e => setMinProfit(Number(e.target.value))}
                             className="filter-input"
@@ -202,20 +238,7 @@ export const Recipes: React.FC = () => {
                             style={{ width: "80px" }}
                         />
                     </div>
-                    <div style={{ display: "flex", alignItems: "center", gap: "5px" }}>
-                        <label>Max Lvl:</label>
-                        <input
-                            type="number"
-                            placeholder="All"
-                            value={maxLevel ?? ""}
-                            onChange={e => {
-                                const val = e.target.value;
-                                setMaxLevel(val ? Number(val) : null);
-                            }}
-                            className="filter-input"
-                            style={{ width: "70px" }}
-                        />
-                    </div>
+
 
                     <button
                         className="page-button"
@@ -304,94 +327,111 @@ export const Recipes: React.FC = () => {
             {loading && <p>Loading recipes...</p>}
             {error && <p className="error">{error}</p>}
 
-            {!loading && !error && (
-                <div className="table-wrapper">
-                    <table className="items-table recipe-table">
-                        <thead>
-                            <tr>
-                                <th>Skill</th>
-                                <th>Lvl</th>
-                                <th>Item / Output</th>
-                                <th>Inputs</th>
-                                <th>Profit/Item</th>
-                                <th>ROI</th>
-                                <th>Volume (Daily)</th>
-                                <th>Profit/Hr</th>
-                                <th>Exp</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {paginatedRecipes.map(recipe => (
-                                <tr key={recipe.id}>
-                                    <td>
-                                        <div style={{ display: "flex", alignItems: "center", gap: "5px" }}>
-                                            {/* Could add skill icons here if available */}
-                                            {recipe.skill}
-                                        </div>
-                                    </td>
-                                    <td>{recipe.level}</td>
-                                    <td>
-                                        <div style={{ display: "flex", flexDirection: "column" }}>
-                                            {recipe.outputs.map((out, idx) => (
-                                                <div key={idx} style={{ display: "flex", alignItems: "center", gap: "5px" }}>
-                                                    <img
-                                                        src={`https://static.runelite.net/cache/item/icon/${out.itemId}.png`}
-                                                        alt=""
-                                                        className="item-icon"
-                                                        style={{ width: 24, height: 24 }}
-                                                    />
-                                                    <Link
-                                                        to={`/item/${out.itemId}`}
-                                                        className="item-name-link"
-                                                        state={{ fromRecipes: true }}
-                                                    >
-                                                        {out.quantity > 1 ? `${out.quantity}x ` : ""}{recipe.name}
-                                                    </Link>
-                                                    {out.subtxt && <span style={{ fontSize: "0.8em", color: "#aaa" }}>({out.subtxt})</span>}
-                                                </div>
-                                            ))}
-                                            {recipe.facilities && <span style={{ fontSize: "0.8em", color: "#888" }}>@ {recipe.facilities}</span>}
-                                        </div>
-                                    </td>
-                                    <td>
-                                        <div style={{ fontSize: "0.9em", display: "flex", flexDirection: "column", gap: "2px" }}>
-                                            {recipe.inputs.map((inpt, idx) => (
-                                                <div key={idx} style={{ display: "flex", alignItems: "center", minHeight: "24px" }}>
-                                                    {inpt.quantity}x&nbsp;
-                                                    <Link
-                                                        to={`/item/${inpt.itemId}`}
-                                                        className="item-name-link"
-                                                        style={{ textDecoration: 'underline' }}
-                                                        state={{ fromRecipes: true }}
-                                                    >
-                                                        {inpt.name ? inpt.name : `Item ${inpt.itemId}`}
-                                                    </Link>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </td>
-                                    <td className={recipe.profit > 0 ? "day-change positive" : "day-change negative"}>
-                                        {recipe.profit.toLocaleString()} gp
-                                    </td>
-                                    <td className={recipe.roi > 0 ? "day-change positive" : "day-change"}>
-                                        {recipe.roi.toFixed(1)}%
-                                    </td>
-                                    <td style={{ fontSize: "0.9em", color: "#aaa" }}>
-                                        {recipe.dailyVolume ? recipe.dailyVolume.toLocaleString() : "-"}
-                                    </td>
-                                    <td style={{ fontWeight: "bold", color: recipe.potentialProfitPerHour && recipe.potentialProfitPerHour > 0 ? "#4caf50" : "inherit" }}>
-                                        {recipe.potentialProfitPerHour
-                                            ? `${Math.round(recipe.potentialProfitPerHour).toLocaleString()} gp`
-                                            : "-"}
-                                    </td>
-                                    <td>
-                                        {recipe.xp_ ? `${recipe.xp_} xp` : "-"}
-                                    </td>
+            {
+                !loading && !error && (
+                    <div className="table-wrapper">
+                        <table className="items-table recipe-table">
+                            <thead>
+                                <tr>
+                                    <th onClick={() => handleSortChange("skill")} style={{ cursor: "pointer" }}>
+                                        Skill {sortKey === "skill" ? (sortDir === "asc" ? "▲" : "▼") : ""}
+                                    </th>
+                                    <th onClick={() => handleSortChange("level")} style={{ cursor: "pointer" }}>
+                                        Lvl {sortKey === "level" ? (sortDir === "asc" ? "▲" : "▼") : ""}
+                                    </th>
+                                    <th onClick={() => handleSortChange("name")} style={{ cursor: "pointer" }}>
+                                        Item / Output {sortKey === "name" ? (sortDir === "asc" ? "▲" : "▼") : ""}
+                                    </th>
+                                    <th>Inputs</th>
+                                    <th onClick={() => handleSortChange("profitPerItem")} style={{ cursor: "pointer" }}>
+                                        Profit/Item {sortKey === "profitPerItem" ? (sortDir === "asc" ? "▲" : "▼") : ""}
+                                    </th>
+                                    <th onClick={() => handleSortChange("roi")} style={{ cursor: "pointer" }}>
+                                        ROI {sortKey === "roi" ? (sortDir === "asc" ? "▲" : "▼") : ""}
+                                    </th>
+                                    <th onClick={() => handleSortChange("dailyVolume")} style={{ cursor: "pointer" }}>
+                                        Volume (Daily) {sortKey === "dailyVolume" ? (sortDir === "asc" ? "▲" : "▼") : ""}
+                                    </th>
+                                    <th onClick={() => handleSortChange("potentialProfitPerHour")} style={{ cursor: "pointer" }}>
+                                        Profit/Hr {sortKey === "potentialProfitPerHour" ? (sortDir === "asc" ? "▲" : "▼") : ""}
+                                    </th>
+                                    <th onClick={() => handleSortChange("xp")} style={{ cursor: "pointer" }}>
+                                        Exp {sortKey === "xp" ? (sortDir === "asc" ? "▲" : "▼") : ""}
+                                    </th>
                                 </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                    <style>{`
+                            </thead>
+                            <tbody>
+                                {paginatedRecipes.map(recipe => (
+                                    <tr key={recipe.id}>
+                                        <td>
+                                            <div style={{ display: "flex", alignItems: "center", gap: "5px" }}>
+                                                {/* Could add skill icons here if available */}
+                                                {recipe.skill}
+                                            </div>
+                                        </td>
+                                        <td>{recipe.level}</td>
+                                        <td>
+                                            <div style={{ display: "flex", flexDirection: "column" }}>
+                                                {recipe.outputs.map((out, idx) => (
+                                                    <div key={idx} style={{ display: "flex", alignItems: "center", gap: "5px" }}>
+                                                        <img
+                                                            src={`https://static.runelite.net/cache/item/icon/${out.itemId}.png`}
+                                                            alt=""
+                                                            className="item-icon"
+                                                            style={{ width: 24, height: 24 }}
+                                                        />
+                                                        <Link
+                                                            to={`/item/${out.itemId}`}
+                                                            className="item-name-link"
+                                                            state={{ fromRecipes: true }}
+                                                        >
+                                                            {out.quantity > 1 ? `${out.quantity}x ` : ""}{recipe.name}
+                                                        </Link>
+                                                        {out.subtxt && <span style={{ fontSize: "0.8em", color: "#aaa" }}>({out.subtxt})</span>}
+                                                    </div>
+                                                ))}
+                                                {recipe.facilities && <span style={{ fontSize: "0.8em", color: "#888" }}>@ {recipe.facilities}</span>}
+                                            </div>
+                                        </td>
+                                        <td>
+                                            <div style={{ fontSize: "0.9em", display: "flex", flexDirection: "column", gap: "2px" }}>
+                                                {recipe.inputs.map((inpt, idx) => (
+                                                    <div key={idx} style={{ display: "flex", alignItems: "center", minHeight: "24px" }}>
+                                                        {inpt.quantity}x&nbsp;
+                                                        <Link
+                                                            to={`/item/${inpt.itemId}`}
+                                                            className="item-name-link"
+                                                            style={{ textDecoration: 'underline' }}
+                                                            state={{ fromRecipes: true }}
+                                                        >
+                                                            {inpt.name ? inpt.name : `Item ${inpt.itemId}`}
+                                                        </Link>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </td>
+                                        <td className={recipe.profit > 0 ? "day-change positive" : "day-change negative"}>
+                                            {recipe.profit.toLocaleString()} gp
+                                        </td>
+                                        <td className={recipe.roi > 0 ? "day-change positive" : "day-change"}>
+                                            {recipe.roi.toFixed(1)}%
+                                        </td>
+                                        <td style={{ fontSize: "0.9em", color: "#aaa" }}>
+                                            {recipe.dailyVolume ? recipe.dailyVolume.toLocaleString() : "-"}
+                                        </td>
+                                        <td style={{ fontWeight: "bold", color: recipe.potentialProfitPerHour && recipe.potentialProfitPerHour > 0 ? "#4caf50" : "inherit" }}>
+                                            {recipe.potentialProfitPerHour
+                                                ? `${Math.round(recipe.potentialProfitPerHour).toLocaleString()} gp`
+                                                : "-"}
+                                        </td>
+                                        <td>
+                                            {recipe.xp_ ? `${recipe.xp_} xp` : "-"}
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                        <style>{`
                         .recipe-table td {
                             vertical-align: top;
                             padding: 8px 10px;
@@ -404,8 +444,9 @@ export const Recipes: React.FC = () => {
                             text-decoration: underline;
                         }
                     `}</style>
-                </div>
-            )}
-        </main>
+                    </div>
+                )
+            }
+        </main >
     );
 };
