@@ -201,10 +201,15 @@ export async function initializeDatabase(): Promise<void> {
     // 6h:  Retention 30d,  Partition 7d (604800s)
     // 24h: Retention 365d, Partition 30d (2592000s)
 
-    await ensurePartitionedHistoryTable(client, 'item_history_5m', 24 * 3600, 24 * 3600);
-    await ensurePartitionedHistoryTable(client, 'item_history_1h', 7 * 24 * 3600, 24 * 3600);
-    await ensurePartitionedHistoryTable(client, 'item_history_6h', 30 * 24 * 3600, 7 * 24 * 3600);
-    await ensurePartitionedHistoryTable(client, 'item_history_24h', 365 * 24 * 3600, 30 * 24 * 3600);
+    const maxRetentionDays = process.env.DATA_RETENTION_DAYS
+      ? parseInt(process.env.DATA_RETENTION_DAYS, 10)
+      : 3650;
+    const maxRetentionSeconds = maxRetentionDays * 24 * 3600;
+
+    await ensurePartitionedHistoryTable(client, 'item_history_5m', Math.min(24 * 3600, maxRetentionSeconds), 24 * 3600);
+    await ensurePartitionedHistoryTable(client, 'item_history_1h', Math.min(7 * 24 * 3600, maxRetentionSeconds), 24 * 3600);
+    await ensurePartitionedHistoryTable(client, 'item_history_6h', Math.min(30 * 24 * 3600, maxRetentionSeconds), 7 * 24 * 3600);
+    await ensurePartitionedHistoryTable(client, 'item_history_24h', Math.min(365 * 24 * 3600, maxRetentionSeconds), 30 * 24 * 3600);
 
     // --- ADVANCED WATCHES ---
     await client.query(`
@@ -430,44 +435,48 @@ export async function getPriceHistory(
 
       // Save to database asynchronously to populate history for future requests
       // Save to database using bulk insert
-      // Determine retention cutoff for the target table
-      const now = Math.floor(Date.now() / 1000);
-      const maxRetentionDays = process.env.DATA_RETENTION_DAYS
-        ? parseInt(process.env.DATA_RETENTION_DAYS, 10)
-        : 3650;
-      const maxRetentionSeconds = maxRetentionDays * 24 * 3600;
+      try {
+        // Determine retention cutoff for the target table
+        const now = Math.floor(Date.now() / 1000);
+        const maxRetentionDays = process.env.DATA_RETENTION_DAYS
+          ? parseInt(process.env.DATA_RETENTION_DAYS, 10)
+          : 3650;
+        const maxRetentionSeconds = maxRetentionDays * 24 * 3600;
 
-      let retentionSeconds = 24 * 3600; // default 5m
-      if (table === 'item_history_1h') retentionSeconds = 7 * 24 * 3600;
-      else if (table === 'item_history_6h') retentionSeconds = 30 * 24 * 3600;
-      else if (table === 'item_history_24h') retentionSeconds = 365 * 24 * 3600;
+        let retentionSeconds = 24 * 3600; // default 5m
+        if (table === 'item_history_1h') retentionSeconds = 7 * 24 * 3600;
+        else if (table === 'item_history_6h') retentionSeconds = 30 * 24 * 3600;
+        else if (table === 'item_history_24h') retentionSeconds = 365 * 24 * 3600;
 
-      // Apply global cap
-      retentionSeconds = Math.min(retentionSeconds, maxRetentionSeconds);
+        // Apply global cap
+        retentionSeconds = Math.min(retentionSeconds, maxRetentionSeconds);
 
-      const retentionCutoff = now - retentionSeconds;
+        const retentionCutoff = now - retentionSeconds;
 
-      // Filter points to only insert those that fit in the table's retention window
-      const historyPoints = apiData
-        .filter(d => d.timestamp >= retentionCutoff)
-        .map(d => ({
-          itemId,
-          timestamp: d.timestamp,
-          avgHighPrice: d.avgHighPrice,
-          avgLowPrice: d.avgLowPrice,
-          highPriceVolume: d.highPriceVolume,
-          lowPriceVolume: d.lowPriceVolume
-        }));
+        // Filter points to only insert those that fit in the table's retention window
+        const historyPoints = apiData
+          .filter(d => d.timestamp >= retentionCutoff)
+          .map(d => ({
+            itemId,
+            timestamp: d.timestamp,
+            avgHighPrice: d.avgHighPrice,
+            avgLowPrice: d.avgLowPrice,
+            highPriceVolume: d.highPriceVolume,
+            lowPriceVolume: d.lowPriceVolume
+          }));
 
-      // Split into chunks of 1000
-      if (historyPoints.length > 0) {
-        const chunkSize = 1000;
-        for (let i = 0; i < historyPoints.length; i += chunkSize) {
-          await bulkInsertItemHistory(table, historyPoints.slice(i, i + chunkSize));
+        // Split into chunks of 1000
+        if (historyPoints.length > 0) {
+          const chunkSize = 1000;
+          for (let i = 0; i < historyPoints.length; i += chunkSize) {
+            await bulkInsertItemHistory(table, historyPoints.slice(i, i + chunkSize));
+          }
+          logger.info(`[PriceHistory] Persisted ${historyPoints.length} points to ${table} from Wiki API (Filtered from ${apiData.length}).`);
+        } else {
+          logger.info(`[PriceHistory] All Wiki API data was older than retention for ${table}. Skiping insert.`);
         }
-        logger.info(`[PriceHistory] Persisted ${historyPoints.length} points to ${table} from Wiki API (Filtered from ${apiData.length}).`);
-      } else {
-        logger.info(`[PriceHistory] All Wiki API data was older than retention for ${table}. Skiping insert.`);
+      } catch (persistErr) {
+        logger.warn(`[PriceHistory] Failed to persist Wiki data for ${itemId} (non-fatal):`, persistErr);
       }
 
       // Filter and map API data to row format
