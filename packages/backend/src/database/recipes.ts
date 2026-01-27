@@ -188,12 +188,13 @@ export async function getProfitableRecipes(minProfit: number = 0, limit: number 
 
     // Create Map for Price Lookup
     // CombinedItem has buyPrice (Low), sellPrice (High) and volume (daily)
-    const priceMap = new Map<number, { buy: number, sell: number, volume: number }>();
+    const priceMap = new Map<number, { buy: number, sell: number, volume: number, limit: number }>();
     for (const item of items) {
         priceMap.set(item.id, {
             buy: item.buyPrice || 0,
             sell: item.sellPrice || 0,
-            volume: item.volume || 0
+            volume: item.volume || 0,
+            limit: item.limit || 0
         });
     }
 
@@ -284,8 +285,35 @@ export async function getProfitableRecipes(minProfit: number = 0, limit: number 
         if (row.ticks && row.ticks > 0) {
             // 1 tick = 0.6 seconds
             const secondsPerAction = row.ticks * 0.6;
-            const actionsPerHour = 3600 / secondsPerAction;
-            profitPerHour = profit * actionsPerHour;
+            const theoreticalActionsPerHour = 3600 / secondsPerAction;
+
+            // Account for Buy Limits
+            // Find the maximum operations per 4 hours allowed by input limits
+            let maxOps4h = Infinity;
+            for (const input of row.inputs) {
+                if (input.item_id === 995) continue; // Coins have no limit
+
+                const pData = priceMap.get(input.item_id);
+                const limit = pData?.limit ?? 0;
+
+                if (limit > 0) {
+                    const opsAllowed = limit / input.quantity;
+                    if (opsAllowed < maxOps4h) {
+                        maxOps4h = opsAllowed;
+                    }
+                }
+            }
+
+            let effectiveActionsPerHour = theoreticalActionsPerHour;
+
+            if (maxOps4h !== Infinity) {
+                const limitActionsPerHr = maxOps4h / 4;
+                if (limitActionsPerHr < theoreticalActionsPerHour) {
+                    effectiveActionsPerHour = limitActionsPerHr;
+                }
+            }
+
+            profitPerHour = profit * effectiveActionsPerHour;
         }
 
         // Determine Weekly/Daily Volume based on main output
