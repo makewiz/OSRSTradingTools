@@ -257,12 +257,16 @@ export class RecipeService {
             if (item) {
                 const qtyStr = params[`mat${i}quantity`] || "1";
                 // Remove commas, handle "1-5"? Use max or min?
-                // If range "3-5", profitability is tricky. Use avg?
                 // For now simpler: parse int.
                 const qty = parseInt(qtyStr.replace(/,/g, "")) || 1;
-                const itemId = this.getItemId(this.cleanWikiText(item));
+                const cleanName = this.cleanWikiText(item);
+                const itemId = this.getItemId(cleanName);
                 if (itemId) {
                     inputs.push({ itemId, quantity: qty });
+                } else {
+                    // Untradable / Missing ID
+                    // Store with ID 0 and name
+                    inputs.push({ itemId: 0, quantity: qty, name: cleanName });
                 }
             }
         }

@@ -9,6 +9,7 @@ interface RecipeInput {
     quantity: number;
     name: string;
     price: number;
+
 }
 
 interface RecipeOutput {
@@ -51,11 +52,15 @@ export const Recipes: React.FC = () => {
     const [skillFilter, setSkillFilter] = useState("All");
     const [minProfit, setMinProfit] = useState(0);
     const [minVolume, setMinVolume] = useState(0);
+    const [hideUntradables, setHideUntradables] = useState(false);
     const [search, setSearch] = useState("");
     const [sortKey, setSortKey] = useState<SortKey>("potentialProfitPerHour");
     const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
 
-    // Player Stats State
+
+
+    // NEW: Filter by stats toggle
+    const [filterByStats, setFilterByStats] = useState(false);
     const [username, setUsername] = useState(() => localStorage.getItem("rec_username") || "");
     const [playerStats, setPlayerStats] = useState<Record<string, number>>(() => {
         try {
@@ -94,7 +99,6 @@ export const Recipes: React.FC = () => {
             // Fetch more items to allow client-side filtering/pagination effectively
             const res = await fetchWithAuth(`${API_BASE_URL}/api/recipes?minProfit=${minProfit}&minVolume=${minVolume}&limit=2000`);
             if (!res.ok) throw new Error("Failed to fetch recipes");
-            if (!res.ok) throw new Error("Failed to fetch recipes");
             const data = await res.json();
             setRecipes(data);
             setError(null);
@@ -104,6 +108,21 @@ export const Recipes: React.FC = () => {
         } finally {
             if (!isRefresh) setLoading(false);
         }
+    };
+
+    const clearFilters = () => {
+        setSearch("");
+        setSkillFilter("All");
+        setMinProfit(0);
+        setMinVolume(0);
+        setHideUntradables(false);
+        setFilterByStats(false);
+    };
+
+    const clearStats = () => {
+        setPlayerStats({});
+        setUsername("");
+        // Optionally keep the section open or close it. Keeping it open for now.
     };
 
     const fetchUserStats = async () => {
@@ -131,7 +150,7 @@ export const Recipes: React.FC = () => {
 
     useEffect(() => {
         setCurrentPage(1);
-    }, [skillFilter, search, minProfit, minVolume, playerStats, sortKey, sortDir]); // Adjust pagination when filters/sort change
+    }, [skillFilter, search, minProfit, minVolume, hideUntradables, playerStats, sortKey, sortDir, filterByStats]); // Adjust pagination when filters/sort change
 
     const skills = useMemo(() => {
         const s = new Set(recipes.map(r => r.skill).filter(Boolean));
@@ -153,13 +172,21 @@ export const Recipes: React.FC = () => {
             if (search && !r.name.toLowerCase().includes(search.toLowerCase())) return false;
 
             // Skill Specific Check (Player Stats)
-            // Only apply if we have a stat for this skill
-            if (playerStats[r.skill] !== undefined) {
+            // Only apply if we have a stat for this skill AND filtering is enabled
+            if (filterByStats && playerStats[r.skill] !== undefined) {
                 if (r.level > playerStats[r.skill]) return false;
             }
 
             return true;
         });
+
+        if (minVolume > 0) {
+            list = list.filter(r => (r.dailyVolume || 0) >= minVolume);
+        }
+
+        if (hideUntradables) {
+            list = list.filter(r => !r.inputs.some(i => i.itemId === 0));
+        }
 
         return list.sort((a, b) => {
             const dir = sortDir === "asc" ? 1 : -1;
@@ -187,7 +214,7 @@ export const Recipes: React.FC = () => {
 
             return ((va as number) - (vb as number)) * dir;
         });
-    }, [recipes, skillFilter, search, playerStats, sortKey, sortDir]);
+    }, [recipes, skillFilter, search, playerStats, minVolume, hideUntradables, sortKey, sortDir, filterByStats]);
 
     // Pagination Logic ...
     const totalItems = filteredRecipes.length;
@@ -232,13 +259,38 @@ export const Recipes: React.FC = () => {
                         <label>Min Volume:</label>
                         <input
                             type="number"
+                            min="0"
                             placeholder="0"
-                            value={minVolume || ""}
-                            onChange={e => setMinVolume(Number(e.target.value))}
                             className="filter-input"
-                            style={{ width: "80px" }}
+                            style={{ width: "100px" }}
+                            value={minVolume || ""}
+                            onChange={(e) => setMinVolume(Number(e.target.value))}
                         />
                     </div>
+                    <div style={{ display: "flex", alignItems: "center" }}>
+                        <label title="Hides recipes that require items with no GE price (e.g. quest items, untradables)" style={{ display: "flex", alignItems: "center", cursor: "pointer" }}>
+                            <input
+                                type="checkbox"
+                                checked={hideUntradables}
+                                onChange={(e) => setHideUntradables(e.target.checked)}
+                                style={{ marginRight: "5px" }}
+                            />
+                            Hide Untradables
+                        </label>
+                    </div>
+
+                    <div style={{ display: "flex", alignItems: "center" }}>
+                        <label style={{ display: "flex", alignItems: "center", cursor: "pointer" }}>
+                            <input
+                                type="checkbox"
+                                checked={filterByStats}
+                                onChange={e => setFilterByStats(e.target.checked)}
+                                style={{ marginRight: "5px" }}
+                            />
+                            Filter using stats
+                        </label>
+                    </div>
+
 
 
                     <button
@@ -247,6 +299,14 @@ export const Recipes: React.FC = () => {
                         style={{ background: showStats ? "#444" : "var(--secondary-color)" }}
                     >
                         {showStats ? "Hide Stats" : "Player Stats"}
+                    </button>
+
+                    <button
+                        className="page-button"
+                        onClick={clearFilters}
+                        style={{ backgroundColor: "#666" }}
+                    >
+                        Clear Filters
                     </button>
 
                     <AutoRefreshControls onRefresh={() => fetchRecipes(true)} />
@@ -266,6 +326,16 @@ export const Recipes: React.FC = () => {
                             <button className="page-button" onClick={fetchUserStats} disabled={fetchingStats}>
                                 {fetchingStats ? "Fetching..." : "Fetch Hiscores"}
                             </button>
+
+                            <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: "10px" }}>
+                                <button
+                                    className="page-button"
+                                    onClick={clearStats}
+                                    style={{ backgroundColor: "#883333", fontSize: "0.9em", padding: "5px 10px" }}
+                                >
+                                    Clear Stats
+                                </button>
+                            </div>
                         </div>
 
                         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(120px, 1fr))", gap: "10px" }}>
@@ -275,7 +345,7 @@ export const Recipes: React.FC = () => {
                                     <label style={{ fontSize: "0.8em", color: "#aaa" }}>{skill}</label>
                                     <input
                                         type="number"
-                                        value={playerStats[skill] ?? ""}
+                                        value={playerStats[skill] || ""}
                                         placeholder="99"
                                         onChange={e => setPlayerStats({ ...playerStats, [skill]: Number(e.target.value) })}
                                         className="filter-input"
@@ -402,14 +472,20 @@ export const Recipes: React.FC = () => {
                                                 {recipe.inputs.map((inpt, idx) => (
                                                     <div key={idx} style={{ display: "flex", alignItems: "center", minHeight: "24px" }}>
                                                         {inpt.quantity}x&nbsp;
-                                                        <Link
-                                                            to={`/item/${inpt.itemId}`}
-                                                            className="item-name-link"
-                                                            style={{ textDecoration: 'underline' }}
-                                                            state={{ fromRecipes: true }}
-                                                        >
-                                                            {inpt.name ? inpt.name : `Item ${inpt.itemId}`}
-                                                        </Link>
+                                                        {inpt.itemId > 0 ? (
+                                                            <Link
+                                                                to={`/item/${inpt.itemId}`}
+                                                                className="item-name-link"
+                                                                style={{ textDecoration: 'underline' }}
+                                                                state={{ fromRecipes: true }}
+                                                            >
+                                                                {inpt.name ? inpt.name : `Item ${inpt.itemId}`}
+                                                            </Link>
+                                                        ) : (
+                                                            <span title="Untradable / No GE Price" style={{ color: "#aaa" }}>
+                                                                {inpt.name || "Unknown Item"}
+                                                            </span>
+                                                        )}
                                                     </div>
                                                 ))}
                                             </div>

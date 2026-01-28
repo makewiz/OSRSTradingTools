@@ -6,6 +6,7 @@ import { getLatestItems, getLastFetchTime, touchActivity } from "../scheduler";
 export interface RecipeInput {
     itemId: number;
     quantity: number;
+    name?: string; // Optional for storage, but will be populated in ProfitableRecipe
 }
 
 export interface RecipeOutput {
@@ -74,9 +75,17 @@ export async function createRecipeTables(): Promise<void> {
         recipe_id INTEGER NOT NULL,
         item_id INTEGER NOT NULL,
         quantity INTEGER NOT NULL,
+        name TEXT,
         FOREIGN KEY (recipe_id) REFERENCES recipes(id) ON DELETE CASCADE
       )
     `);
+
+        // Attempt to add column if it doesn't exist (migration)
+        try {
+            await client.query(`ALTER TABLE recipe_inputs ADD COLUMN IF NOT EXISTS name TEXT`);
+        } catch (e) {
+            // Ignore error if column exists or other minor issue
+        }
 
         await client.query(`
       CREATE TABLE IF NOT EXISTS recipe_outputs (
@@ -129,9 +138,9 @@ export async function saveRecipe(recipe: Omit<Recipe, "id">): Promise<void> {
 
         for (const input of recipe.inputs) {
             await client.query(`
-        INSERT INTO recipe_inputs (recipe_id, item_id, quantity)
-        VALUES ($1, $2, $3)
-      `, [recipeId, input.itemId, input.quantity]);
+        INSERT INTO recipe_inputs (recipe_id, item_id, quantity, name)
+        VALUES ($1, $2, $3, $4)
+      `, [recipeId, input.itemId, input.quantity, input.name]);
         }
 
         for (const output of recipe.outputs) {
@@ -238,7 +247,7 @@ export async function getProfitableRecipes(minProfit: number = 0, limit: number 
             const revenuePrice = priceData?.sell ?? 0; // Sell at high (ask)
 
             // If price is missing or zero, we can't calculate profit accurately
-            if ((!priceData || costPrice <= 0) && input.item_id !== 995) {
+            if ((!priceData || costPrice <= 0) && input.item_id !== 995 && input.item_id !== 0) {
                 valid = false;
             }
 
@@ -246,7 +255,8 @@ export async function getProfitableRecipes(minProfit: number = 0, limit: number 
             richInputs.push({
                 itemId: input.item_id,
                 quantity: input.quantity,
-                name: nameMap.get(input.item_id) || `Item ${input.item_id}`,
+                // Use stored name if available (for untradables), otherwise lookup from map
+                name: (input as any).name || nameMap.get(input.item_id) || `Item ${input.item_id}`,
                 price: costPrice
             });
         }
