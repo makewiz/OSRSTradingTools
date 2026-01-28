@@ -50,7 +50,7 @@ export const Recipes: React.FC = () => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [skillFilter, setSkillFilter] = useState("All");
-    const [minProfit, setMinProfit] = useState(0);
+    const [minProfit, setMinProfit] = useState<number | undefined>(undefined);
     const [minVolume, setMinVolume] = useState(0);
     const [hideUntradables, setHideUntradables] = useState(false);
     const [search, setSearch] = useState("");
@@ -97,7 +97,11 @@ export const Recipes: React.FC = () => {
         if (!isRefresh) setLoading(true);
         try {
             // Fetch more items to allow client-side filtering/pagination effectively
-            const res = await fetchWithAuth(`${API_BASE_URL}/api/recipes?minProfit=${minProfit}&minVolume=${minVolume}&limit=2000`);
+            let url = `${API_BASE_URL}/api/recipes?minVolume=${minVolume}&limit=2000`;
+            if (minProfit !== undefined) {
+                url += `&minProfit=${minProfit}`;
+            }
+            const res = await fetchWithAuth(url);
             if (!res.ok) throw new Error("Failed to fetch recipes");
             const data = await res.json();
             setRecipes(data);
@@ -113,7 +117,7 @@ export const Recipes: React.FC = () => {
     const clearFilters = () => {
         setSearch("");
         setSkillFilter("All");
-        setMinProfit(0);
+        setMinProfit(undefined);
         setMinVolume(0);
         setHideUntradables(false);
         setFilterByStats(false);
@@ -227,7 +231,7 @@ export const Recipes: React.FC = () => {
     return (
         <main className="app-main">
             <section className="controls">
-                <h2>Profitable Recipes</h2>
+                <h2>Recipes</h2>
                 <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", alignItems: "center", marginBottom: "15px" }}>
                     <input
                         type="text"
@@ -249,8 +253,11 @@ export const Recipes: React.FC = () => {
                         <input
                             type="number"
                             placeholder="0"
-                            value={minProfit || ""}
-                            onChange={e => setMinProfit(Number(e.target.value))}
+                            value={minProfit !== undefined ? minProfit : ""}
+                            onChange={e => {
+                                const val = e.target.value;
+                                setMinProfit(val === "" ? undefined : Number(val));
+                            }}
                             className="filter-input"
                             style={{ width: "100px" }}
                         />

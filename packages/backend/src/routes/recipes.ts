@@ -48,7 +48,7 @@ const conditionalAuth = async (req: any, res: any, next: any) => {
 // Use conditional auth so we can track usage or restrict if needed, but allow public access if configured.
 router.get("/", conditionalAuth, async (req, res) => {
     try {
-        const minProfit = req.query.minProfit ? parseInt(req.query.minProfit as string) : 0;
+        const minProfit = req.query.minProfit ? parseInt(req.query.minProfit as string) : Number.MIN_SAFE_INTEGER;
         const limit = req.query.limit ? parseInt(req.query.limit as string) : 100;
         const minVolume = req.query.minVolume ? parseInt(req.query.minVolume as string) : 0;
 
