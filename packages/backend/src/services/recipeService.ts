@@ -352,22 +352,19 @@ export class RecipeService {
         // "Category:Production" ? 
         // Let's rely on specific known skill categories for MVP to ensure high quality data.
         const categories = [
-            "Category:Smithing_items",
-            "Category:Crafting_items",
-            "Category:Fletching_items",
-            "Category:Herblore_items",
-            "Category:Cooking_items",
-            "Category:Construction_items",
-            "Category:Farming_items",
-            "Category:Magic_items",
-            "Category:Runecraft_items",
-            "Category:Production", // Maybe too broad?
-            "Category:Semi-finished_items",
+            "Category:Smithing",
+            "Category:Crafting",
+            "Category:Fletching",
+            "Category:Herblore",
+            "Category:Cooking",
+            "Category:Construction",
+            "Category:Farming",
+            "Category:Magic",
+            "Category:Runecraft",
             "Category:Potions",
             "Category:Food",
             "Category:Ammunition",
             "Category:Jewellery",
-            "Category:Enchanted_jewellery",
             "Category:Armour",
             "Category:Weapons"
         ];
