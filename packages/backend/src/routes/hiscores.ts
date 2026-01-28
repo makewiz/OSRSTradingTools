@@ -1,8 +1,14 @@
 import { Router } from "express";
 import { hiscoreService } from "../services/hiscoreService";
 import { logger } from "@osrstradingtools/shared";
+import { authenticateToken } from "../auth";
 
 const router = Router();
+
+// Protect all routes in this router
+if (process.env.REQUIRE_AUTH === "true") {
+    router.use(authenticateToken);
+}
 
 // GET /api/hiscores/:username
 router.get("/:username", async (req, res) => {
