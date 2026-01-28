@@ -2,6 +2,7 @@ import { pool } from "../database";
 import { logger } from "@osrstradingtools/shared";
 import { getCombinedItems } from "../osrsClient";
 import { getLatestItems, getLastFetchTime, touchActivity } from "../scheduler";
+import { calculateTax } from "../tax";
 
 export interface RecipeInput {
     itemId: number;
@@ -288,7 +289,12 @@ export async function getProfitableRecipes(minProfit: number = 0, limit: number 
             });
         }
 
-        const profit = revenue - cost;
+        let totalTax = 0;
+        for (const out of richOutputs) {
+            totalTax += calculateTax(out.price, out.name) * out.quantity;
+        }
+
+        const profit = revenue - cost - totalTax;
         const roi = cost > 0 ? (profit / cost) * 100 : 0;
 
         let profitPerHour = null;
