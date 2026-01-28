@@ -49,18 +49,41 @@ export const Recipes: React.FC = () => {
     const [recipes, setRecipes] = useState<ProfitableRecipe[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
-    const [skillFilter, setSkillFilter] = useState("All");
-    const [minProfit, setMinProfit] = useState<number | undefined>(undefined);
-    const [minVolume, setMinVolume] = useState(0);
-    const [hideUntradables, setHideUntradables] = useState(false);
-    const [search, setSearch] = useState("");
-    const [sortKey, setSortKey] = useState<SortKey>("potentialProfitPerHour");
-    const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
 
+    // Helper to get saved filters
+    const getSavedFilters = () => {
+        try {
+            return JSON.parse(localStorage.getItem("rec_filters") || "{}");
+        } catch {
+            return {};
+        }
+    };
 
+    const [skillFilter, setSkillFilter] = useState(() => getSavedFilters().skillFilter ?? "All");
+    const [minProfit, setMinProfit] = useState<number | undefined>(() => getSavedFilters().minProfit);
+    const [minVolume, setMinVolume] = useState(() => getSavedFilters().minVolume ?? 0);
+    const [hideUntradables, setHideUntradables] = useState(() => getSavedFilters().hideUntradables ?? false);
+    const [search, setSearch] = useState(() => getSavedFilters().search ?? "");
+    const [sortKey, setSortKey] = useState<SortKey>(() => getSavedFilters().sortKey ?? "potentialProfitPerHour");
+    const [sortDir, setSortDir] = useState<"asc" | "desc">(() => getSavedFilters().sortDir ?? "desc");
 
     // NEW: Filter by stats toggle
-    const [filterByStats, setFilterByStats] = useState(false);
+    const [filterByStats, setFilterByStats] = useState(() => getSavedFilters().filterByStats ?? false);
+
+    // Save filters to localStorage whenever they change
+    useEffect(() => {
+        const filters = {
+            skillFilter,
+            minProfit,
+            minVolume,
+            hideUntradables,
+            search,
+            sortKey,
+            sortDir,
+            filterByStats
+        };
+        localStorage.setItem("rec_filters", JSON.stringify(filters));
+    }, [skillFilter, minProfit, minVolume, hideUntradables, search, sortKey, sortDir, filterByStats]);
     const [username, setUsername] = useState(() => localStorage.getItem("rec_username") || "");
     const [playerStats, setPlayerStats] = useState<Record<string, number>>(() => {
         try {
