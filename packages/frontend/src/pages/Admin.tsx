@@ -23,6 +23,14 @@ export const Admin: React.FC = () => {
     const [newUserEmail, setNewUserEmail] = useState("");
     const [newUserIsAdmin, setNewUserIsAdmin] = useState(false);
 
+    const [syncStatus, setSyncStatus] = useState<{
+        isSyncing: boolean;
+        lastSyncStart: string | null;
+        lastSyncEnd: string | null;
+        lastError: string | null;
+        processedCount: number;
+    } | null>(null);
+
     useEffect(() => {
         if (!isAuthenticated) {
             navigate("/login");
@@ -35,7 +43,30 @@ export const Admin: React.FC = () => {
         }
 
         fetchSettings();
+        fetchSyncStatus();
     }, [user, isAuthenticated]);
+
+    useEffect(() => {
+        let interval: any;
+        if (syncStatus?.isSyncing) {
+            interval = setInterval(fetchSyncStatus, 2000);
+        }
+        return () => {
+            if (interval) clearInterval(interval);
+        };
+    }, [syncStatus?.isSyncing]);
+
+    const fetchSyncStatus = async () => {
+        try {
+            const res = await fetchWithAuth(`${API_BASE_URL}/api/recipes/sync/status`);
+            if (res.ok) {
+                const data = await res.json();
+                setSyncStatus(data);
+            }
+        } catch (err) {
+            console.error("Failed to fetch sync status", err);
+        }
+    };
 
     const fetchSettings = async () => {
         setLoading(true);
@@ -53,6 +84,8 @@ export const Admin: React.FC = () => {
             setLoading(false);
         }
     };
+
+
 
     const handleSaveSettings = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -210,6 +243,19 @@ export const Admin: React.FC = () => {
                 <h2>Recipe Management</h2>
                 {syncError && <div className="error-message">{syncError}</div>}
                 {syncSuccess && <div className="success-message">{syncSuccess}</div>}
+                <div style={{ marginBottom: "15px" }}>
+                    {syncStatus && (
+                        <div style={{ background: "#222", padding: "10px", borderRadius: "5px" }}>
+                            <p><strong>Status:</strong> <span style={{ color: syncStatus.isSyncing ? "#ffd43b" : (syncStatus.lastError ? "#ff6b6b" : "#51cf66") }}>
+                                {syncStatus.isSyncing ? "Syncing..." : (syncStatus.lastError ? "Error" : "Idle")}
+                            </span></p>
+                            <p><strong>Processed:</strong> {syncStatus.processedCount} recipes</p>
+                            {syncStatus.lastSyncStart && <p><strong>Last Start:</strong> {new Date(syncStatus.lastSyncStart).toLocaleString()}</p>}
+                            {syncStatus.lastSyncEnd && <p><strong>Last End:</strong> {new Date(syncStatus.lastSyncEnd).toLocaleString()}</p>}
+                            {syncStatus.lastError && <p style={{ color: "#ff6b6b" }}><strong>Error:</strong> {syncStatus.lastError}</p>}
+                        </div>
+                    )}
+                </div>
                 <button
                     onClick={async () => {
                         setSyncError(null);
@@ -218,6 +264,7 @@ export const Admin: React.FC = () => {
                             const res = await fetchWithAuth(`${API_BASE_URL}/api/recipes/sync`, { method: "POST" });
                             if (res.ok) {
                                 setSyncSuccess("Recipe sync started successfully.");
+                                fetchSyncStatus();
                             } else {
                                 const d = await res.json();
                                 setSyncError(d.error || "Failed to start sync.");
@@ -226,10 +273,11 @@ export const Admin: React.FC = () => {
                             setSyncError("Error starting sync.");
                         }
                     }}
+                    disabled={syncStatus?.isSyncing}
                     className="page-button"
                     style={{ marginTop: 0 }}
                 >
-                    Trigger Recipe Sync
+                    {syncStatus?.isSyncing ? "Syncing..." : "Trigger Recipe Sync"}
                 </button>
             </div>
 

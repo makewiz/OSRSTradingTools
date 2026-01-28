@@ -340,63 +340,95 @@ export class RecipeService {
         return clean.trim();
     }
 
+    private isSyncing = false;
+    private lastSyncStart: Date | null = null;
+    private lastSyncEnd: Date | null = null;
+    private lastError: string | null = null;
+    private processedCount = 0;
+
+    public getSyncStatus() {
+        return {
+            isSyncing: this.isSyncing,
+            lastSyncStart: this.lastSyncStart,
+            lastSyncEnd: this.lastSyncEnd,
+            lastError: this.lastError,
+            processedCount: this.processedCount
+        };
+    }
+
     // Orchestrator
     public async syncRecipes(): Promise<void> {
-        logger.info("[RecipeService] Starting recipe sync...");
-        await this.loadItemMapping();
+        if (this.isSyncing) {
+            logger.warn("[RecipeService] Sync already in progress.");
+            return;
+        }
 
-        // Potential categories:
-        // Category:Recipe_tables (might be meta)
-        // Category:Items_with_recipes - Not sure if this exists.
-        // Check Wiki structure... 
-        // "Category:Production" ? 
-        // Let's rely on specific known skill categories for MVP to ensure high quality data.
-        const categories = [
-            "Category:Smithing",
-            "Category:Crafting",
-            "Category:Fletching",
-            "Category:Herblore",
-            "Category:Cooking",
-            "Category:Construction",
-            "Category:Farming",
-            "Category:Magic",
-            "Category:Runecraft",
-            "Category:Potions",
-            "Category:Food",
-            "Category:Ammunition",
-            "Category:Jewellery",
-            "Category:Armour",
-            "Category:Weapons"
-        ];
+        this.isSyncing = true;
+        this.lastSyncStart = new Date();
+        this.lastError = null;
+        this.processedCount = 0;
 
-        let processedCount = 0;
+        try {
+            logger.info("[RecipeService] Starting recipe sync...");
+            await this.loadItemMapping();
 
-        for (const cat of categories) {
-            logger.info(`[RecipeService] Fetching titles for ${cat}`);
-            const titles = await this.fetchPagesInCategory(cat, 5000); // 200 is too low
-            logger.info(`[RecipeService] Found ${titles.length} titles in ${cat}`);
+            // Potential categories:
+            // Category:Recipe_tables (might be meta)
+            // Category:Items_with_recipes - Not sure if this exists.
+            // Check Wiki structure... 
+            // "Category:Production" ? 
+            // Let's rely on specific known skill categories for MVP to ensure high quality data.
+            const categories = [
+                "Category:Smithing",
+                "Category:Crafting",
+                "Category:Fletching",
+                "Category:Herblore",
+                "Category:Cooking",
+                "Category:Construction",
+                "Category:Farming",
+                "Category:Magic",
+                "Category:Runecraft",
+                "Category:Potions",
+                "Category:Food",
+                "Category:Ammunition",
+                "Category:Jewellery",
+                "Category:Armour",
+                "Category:Weapons"
+            ];
 
-            for (const title of titles) {
-                // Throttle: Wiki asks to not overload. 
-                // Sequential requests are usually fine, but adding a small delay is polite and avoids 429 burst.
-                await this.sleep(100);
+            for (const cat of categories) {
+                logger.info(`[RecipeService] Fetching titles for ${cat}`);
+                const titles = await this.fetchPagesInCategory(cat, 5000); // 200 is too low
+                logger.info(`[RecipeService] Found ${titles.length} titles in ${cat}`);
 
-                const wikitext = await this.fetchWikitext(title);
-                if (wikitext) {
-                    const recipes = this.parseRecipes(wikitext, title);
-                    for (const r of recipes) {
-                        try {
-                            await saveRecipe(r);
-                            processedCount++;
-                        } catch (e) {
-                            //  logger.warn(`Failed to save recipe for ${title}`, e);
+                for (const title of titles) {
+                    // Throttle: Wiki asks to not overload. 
+                    // Sequential requests are usually fine, but adding a small delay is polite and avoids 429 burst.
+                    await this.sleep(100);
+
+                    const wikitext = await this.fetchWikitext(title);
+                    if (wikitext) {
+                        const recipes = this.parseRecipes(wikitext, title);
+                        for (const r of recipes) {
+                            try {
+                                await saveRecipe(r);
+                                this.processedCount++;
+                            } catch (e) {
+                                //  logger.warn(`Failed to save recipe for ${title}`, e);
+                            }
                         }
                     }
                 }
             }
-        }
 
-        logger.info(`[RecipeService] Sync complete. Saved ${processedCount} recipes.`);
+            this.lastSyncEnd = new Date();
+            logger.info(`[RecipeService] Sync complete. Saved ${this.processedCount} recipes.`);
+        } catch (err: any) {
+            logger.error(`[RecipeService] Sync failed`, err);
+            this.lastError = err.message || "Unknown error";
+        } finally {
+            this.isSyncing = false;
+        }
     }
 }
 

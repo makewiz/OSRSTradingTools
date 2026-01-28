@@ -76,4 +76,13 @@ router.post("/sync", authenticateToken, async (req, res) => {
     }
 });
 
+// GET /recipes/sync/status - Check sync status (Admin only)
+router.get("/sync/status", authenticateToken, async (req, res) => {
+    // Check if user is admin
+    if (!req.user?.is_admin) {
+        return res.status(403).json({ error: "Admin access required" });
+    }
+    res.json(recipeService.getSyncStatus());
+});
+
 export default router;
