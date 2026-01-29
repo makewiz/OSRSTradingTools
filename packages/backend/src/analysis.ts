@@ -137,43 +137,31 @@ export class AnalysisService {
     ): Promise<string> {
         const apiKey = process.env.GEMINI_API_KEY;
 
+        // Construct full data context for the AI
+        const marketContext = {
+            highMargin: highMargin.map(i => ({ ...i, reason: undefined })), // Send raw data, AI can deduce "reason"
+            highVolume: bulk.map(i => ({ ...i, reason: undefined })),
+            spikes: spikes.map(i => ({ ...i, reason: undefined })),
+            drops: drops.map(i => ({ ...i, reason: undefined })),
+            news: news.slice(0, 5)
+        };
+
         let promptContext = `
 You are an expert Old School RuneScape (OSRS) trading assistant.
-Your goal is to summarize the market highlights based on the data provided, applying the principles of the Merchanting Guide where relevant.
+Your goal is to summarize the market highlights based on the DETAILED data provided below.
+You MUST apply the principles of the Merchanting Guide (e.g. checking volume, ROI, limits) to identify the best opportunities.
 
 ${MERCHANTING_GUIDE}
 
-Market Report:\n`;
-
-        if (news.length > 0) {
-            promptContext += `Recent News Updates:\n`;
-            news.forEach(n => {
-                promptContext += `- ${n.title} (${n.date}) - ${n.category}\n`;
-            });
-            promptContext += `\n`;
-        }
-
-        if (highMargin.length > 0) {
-            promptContext += `Top Mid Price Profit: ${highMargin[0].name} (${highMargin[0].profit?.toLocaleString()}gp profit per item)\n`;
-        }
-        if (bulk.length > 0) {
-            promptContext += `Top Bulk Profit: ${bulk[0].name} (${bulk[0].potentialProfit?.toLocaleString()}gp potential profit at buy limit)\n`;
-        }
-        if (spikes.length > 0) {
-            promptContext += `Top Spike: ${spikes[0].name} (+${spikes[0].dayChange?.toFixed(1)}%)\n`;
-        }
-        if (drops.length > 0) {
-            promptContext += `Top Drop: ${drops[0].name} (${drops[0].dayChange?.toFixed(1)}%)\n`;
-        }
-
-        const notable = highMargin.slice(1, 3).map(i => i.name).join(", ");
-        if (notable) {
-            promptContext += `Other notable items: ${notable}.\n`;
-        }
+**Market Data (JSON):**
+\`\`\`json
+${JSON.stringify(marketContext, null, 2)}
+\`\`\`
+`;
 
         // --- Add Item Context from Wiki ---
         if (itemContext && Object.keys(itemContext).length > 0) {
-            promptContext += `\nItem Context (Uses/Lore from Wiki):\n`;
+            promptContext += `\n**Item Wiki Context (Uses/Lore):**\n`;
             for (const [name, desc] of Object.entries(itemContext)) {
                 if (desc) {
                     promptContext += `- **${name}**: ${desc}\n`;
@@ -182,13 +170,14 @@ Market Report:\n`;
         }
 
         // Add prompt instruction
-        promptContext += "\nSummarize the market highlights in 2-3 concise, engaging sentences as a specialized OSRS trading assistant.";
-        if (itemContext && Object.keys(itemContext).length > 0) {
-            promptContext += " Use the provided Item Context to explain *why* an item might be valuable or volatile (e.g. mention its uses).";
-        }
-        if (news.length > 0) {
-            promptContext += " Briefly mention if any specific recent news might be relevant to the market activity, but focus on the trading opportunities.";
-        }
+        promptContext += `
+\n**Instructions:**
+1. Summarize the market highlights in 2-3 concise, engaging sentences.
+2. **Be specific**: Mention item names, exact profit numbers, or ROI percentages from the JSON data.
+3. Use the Wiki Context to explain *why* an item is good (e.g. "high volume due to new boss").
+4. If news is relevant, mention it briefly.
+5. Focus on the best trading opportunities found in the "highMargin" and "highVolume" sections.
+`;
 
         if (apiKey) {
             try {
@@ -213,7 +202,7 @@ Market Report:\n`;
             }
         }
 
-        // Fallback template
+        // Fallback (same as before)
         const parts = [];
         if (highMargin.length > 0) {
             parts.push(`Today's top mid price flip is ${highMargin[0].name}.`);
