@@ -14,8 +14,7 @@ import {
     updateAdvancedWatch
 } from "../database";
 import { exchangeCodeForToken, getDiscordUser, assignLinkedRole } from "../oauth";
-import { getCombinedItems } from "../osrsClient";
-import { getLatestItems, touchActivity, getLastFetchTime } from "../scheduler";
+import { getLatestItems } from "../scheduler";
 import { AnalysisService } from "../analysis";
 import { logger } from "@osrstradingtools/shared";
 
@@ -43,11 +42,7 @@ router.get("/bot/items", async (req, res) => {
     }
 
     try {
-        touchActivity();
-        let items = getLatestItems();
-        if (!items || items.length === 0 || Date.now() - getLastFetchTime() > 120000) {
-            items = await getCombinedItems();
-        }
+        const items = await getLatestItems();
         res.json({ items });
     } catch (err) {
         // eslint-disable-next-line no-console
@@ -133,10 +128,7 @@ router.get("/settings", async (req, res) => {
 
         // Enrich with item names
         // Fetch detailed item information from cache to enrich watches with names.
-        let allItems = getLatestItems();
-        if (!allItems || allItems.length === 0) {
-            allItems = await getCombinedItems();
-        }
+        let allItems = await getLatestItems();
         const enrichedWatches = watches.map(w => {
             const item = allItems.find(i => i.id === w.item_id);
             return {

@@ -1,7 +1,6 @@
 import { pool } from "../database";
 import { logger } from "@osrstradingtools/shared";
-import { getCombinedItems } from "../osrsClient";
-import { getLatestItems, getLastFetchTime, touchActivity } from "../scheduler";
+import { getLatestItems } from "../scheduler";
 import { calculateTax } from "../tax";
 
 export interface RecipeInput {
@@ -176,15 +175,7 @@ export async function getProfitableRecipes(minProfit: number = 0, limit: number 
     if (itemIds.size === 0) return [];
 
     // Optimize: fetch all latest prices in one go using cache if available
-    const now = Date.now();
-    touchActivity(); // Ensure scheduler knows we are active
-    let items = getLatestItems();
-
-    // If cache is empty or stale (older than 2 mins), fetch fresh
-    if (!items || items.length === 0 || now - getLastFetchTime() > 120000) {
-        logger.info("[Recipes] Cache empty or stale, fetching fresh items...");
-        items = await getCombinedItems();
-    }
+    const items = await getLatestItems();
 
     // Create Map for Price Lookup
     // CombinedItem has buyPrice (Low), sellPrice (High) and volume (daily)

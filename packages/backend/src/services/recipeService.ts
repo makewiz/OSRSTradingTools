@@ -1,5 +1,5 @@
 import { logger } from "@osrstradingtools/shared";
-import { getCombinedItems } from "../osrsClient";
+import { getLatestItems } from "../scheduler";
 import { saveRecipe, Recipe, RecipeInput, RecipeOutput } from "../database/recipes";
 
 const WIKI_API_URL = "https://oldschool.runescape.wiki/api.php";
@@ -69,7 +69,7 @@ export class RecipeService {
     private async loadItemMapping() {
         if (this.itemMapping.size > 0) return;
         try {
-            const items = await getCombinedItems(); // Fetches latest prices and includes item details.
+            const items = await getLatestItems(); // Fetches latest prices and includes item details.
 
             for (const item of items) {
                 this.itemMapping.set(item.name.toLowerCase(), item.id);

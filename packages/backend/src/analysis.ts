@@ -1,5 +1,5 @@
 
-import { getCombinedItems, CombinedItem, fetchWikiDescription } from "./osrsClient";
+import { CombinedItem, fetchWikiDescription } from "./osrsClient";
 import { getLatestItems } from "./scheduler";
 import { NewsService, NewsItem } from "./news";
 import dotenv from "dotenv";
@@ -33,10 +33,7 @@ export class AnalysisService {
             return this.lastAnalysis;
         }
 
-        let items = getLatestItems();
-        if (!items || items.length === 0) {
-            items = await getCombinedItems();
-        }
+        const items = await getLatestItems();
 
         // Fetch news
         const news = await NewsService.fetchNewestNews();

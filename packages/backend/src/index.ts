@@ -3,9 +3,8 @@ dotenv.config();
 
 import express from "express";
 import cors from "cors";
-import { getCombinedItems } from "./osrsClient";
 import { initializeDatabase, closeDatabase } from "./database";
-import { startPriceScheduler, getLatestItems, touchActivity, getLastFetchTime } from "./scheduler";
+import { startPriceScheduler, getLatestItems, runRetentionPolicy } from "./scheduler";
 import { logger } from "@osrstradingtools/shared";
 
 import itemsRouter from "./routes/items";
@@ -78,15 +77,8 @@ app.get("/api/items", async (req, res, next) => {
   }
 }, async (_req, res) => {
   try {
-    touchActivity();
-    const cached = getLatestItems();
-    if (cached && cached.length > 0 && Date.now() - getLastFetchTime() < 120000) {
-      res.json({ items: cached });
-    } else {
-      // Fallback if cache is empty (e.g. startup)
-      const items = await getCombinedItems();
-      res.json({ items });
-    }
+    const items = await getLatestItems();
+    res.json({ items });
   } catch (err) {
     logger.error("Failed to fetch OSRS prices:", err);
     res.status(502).json({ error: "Failed to fetch OSRS prices" });

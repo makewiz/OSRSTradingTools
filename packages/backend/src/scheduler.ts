@@ -26,10 +26,34 @@ export function getLastFetchTime(): number {
 }
 
 /**
- * Get the latest cached items
+ * Get the latest items (Smart Cache)
+ * - Touches activity
+ * - Returns cache if valid (< 2m old)
+ * - Fetches fresh if stale or empty
  */
-export function getLatestItems(): CombinedItem[] {
-  return latestItemsCache;
+export async function getLatestItems(): Promise<CombinedItem[]> {
+  touchActivity();
+
+  // Return cache if valid and fresh (2 minutes)
+  if (latestItemsCache && latestItemsCache.length > 0 && Date.now() - lastFetchTimestamp < 120000) {
+    return latestItemsCache;
+  }
+
+  // Fetch fresh if needed
+  logger.debug("[Scheduler] Cache stale or empty, fetching fresh items...");
+  try {
+    const items = await getCombinedItems();
+    latestItemsCache = items;
+    lastFetchTimestamp = Date.now();
+    return items;
+  } catch (err) {
+    logger.error("[Scheduler] Failed to fetch items on-demand:", err);
+    // Return stale cache if available as fallback
+    if (latestItemsCache && latestItemsCache.length > 0) {
+      return latestItemsCache;
+    }
+    throw err;
+  }
 }
 
 /**
