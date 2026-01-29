@@ -75,6 +75,7 @@ router.post("/settings", async (req, res) => {
     }
 });
 
+
 // POST /users
 router.post("/users", async (req, res) => {
     const result = userCreateSchema.safeParse(req.body);
@@ -103,6 +104,34 @@ router.post("/users", async (req, res) => {
         logger.error("Failed to create user:", err);
         res.status(500).json({ error: "Failed to create user" });
     }
+});
+
+import { historyService } from "../services/historyService";
+
+// POST /history/backfill
+router.post("/history/backfill", async (req, res) => {
+    try {
+        const { retentionDays } = req.body;
+        const days = retentionDays ? parseInt(retentionDays, 10) : 365;
+
+        // Async trigger
+        historyService.backfillHistory(days).catch(err => {
+            logger.error("Error triggering backfill:", err);
+        });
+
+        res.json({ success: true, message: `Backfill process started for ${days} days retention.` });
+    } catch (err) {
+        if (err instanceof Error && err.message === "Backfill already in progress") {
+            return res.status(409).json({ error: "Backfill already in progress" });
+        }
+        logger.error("Failed to start backfill:", err);
+        res.status(500).json({ error: "Failed to start backfill" });
+    }
+});
+
+// GET /history/status
+router.get("/history/status", (req, res) => {
+    res.json(historyService.getStatus());
 });
 
 export default router;

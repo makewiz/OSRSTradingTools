@@ -3,6 +3,115 @@ import { useAuth } from "../contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
 import { API_BASE_URL } from "../config";
 
+
+const HistoryBackfillSection: React.FC = () => {
+    const { fetchWithAuth } = useAuth();
+    const [retentionDays, setRetentionDays] = useState(365);
+    const [status, setStatus] = useState<{
+        isBackfilling: boolean;
+        totalItems: number;
+        processedCount: number;
+        currentItemName: string | null;
+        lastError: string | null;
+    } | null>(null);
+    const [loading, setLoading] = useState(false);
+    const [msg, setMsg] = useState<{ type: 'error' | 'success', text: string } | null>(null);
+
+    const fetchStatus = async () => {
+        try {
+            const res = await fetchWithAuth(`${API_BASE_URL}/api/admin/history/status`);
+            if (res.ok) {
+                const data = await res.json();
+                setStatus(data);
+            }
+        } catch (err) {
+            console.error("Failed to fetch backfill status", err);
+        }
+    };
+
+    useEffect(() => {
+        fetchStatus();
+        const interval = setInterval(() => {
+            // Poll more frequently if active
+            fetchStatus();
+        }, 2000);
+        return () => clearInterval(interval);
+    }, []);
+
+    const handleStartBackfill = async () => {
+        setLoading(true);
+        setMsg(null);
+        try {
+            const res = await fetchWithAuth(`${API_BASE_URL}/api/admin/history/backfill`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ retentionDays })
+            });
+            const data = await res.json();
+            if (res.ok) {
+                setMsg({ type: 'success', text: data.message });
+                fetchStatus();
+            } else {
+                setMsg({ type: 'error', text: data.error || "Failed to start backfill" });
+            }
+        } catch (err) {
+            setMsg({ type: 'error', text: "Error starting backfill" });
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    return (
+        <div className="admin-section">
+            <h2>History Backfill</h2>
+            {msg && <div className={msg.type === 'error' ? "error-message" : "success-message"}>{msg.text}</div>}
+
+            <div style={{ marginBottom: "15px" }}>
+                <p style={{ color: "#aaa", fontSize: "0.9em", marginBottom: "10px" }}>
+                    Force-fetches missing history data from Wiki API for all items.
+                    Respects global retention cap (DATA_RETENTION_DAYS).
+                </p>
+                <div className="form-group" style={{ maxWidth: "200px" }}>
+                    <label>Retention Days</label>
+                    <input
+                        type="number"
+                        value={retentionDays}
+                        onChange={(e) => setRetentionDays(parseInt(e.target.value) || 0)}
+                    />
+                </div>
+                <button
+                    onClick={handleStartBackfill}
+                    disabled={loading || status?.isBackfilling}
+                    className="page-button"
+                >
+                    {loading ? "Starting..." : (status?.isBackfilling ? "Backfill in Progress..." : "Start Backfill")}
+                </button>
+            </div>
+
+            {status && (status.isBackfilling || status.processedCount > 0) && (
+                <div style={{ background: "#222", padding: "10px", borderRadius: "5px", marginTop: "10px" }}>
+                    <p><strong>Status:</strong> <span style={{ color: status.isBackfilling ? "#ffd43b" : "#51cf66" }}>
+                        {status.isBackfilling ? "Running" : "Idle"}
+                    </span></p>
+                    <p><strong>Progress:</strong> {status.processedCount} / {status.totalItems}</p>
+                    {status.currentItemName && <p><strong>Current Item:</strong> {status.currentItemName}</p>}
+                    {status.lastError && <p style={{ color: "#ff6b6b" }}><strong>Last Error:</strong> {status.lastError}</p>}
+
+                    {/* Simple Progress Bar */}
+                    <div style={{ width: "100%", height: "10px", background: "#444", borderRadius: "5px", marginTop: "10px", overflow: "hidden" }}>
+                        <div style={{
+                            width: `${status.totalItems > 0 ? (status.processedCount / status.totalItems) * 100 : 0}%`,
+                            height: "100%",
+                            background: status.isBackfilling ? "#ffd43b" : "#51cf66",
+                            transition: "width 0.5s ease"
+                        }} />
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+};
+
 export const Admin: React.FC = () => {
     const { user, fetchWithAuth, isAuthenticated } = useAuth();
     const navigate = useNavigate();
@@ -373,6 +482,11 @@ export const Admin: React.FC = () => {
                     </div>
                 </div>
             </div>
+
+            <hr />
+
+            <HistoryBackfillSection />
+
 
             <style>{`
                 .admin-section {
