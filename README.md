@@ -13,6 +13,7 @@ Hobby web app to help Old School RuneScape traders browse items, inspect GE marg
 ### Features
 - **Real-time Pricing**: Fetches latest OSRS prices every minute.
 - **Market Analysis**: Identifies high margin items, volume spikes, and price drops.
+- **Profitable Recipes**: Calculate profit for crafting, smithing, and other processing skills.
 - **AI Integration**: Generates daily market summaries using OpenAI (optional).
 - **Discord Alerts**: Users can watch items and get notified of price changes.
 
@@ -77,6 +78,8 @@ The backend starts on `http://localhost:4000` and exposes:
   - buy price, sell price, margin, daily volume
 - `POST /api/auth/*` - Authentication endpoints (register, login, Discord OAuth)
 - `GET/POST /api/watch` - Item watch management
+- `GET /api/recipes` - Get profitable recipes with various filters
+- `POST /api/admin/*` - Admin management (sync recipes, cache control)
 
 **Database & Scheduled Fetching**:
 - PostgreSQL database stores price history and user data
@@ -102,6 +105,7 @@ Open the printed Vite URL (usually `http://localhost:5173`).
 The UI lets you:
 
 - Search items by name or examine text
+- **Profitable Recipes**: filter by skill, profit, volume, and ROI
 - Sort by **name, buy price, sell price, margin, volume**
 - Mark items as **favourites** (stored in `localStorage`)
 - Copy a simple `/watch <id> // <name>` command for Discord to your clipboard
