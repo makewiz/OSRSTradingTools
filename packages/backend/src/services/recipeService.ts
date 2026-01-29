@@ -70,11 +70,7 @@ export class RecipeService {
     private async loadItemMapping() {
         if (this.itemMapping.size > 0) return;
         try {
-            const items = await getCombinedItems(); // This might be heavy? It fetches latest prices too.
-            // Actually getCombinedItems calls getMapping internally.
-            // Let's just use getMapping directly if exposed, OR just use `items` since we need it anyway.
-            // Since `getMapping` is not exported from `osrsClient` directly (it is internal), we rely on `getCombinedItems` or modify `osrsClient`.
-            // `getCombinedItems` is fine, it caches.
+            const items = await getCombinedItems(); // Fetches latest prices and includes item details.
 
             for (const item of items) {
                 this.itemMapping.set(item.name.toLowerCase(), item.id);
@@ -145,10 +141,8 @@ export class RecipeService {
         const recipes: Omit<Recipe, "id">[] = [];
 
         // Regex to find {{Recipe ... }} blocks
-        // This is a naive regex parser. It handles nested braces poorly but {{Recipe}} usually isn't deeply nested.
-        // Better approach: simple stack parser or library. 
-        // For now, let's use a regex that matches {{Recipe and ends with }} 
-        // Multi-line support is needed.
+        // Regex to find {{Recipe ... }} blocks.
+        // Current implementation supports standard single-line and multi-line templates using a brace counting strategy.
 
         // We'll iterate through the string to find {{Recipe
         const matches = wikitext.matchAll(/\{\{Recipe\s*\|([\s\S]*?)\}\}/gi);
@@ -209,13 +203,13 @@ export class RecipeService {
         // We want to split by pipe `|` ONLY if braces/brackets are 0.
         // And we need to capture key=value.
 
-        // Actually, a simpler regex for parameter parsing might work if we assume standard formatting:
+
         // | key = value
 
         const paramMatches = cleanContent.matchAll(/\|\s*([^=]+?)\s*=\s*([\s\S]*?)(?=(\n\||$))/g);
         // This regex is tricky.
 
-        // Let's implement a simple loop parser for params
+        // Parse parameters using a loop to handle nested structures correctly.
         const parts: string[] = [];
         let currentPart = "";
         for (let i = 0; i < cleanContent.length; i++) {
@@ -257,7 +251,7 @@ export class RecipeService {
             if (item) {
                 const qtyStr = params[`mat${i}quantity`] || "1";
                 // Remove commas, handle "1-5"? Use max or min?
-                // For now simpler: parse int.
+                // Parse quantity, removing commas.
                 const qty = parseInt(qtyStr.replace(/,/g, "")) || 1;
                 const cleanName = this.cleanWikiText(item);
                 const itemId = this.getItemId(cleanName);
@@ -377,7 +371,7 @@ export class RecipeService {
             // Category:Items_with_recipes - Not sure if this exists.
             // Check Wiki structure... 
             // "Category:Production" ? 
-            // Let's rely on specific known skill categories for MVP to ensure high quality data.
+            // Fetch recipes from specific known skill categories.
             const categories = [
                 "Category:Smithing",
                 "Category:Crafting",

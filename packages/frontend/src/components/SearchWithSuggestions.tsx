@@ -43,7 +43,7 @@ export const SearchWithSuggestions: React.FC<SearchWithSuggestionsProps> = ({
                 if (!aStarts && bStarts) return 1;
 
                 // Secondary sort by volume or exact length match could be good, 
-                // but just alphabetical is fine for now
+                // Secondary sort can be added here if needed.
                 return aName.localeCompare(bName);
             })
             .slice(0, 10); // Limit to 10 suggestions

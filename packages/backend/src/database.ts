@@ -547,7 +547,7 @@ export async function getLatestPrice(itemId: number): Promise<{ buyPrice: number
 
 
 // Obsolete legacy helpers (remove if unused, or keep empty if exported and used elsewhere)
-// For now, I've replaced getPriceHistory with the new implementation above.
+// Obsolete legacy helpers (remove if unused, or keep empty if exported and used elsewhere)
 
 
 async function calculatePriceChange(

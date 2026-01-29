@@ -132,9 +132,7 @@ router.get("/settings", async (req, res) => {
         const watches = await getBackendWatches(discordUser.discord_id);
 
         // Enrich with item names
-        // Note: In a production app with DB "items" table, we would JOIN. 
-        // Here we fetch from cache.
-        // Here we fetch from cache.
+        // Fetch detailed item information from cache to enrich watches with names.
         let allItems = getLatestItems();
         if (!allItems || allItems.length === 0) {
             allItems = await getCombinedItems();
@@ -266,7 +264,7 @@ router.delete("/watch/:itemId", async (req, res) => {
     try {
         const discordUser = await getDiscordUserByUserId(userId);
         if (!discordUser) {
-            // If not linked, maybe they are just trying to clean up? But we can't do anything.
+            // User not linked, cannot remove backend watches.
             return res.status(404).json({ error: "No Discord account linked" });
         }
 

@@ -146,7 +146,7 @@ router.post("/discord/login", authLimiter, async (req, res) => {
 
             // 3. If not, treat as "Register via Discord"
             // We need to create a new user. We'll generate a random username if collision, or random password.
-            // NOTE: In a real app, might ask user to choose username. For now, auto-create.
+            // Create new user with Discord username.
             let username = discordProfile.username;
 
             // Check collision

@@ -75,7 +75,7 @@ export const DiscordCallback: React.FC = () => {
                 }
             } catch (err: any) {
                 setError(err.message || "An unknown error occurred.");
-                processed.current = false; // Allow retry if it failed? Or maybe not.
+                processed.current = false;
             }
         };
 

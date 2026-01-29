@@ -6,34 +6,9 @@ import { logger } from "@osrstradingtools/shared";
 
 const router = Router();
 
-// Apply auth middleware if strictly required, or handle optional auth inside.
-// User requested "same authentication to recipes as other routes".
-// If "other routes" means favorites/discord, they are PROECTED.
-// If "other routes" means items, it is OPTIONAL.
-// Given "sync admin only", it implies some role check.
-// Let's assume the user wants the recipes to be protected like favorites/discord since they are a "feature".
-// However, the user said "same authentication to recipes as other routes".
-// In index.ts, `items` has optional auth. `favorites` has strict auth.
-// I will assume strict auth is safer for now if the user compares it to "favorites". 
-// BUT, usually public viewing is nice.
-// Let's look at index.ts again... `app.use("/api/auth", authRouter);`, `app.use("/api/favorites", favoritesRouter);`.
-// Favorites is strictly protected.
-// Items is optionally protected based on env var.
-// I'll make it optionally protected if env var set, otherwise public? 
-// Or just apply `authenticateToken` if `REQUIRE_AUTH` is set?
-// Let's follow the `items` pattern in `index.ts` but applying it at router level is cleaner if we can.
-// Actually, let's just use `authenticateToken` on all routes if the user wants "same as other routes" and usually apps protect features.
-// However, I suspect they mean "Same as Items" or "Same as Favorites".
-// Let's look at `index.ts` again. `items` logic:
-/*
-  if (process.env.REQUIRE_AUTH === "true") {
-    await authenticateToken(req, res, next);
-  } else {
-    next();
-  }
-*/
-// I will implement similar logic here for GET, but STRICT logic for POST (Sync).
-// Actually, `authenticateToken` does not enforce admin. I need to check admin inside.
+// Authentication Strategy:
+// GET /recipes: Conditionally authenticated based on REQUIRE_AUTH env var to allow flexible public/private access.
+// POST /recipes/*: Strictly authenticated and requires Admin role for sensitive operations (Sync, Import, Export).
 
 // Helper for conditional auth
 const conditionalAuth = async (req: any, res: any, next: any) => {

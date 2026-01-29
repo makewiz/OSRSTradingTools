@@ -161,9 +161,7 @@ async function checkNotifications(client: Client) {
             userBatches = [];
             notificationsToSend.set(discordId, userBatches);
         }
-        // Aggressive helper to merge if exact same header? 
-        // Or just push new batch. Since advanced watches have unique names, separate batches is fine.
-        // For Legacy, we use one generic header.
+        // Merge into existing batch if header matches.
 
         let existingBatch = allowMerge ? userBatches.find(b => b.header === header) : undefined;
         if (existingBatch) {
@@ -272,7 +270,7 @@ async function checkNotifications(client: Client) {
                         case 'roi': valA = a.roi ?? 0; valB = b.roi ?? 0; break;
                         case 'margin': valA = a.margin ?? 0; valB = b.margin ?? 0; break;
                         case 'volume': valA = a.volume ?? 0; valB = b.volume ?? 0; break;
-                        case 'oneHourChange': valA = Math.abs(a.oneHourChange ?? 0); valB = Math.abs(b.oneHourChange ?? 0); break; // Magnitude? Or value? Usually magnitude for volatility. Let's use Raw value for Asc/Desc flexibility, unless it's 'change' then magnitude implies volatility. Let's start with raw.
+                        case 'oneHourChange': valA = Math.abs(a.oneHourChange ?? 0); valB = Math.abs(b.oneHourChange ?? 0); break;
                         case 'dayChange': valA = a.dayChange ?? 0; valB = b.dayChange ?? 0; break;
                         default: valA = a.profit ?? 0; valB = b.profit ?? 0;
                     }

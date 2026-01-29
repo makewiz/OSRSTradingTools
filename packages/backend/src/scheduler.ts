@@ -175,15 +175,13 @@ export async function runRetentionPolicy(): Promise<void> {
 
     // 1. Downsample 5m -> 1h (Always run unless max retention is extremely low)
     // Range: [2 hours ago, 1 hour ago) - process the hour that just finished (+ overlap)
-    // Actually, let's process the last 24h to be safe and ensure updates? 
-    // Or just process "since last run"? Scheduler runs hourly.
-    // Let's re-process the last 4 hours to be safe against downtime/delays.
+    // Process the last 4 hours to ensure coverage against potential downtime or delays.
     await downsample('item_history_5m', 'item_history_1h', oneHour, now - 4 * oneHour, now);
 
     // 2. Downsample 1h -> 6h
     // Only if we are keeping data longer than 1 week (approx 7 days)
     // If strict 7 day retention, we don't need 6h data (or it will be deleted immediately).
-    // Let's safe guard it: if maxRetentionDays <= 7, skip.
+    // Skip downsampling if retention policy is short (<= 7 days).
     if (maxRetentionDays > 7) {
       // Process last 24h
       await downsample('item_history_1h', 'item_history_6h', sixHours, now - 24 * oneHour, now);
@@ -260,9 +258,8 @@ export function startPriceScheduler(): void {
   // });
 
   // Run initial recipe sync if table is empty? 
-  // For now, let's not block startup. Admin can trigger sync via API or we rely on daily job.
-  // Or we can check if table is empty and run.
-  // But that requires async check. Let's keep it simple: API trigger or Schedule.
+  // Recipe sync is triggered manually via API or by the daily schedule.
+  // Initial sync on startup is intentionally skipped to avoid blocking boot time.
 
   logger.info("[Scheduler] Price fetcher started (runs every minute)");
   logger.info("[Scheduler] Retention policy started (runs every hour)");

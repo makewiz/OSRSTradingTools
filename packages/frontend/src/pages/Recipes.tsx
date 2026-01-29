@@ -149,7 +149,7 @@ export const Recipes: React.FC = () => {
     const clearStats = () => {
         setPlayerStats({});
         setUsername("");
-        // Optionally keep the section open or close it. Keeping it open for now.
+        // Keep the section open after clearing stats.
     };
 
     const fetchUserStats = async () => {
