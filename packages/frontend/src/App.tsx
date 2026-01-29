@@ -17,18 +17,18 @@ import { Watches } from "./pages/Watches";
 import { Favorites } from "./pages/Favorites";
 import { HighlightsPage } from "./pages/HighlightsPage";
 import { Recipes } from "./pages/Recipes";
-import Assistant from "./pages/Assistant"; // [NEW]
+import { ChatWidget } from "./components/ChatWidget"; // [NEW]
 
 export const App: React.FC = () => {
   return (
     <AuthProvider>
       <FilterProvider>
-        <div className="app">
+        <div className="app relative min-h-screen">
           <Header />
           <Routes>
             <Route path="/" element={<HighlightsPage />} />
             <Route path="/recipes" element={<Recipes />} />
-            <Route path="/assistant" element={<Assistant />} /> {/* [NEW] */}
+            {/* Route /assistant removed, replaced by global widget */}
             <Route path="/items" element={<ItemList />} />
             <Route path="/item/:id" element={<ItemDetail />} />
             <Route path="/login" element={<Login />} />
@@ -42,6 +42,7 @@ export const App: React.FC = () => {
             <Route path="/privacy" element={<Privacy />} />
             <Route path="/terms" element={<Terms />} />
           </Routes>
+          <ChatWidget />
           <Footer />
         </div>
       </FilterProvider>
