@@ -1,6 +1,6 @@
 
 import express from "express";
-import { AnalysisService } from "../analysis";
+import { AnalysisService, MERCHANTING_GUIDE } from "../analysis";
 import { logger } from "@osrstradingtools/shared";
 
 const router = express.Router();
@@ -61,36 +61,6 @@ router.post("/", async (req, res) => {
 
         const wikiContext = marketData.itemContext || {};
 
-        const MERCHANTING_GUIDE = `
-**OSRS Merchanting Guide (Wiki Summary):**
-
-**1. Types of Merchanting**
-- **Flipping**: Short-term buying low and selling high. Exploits the "bid-ask spread" created by impatient players.
-- **Investing (Speculation)**: Long-term prediction of price trends based on game updates (e.g., new boss release = demand for specific gear). Safer when changes are predictable.
-- **Bulk Flipping**: High volume, low margin (1-3gp profit). Requires large capital (20m+) but scales well. (e.g., Runes, Arrows, Food).
-
-**2. Grand Exchange Mechanics**
-- **Instant Trades**: If you buy above market price, it instantly fills at the lowest available sell offer.
-- **Limits**: Most items have a buy limit every 4 hours (e.g., 11k darts, 70 barrows equipment).
-- **Guide Price vs. Real Price**: "Guide Price" is a lagging average. Real "Street Price" or "Active Price" is determined by live buyers/sellers.
-
-**3. Determining Prices (The Buy/Sell Test)**
-- **To find Margins**: Buy 1 item high (Instant Buy Price), Sell 1 item low (Instant Sell Price).
-- **The Spread**: The difference between these two numbers is your potential profit margin per item.
-- *Warning*: Do not test expensive low-volume items (3rd Age, expensive armor) as the spread might be huge, causing a loss.
-
-**4. Strategy & Psychology**
-- **Volume vs Price**: High volume items (scales, runes) move fast. Low volume items (armor) move slow but have higher margins.
-- **Diversification**: Spread wealth across 4-6 items to mitigate risk of a crash.
-- **Patience**: If an item crashes, you can often wait for it to rebound. Panic selling locks in losses.
-- **Updates**: Read game news. If a new "Dragon" quest comes out, Dragon items might rise.
-
-**Common High-Volume Categories**:
-- Ammunition (Darts, Arrows)
-- Runes (Chaos, Death, Blood)
-- Consumables (Food, Potions)
-- Resources (Ores, Bars, Logs, Hides)
-`;
 
         const prompt = `
 You are an expert Old School RuneScape (OSRS) flipping and trading assistant.
