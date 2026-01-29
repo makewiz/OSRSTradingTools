@@ -254,10 +254,10 @@ export function startPriceScheduler(): void {
   });
 
   // Run Recipe Sync once a day (at 3 AM)
-  cron.schedule("0 3 * * *", () => {
-    logger.info("[Scheduler] Starting daily recipe sync...");
-    recipeService.syncRecipes().catch(err => logger.error("[Scheduler] Recipe sync failed:", err));
-  });
+  // cron.schedule("0 3 * * *", () => {
+  //   logger.info("[Scheduler] Starting daily recipe sync...");
+  //   recipeService.syncRecipes().catch(err => logger.error("[Scheduler] Recipe sync failed:", err));
+  // });
 
   // Run initial recipe sync if table is empty? 
   // For now, let's not block startup. Admin can trigger sync via API or we rely on daily job.
@@ -266,6 +266,6 @@ export function startPriceScheduler(): void {
 
   logger.info("[Scheduler] Price fetcher started (runs every minute)");
   logger.info("[Scheduler] Retention policy started (runs every hour)");
-  logger.info("[Scheduler] Recipe sync scheduled (runs daily at 03:00)");
+  // logger.info("[Scheduler] Recipe sync scheduled (runs daily at 03:00)");
 }
 
