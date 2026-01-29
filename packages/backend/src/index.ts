@@ -17,6 +17,7 @@ import adminRouter from "./routes/admin";
 import configRouter from "./routes/config";
 import analysisRouter from "./routes/analysis";
 import recipesRouter from "./routes/recipes";
+import chatRouter from "./routes/chat"; // [NEW] Chat route
 
 // Initialize database
 // Initialize database
@@ -60,6 +61,8 @@ import filtersRouter from "./routes/filters";
 app.use("/api/filters", filtersRouter);
 // Recipe routes
 app.use("/api/recipes", recipesRouter);
+// Chat routes
+app.use("/api/chat", chatRouter); // [NEW] Chat route
 // Hiscore routes
 import hiscoresRouter from "./routes/hiscores";
 app.use("/api/hiscores", hiscoresRouter);

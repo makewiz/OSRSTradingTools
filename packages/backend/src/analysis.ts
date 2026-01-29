@@ -6,6 +6,7 @@ import dotenv from "dotenv";
 
 dotenv.config();
 
+// Extend CombinedItem so HighlightItem has ALL fields
 export interface HighlightItem extends CombinedItem {
     reason: string;
 }
@@ -18,6 +19,7 @@ export interface MarketAnalysis {
     priceDrops: HighlightItem[];
     summary: string;
     news?: NewsItem[];
+    itemContext?: Record<string, string>;
 }
 
 export class AnalysisService {
@@ -50,8 +52,9 @@ export class AnalysisService {
             .map(i => {
                 return {
                     ...i,
+                    // redundant safety check, though ...i should cover it if i is CombinedItem
                     reason: `Profit: ${i.profit?.toLocaleString()}gp, Buy: ${i.buyPrice?.toLocaleString()}gp, Vol: ${i.volume?.toLocaleString()}`
-                };
+                } as HighlightItem;
             });
 
         const highVolume = items
@@ -63,7 +66,7 @@ export class AnalysisService {
             .map(i => ({
                 ...i,
                 reason: `Pot. Profit: ${i.potentialProfit?.toLocaleString()}gp, Buy: ${i.buyPrice?.toLocaleString()}gp, Vol: ${i.volume?.toLocaleString()}`
-            }));
+            } as HighlightItem));
 
         const priceSpikes = items
             .filter(i => {
@@ -76,7 +79,7 @@ export class AnalysisService {
             })
             .sort((a, b) => (b.dayChange || 0) - (a.dayChange || 0))
             .slice(0, 5)
-            .map(i => ({ ...i, reason: `Spike: +${i.dayChange?.toFixed(1)}% (Buy: ${i.buyPrice?.toLocaleString()}gp, Vol: ${i.volume?.toLocaleString()})` }));
+            .map(i => ({ ...i, reason: `Spike: +${i.dayChange?.toFixed(1)}% (Buy: ${i.buyPrice?.toLocaleString()}gp, Vol: ${i.volume?.toLocaleString()})` } as HighlightItem));
 
         const priceDrops = items
             .filter(i => {
@@ -89,7 +92,7 @@ export class AnalysisService {
             })
             .sort((a, b) => (a.dayChange || 0) - (b.dayChange || 0))
             .slice(0, 5)
-            .map(i => ({ ...i, reason: `Drop: ${i.dayChange?.toFixed(1)}% (Buy: ${i.buyPrice?.toLocaleString()}gp, Vol: ${i.volume?.toLocaleString()})` }));
+            .map(i => ({ ...i, reason: `Drop: ${i.dayChange?.toFixed(1)}% (Buy: ${i.buyPrice?.toLocaleString()}gp, Vol: ${i.volume?.toLocaleString()})` } as HighlightItem));
 
         // Fetch Wiki context for top items
         const itemsToFetch = new Set<string>();
@@ -116,7 +119,8 @@ export class AnalysisService {
             priceSpikes,
             priceDrops,
             summary,
-            news
+            news,
+            itemContext
         };
         this.lastAnalysisTime = now;
 
