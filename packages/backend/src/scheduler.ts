@@ -1,7 +1,7 @@
 import cron from "node-cron";
 import { getCombinedItems, CombinedItem, get5m, Osrs5mItem } from "./osrsClient";
 import { insertItemHistory, bulkInsertItemHistory, pool } from "./database";
-import { maintainPartitions } from "./db/partitions";
+import { maintainPartitions } from "./database/partitions";
 import { logger } from "@osrstradingtools/shared";
 import { recipeService } from "./services/recipeService";
 

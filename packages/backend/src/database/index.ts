@@ -1,9 +1,9 @@
 import { Pool } from "pg";
 import dotenv from "dotenv";
-import { fetchWikiTimeSeries } from "./osrsClient";
+import { fetchWikiTimeSeries } from "../osrsClient";
 import { logger } from "@osrstradingtools/shared";
-import { ensurePartitionedHistoryTable } from "./db/partitions";
-import { createRecipeTables } from "./database/recipes";
+import { ensurePartitionedHistoryTable } from "./partitions";
+import { createRecipeTables } from "./recipes";
 
 dotenv.config();
 
