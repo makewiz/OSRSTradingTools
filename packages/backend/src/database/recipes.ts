@@ -63,13 +63,7 @@ export async function createRecipeTables(): Promise<void> {
         UNIQUE(name, skill, level) 
       )
     `);
-        // Note: inputs_hash is a conceptual unique constraint; in practice we might just rely on name/skill or just overwrite.
-        // Simplifying unique constraint to just name for now, or name+skill+output? 
-        // Actually, one item can have multiple recipes (e.g. diff moulds).
-        // Let's rely on a delete-insert or intelligent upsert based on name + signature.
-        // For now, let's Drop/Recreate or just Upsert by Name if unique enough.
-        // To keep it simple for the MVP: We will use a unique constraint on (name, skill, level) and basic Upsert.
-        // If that proves insufficient (collisions), we'll refine.
+        // Unique constraint on (name, skill, level) helps prevent duplicates.
 
         await client.query(`
       CREATE TABLE IF NOT EXISTS recipe_inputs (
@@ -98,9 +92,6 @@ export async function createRecipeTables(): Promise<void> {
       )
     `);
 
-        // Add constraint if not exists (manual check or just try/catch)
-        // For simplicity in this script, we won't add complex constraints dynamically yet.
-
     } finally {
         client.release();
     }
@@ -115,8 +106,7 @@ export async function saveRecipe(recipe: Omit<Recipe, "id">): Promise<void> {
     try {
         await client.query("BEGIN");
 
-        // Basic de-duplication: Delete existing recipes with same name/skill to avoid duplicates on re-sync
-        // A better approach would be checking a hash, but this is fine for full-syncs.
+        // Delete existing recipes with same name/skill to avoid duplicates.
         await client.query("DELETE FROM recipes WHERE name = $1 AND skill = $2", [recipe.name, recipe.skill]);
 
         const res = await client.query(`
@@ -209,7 +199,6 @@ export async function getProfitableRecipes(minProfit: number = 0, limit: number 
     }
 
     // Create Map for Name Lookup
-    // Create Map for Name Lookup
     const nameMap = new Map<number, string>();
     for (const item of items) {
         nameMap.set(item.id, item.name);
@@ -240,7 +229,7 @@ export async function getProfitableRecipes(minProfit: number = 0, limit: number 
             }
 
             const priceData = priceMap.get(input.item_id);
-            // If no price data, assume 0 or skip? Let's skip to be safe.
+            // If no price data, skip.
 
             // Standard: Cost = Buy Price (Low), Revenue = Sell Price (High)
             // Patient trader logic.
@@ -332,15 +321,7 @@ export async function getProfitableRecipes(minProfit: number = 0, limit: number 
             profitPerHour = profit * effectiveActionsPerHour;
         }
 
-        // Determine Weekly/Daily Volume based on main output
-        // Try to match exact recipe name (often output name) inside price map if ID known?
-        // Actually, we need to map name to ID for the `volume` variable.
-        // But `priceMap` is by ID.
-        // The previous code had `volumes[row.name]` which is Name -> Volume.
-        // We removed `getVolumes()`.
-        // However, we have `priceMap` which has volumes by ID.
-        // We can check volume of the output items.
-        // The recipe volume is effectively the volume of the main output item.
+        // Determine Weekly/Daily Volume based on the volume of the main output item.
 
         let volume = 0;
         if (richOutputs.length > 0) {
@@ -429,10 +410,7 @@ export async function importRecipes(recipes: Recipe[]): Promise<void> {
         await client.query("TRUNCATE recipes CASCADE");
 
         // Insert new recipes
-        // reusing logic from saveRecipe but inline or just calling saveRecipe inside loop?
-        // Calling saveRecipe inside a loop that manages its own transaction is tricky if saveRecipe also does BEGIN/COMMIT (it does).
-        // So we should extract the insert logic or just copy it here for the bulk operation to avoid N transactions.
-        // Actually, let's copy the logic to handle the single large transaction for speed.
+        // Inline logic to handle the single large transaction for speed.
 
         const insertRecipeQuery = `
           INSERT INTO recipes (name, skill, level, ticks, facilities, tools, members, xp, wiki_url)
