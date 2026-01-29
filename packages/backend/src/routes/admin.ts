@@ -3,7 +3,6 @@ import { z } from "zod";
 import {
     createUser,
     getUserByUsername,
-    getSystemSetting,
     setSystemSetting,
     getAllSystemSettings
 } from "../database";

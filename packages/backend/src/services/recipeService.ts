@@ -1,5 +1,4 @@
 import { logger } from "@osrstradingtools/shared";
-import { load } from "cheerio";
 import { getCombinedItems } from "../osrsClient";
 import { saveRecipe, Recipe, RecipeInput, RecipeOutput } from "../database/recipes";
 

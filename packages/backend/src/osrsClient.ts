@@ -1,4 +1,4 @@
-import { calculateDayChange, calculateHourChange, getLatestPricesBefore } from "./database";
+import { getLatestPricesBefore } from "./database";
 import { calculateTax, calculateProfit, calculateROI } from "./tax";
 
 const MAPPING_URL = "https://prices.runescape.wiki/api/v1/osrs/mapping";

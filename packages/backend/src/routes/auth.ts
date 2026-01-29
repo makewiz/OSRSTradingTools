@@ -13,7 +13,6 @@ import {
     authenticateToken
 } from "../auth";
 import { exchangeCodeForToken, getDiscordUser, checkGuildMembership, assignLinkedRole } from "../oauth";
-import crypto from "crypto";
 import { authLimiter } from "../middleware/rateLimiter";
 import { logger } from "@osrstradingtools/shared";
 
