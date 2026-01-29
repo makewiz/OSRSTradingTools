@@ -110,7 +110,7 @@ async function fetchJson<T>(url: string): Promise<T> {
   return (await res.json()) as T;
 }
 
-export async function getMapping(): Promise<OsrsItemMapping[]> {
+async function getMapping(): Promise<OsrsItemMapping[]> {
   const now = Date.now();
   if (mappingCache && now - mappingCache.fetchedAt < MAPPING_TTL) {
     return mappingCache.data;
@@ -140,7 +140,7 @@ export async function get5m(): Promise<Osrs5mResponse> {
   return data;
 }
 
-export async function getVolumes(): Promise<OsrsVolumesResponse> {
+async function getVolumes(): Promise<OsrsVolumesResponse> {
   const now = Date.now();
   if (volumesCache && now - volumesCache.fetchedAt < VOLUMES_TTL) {
     return volumesCache.data;
