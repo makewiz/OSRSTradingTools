@@ -275,10 +275,103 @@ export const Admin: React.FC = () => {
                     }}
                     disabled={syncStatus?.isSyncing}
                     className="page-button"
-                    style={{ marginTop: 0 }}
+                    style={{ marginTop: 0, marginRight: "10px" }}
                 >
                     {syncStatus?.isSyncing ? "Syncing..." : "Trigger Recipe Sync"}
                 </button>
+
+                <div style={{ marginTop: "20px", borderTop: "1px solid #444", paddingTop: "20px" }}>
+                    <h3>Data Management</h3>
+                    <div style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap" }}>
+                        <button
+                            onClick={async () => {
+                                try {
+                                    const res = await fetchWithAuth(`${API_BASE_URL}/api/recipes/export`);
+                                    if (res.ok) {
+                                        const blob = await res.blob();
+                                        const url = window.URL.createObjectURL(blob);
+                                        const a = document.createElement("a");
+                                        a.href = url;
+                                        a.download = "recipes_export.json";
+                                        document.body.appendChild(a);
+                                        a.click();
+                                        window.URL.revokeObjectURL(url);
+                                        a.remove();
+                                    } else {
+                                        setSyncError("Failed to export recipes");
+                                    }
+                                } catch (err) {
+                                    setSyncError("Error exporting recipes");
+                                }
+                            }}
+                            className="page-button"
+                            style={{ marginTop: 0 }}
+                        >
+                            Export Recipes
+                        </button>
+
+                        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                            <input
+                                type="file"
+                                accept=".json"
+                                id="import-file"
+                                style={{ display: "none" }}
+                                onChange={async (e) => {
+                                    const file = e.target.files?.[0];
+                                    if (!file) return;
+
+                                    if (!confirm("WARNING: Importing recipes will REPLACE all existing recipes. Continue?")) {
+                                        e.target.value = ""; // Reset file input
+                                        return;
+                                    }
+
+                                    const reader = new FileReader();
+                                    reader.onload = async (ev) => {
+                                        try {
+                                            const content = ev.target?.result as string;
+                                            const json = JSON.parse(content);
+
+                                            const res = await fetchWithAuth(`${API_BASE_URL}/api/recipes/import`, {
+                                                method: "POST",
+                                                headers: { "Content-Type": "application/json" },
+                                                body: JSON.stringify(json)
+                                            });
+
+                                            if (res.ok) {
+                                                const d = await res.json();
+                                                setSyncSuccess(d.message || "Import successful");
+                                                setSyncError(null);
+                                            } else {
+                                                const d = await res.json();
+                                                setSyncError(d.error || "Import failed");
+                                                setSyncSuccess(null);
+                                            }
+                                        } catch (err) {
+                                            setSyncError("Error parsing or importing file");
+                                            setSyncSuccess(null);
+                                        } finally {
+                                            // Reset input
+                                            e.target.value = "";
+                                        }
+                                    };
+                                    reader.readAsText(file);
+                                }}
+                            />
+                            <label htmlFor="import-file" className="page-button" style={{
+                                marginTop: 0,
+                                cursor: "pointer",
+                                background: "#dc3545",
+                                color: "white",
+                                padding: "10px",
+                                borderRadius: "4px",
+                                display: "inline-block",
+                                textAlign: "center"
+                            }}>
+                                Import Recipes
+                            </label>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             <style>{`

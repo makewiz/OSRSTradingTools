@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { getProfitableRecipes } from "../database/recipes";
+import { getProfitableRecipes, getAllRecipesForExport, importRecipes } from "../database/recipes";
 import { recipeService } from "../services/recipeService";
 import { authenticateToken } from "../auth";
 import { logger } from "@osrstradingtools/shared";
@@ -83,6 +83,43 @@ router.get("/sync/status", authenticateToken, async (req, res) => {
         return res.status(403).json({ error: "Admin access required" });
     }
     res.json(recipeService.getSyncStatus());
+});
+
+// GET /recipes/export - Export all recipes as JSON (Admin only)
+router.get("/export", authenticateToken, async (req, res) => {
+    if (!req.user?.is_admin) {
+        return res.status(403).json({ error: "Admin access required" });
+    }
+
+    try {
+        const recipes = await getAllRecipesForExport();
+        res.setHeader("Content-Disposition", "attachment; filename=recipes.json");
+        res.setHeader("Content-Type", "application/json");
+        res.json(recipes);
+    } catch (err) {
+        logger.error("Failed to export recipes", err);
+        res.status(500).json({ error: "Failed to export recipes" });
+    }
+});
+
+// POST /recipes/import - Import recipes from JSON (Admin only)
+router.post("/import", authenticateToken, async (req, res) => {
+    if (!req.user?.is_admin) {
+        return res.status(403).json({ error: "Admin access required" });
+    }
+
+    try {
+        const recipes = req.body;
+        if (!Array.isArray(recipes)) {
+            return res.status(400).json({ error: "Invalid format: Expected array of recipes" });
+        }
+
+        await importRecipes(recipes);
+        res.json({ message: `Successfully imported ${recipes.length} recipes` });
+    } catch (err) {
+        logger.error("Failed to import recipes", err);
+        res.status(500).json({ error: "Failed to import recipes" });
+    }
 });
 
 export default router;

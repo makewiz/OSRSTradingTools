@@ -384,3 +384,97 @@ export async function getProfitableRecipes(minProfit: number = 0, limit: number 
 
     return profitableRecipes.sort((a, b) => (b.potentialProfitPerHour ?? -Infinity) - (a.potentialProfitPerHour ?? -Infinity)).slice(0, limit);
 }
+
+export async function getAllRecipesForExport(): Promise<Recipe[]> {
+    const res = await pool.query(`
+      SELECT r.*, 
+             COALESCE(json_agg(DISTINCT ri.*) FILTER (WHERE ri.item_id IS NOT NULL), '[]') as inputs,
+             COALESCE(json_agg(DISTINCT ro.*) FILTER (WHERE ro.item_id IS NOT NULL), '[]') as outputs
+      FROM recipes r
+      LEFT JOIN recipe_inputs ri ON r.id = ri.recipe_id
+      LEFT JOIN recipe_outputs ro ON r.id = ro.recipe_id
+      GROUP BY r.id
+    `);
+
+    return res.rows.map(row => ({
+        id: row.id,
+        name: row.name,
+        skill: row.skill,
+        level: row.level,
+        ticks: row.ticks,
+        facilities: row.facilities,
+        tools: row.tools,
+        members: row.members,
+        xp_: row.xp,
+        wikiUrl: row.wiki_url,
+        inputs: row.inputs.map((i: any) => ({
+            itemId: i.item_id,
+            quantity: i.quantity,
+            name: i.name
+        })),
+        outputs: row.outputs.map((o: any) => ({
+            itemId: o.item_id,
+            quantity: o.quantity,
+            subtxt: o.subtxt
+        }))
+    }));
+}
+
+export async function importRecipes(recipes: Recipe[]): Promise<void> {
+    const client = await pool.connect();
+    try {
+        await client.query("BEGIN");
+
+        // Truncate existing recipes
+        await client.query("TRUNCATE recipes CASCADE");
+
+        // Insert new recipes
+        // reusing logic from saveRecipe but inline or just calling saveRecipe inside loop?
+        // Calling saveRecipe inside a loop that manages its own transaction is tricky if saveRecipe also does BEGIN/COMMIT (it does).
+        // So we should extract the insert logic or just copy it here for the bulk operation to avoid N transactions.
+        // Actually, let's copy the logic to handle the single large transaction for speed.
+
+        const insertRecipeQuery = `
+          INSERT INTO recipes (name, skill, level, ticks, facilities, tools, members, xp, wiki_url)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+          RETURNING id
+        `;
+
+        for (const recipe of recipes) {
+            const res = await client.query(insertRecipeQuery, [
+                recipe.name,
+                recipe.skill,
+                recipe.level,
+                recipe.ticks,
+                recipe.facilities,
+                recipe.tools,
+                recipe.members,
+                recipe.xp_,
+                recipe.wikiUrl
+            ]);
+            const recipeId = res.rows[0].id;
+
+            for (const input of recipe.inputs) {
+                await client.query(`
+                    INSERT INTO recipe_inputs (recipe_id, item_id, quantity, name)
+                    VALUES ($1, $2, $3, $4)
+                `, [recipeId, input.itemId, input.quantity, input.name]);
+            }
+
+            for (const output of recipe.outputs) {
+                await client.query(`
+                    INSERT INTO recipe_outputs (recipe_id, item_id, quantity, subtxt)
+                    VALUES ($1, $2, $3, $4)
+                `, [recipeId, output.itemId, output.quantity, output.subtxt]);
+            }
+        }
+
+        await client.query("COMMIT");
+    } catch (err) {
+        await client.query("ROLLBACK");
+        logger.error("Failed to import recipes", err);
+        throw err;
+    } finally {
+        client.release();
+    }
+}
