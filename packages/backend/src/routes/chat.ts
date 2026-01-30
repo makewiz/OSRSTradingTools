@@ -4,8 +4,13 @@ import { AnalysisService, MERCHANTING_GUIDE } from "../analysis";
 import { CombinedItem } from "../osrsClient";
 import { getLatestItems } from "../scheduler";
 import { logger } from "@osrstradingtools/shared";
+import { authenticateToken } from "../auth";
 
 const router = express.Router();
+
+if (process.env.REQUIRE_AUTH === "true") {
+    router.use(authenticateToken);
+}
 
 // Helper to simple search items
 // Helper to clean strings for better matching
