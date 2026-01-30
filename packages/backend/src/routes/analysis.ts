@@ -1,12 +1,13 @@
 
 import { Router } from "express";
 import { authenticateToken } from "../auth";
-import { getCombinedItems, fetchWikiDescription } from "../osrsClient";
+import { fetchWikiDescription } from "../osrsClient";
 import { getPriceHistory, getBatchPriceHistory } from "../database";
 import { MERCHANTING_GUIDE } from "../analysis";
 import { NewsService } from "../news";
 import { logger } from "@osrstradingtools/shared";
 import dotenv from "dotenv";
+import { getLatestItems } from "../scheduler";
 
 dotenv.config();
 
@@ -51,7 +52,7 @@ router.get("/risk/:id", async (req, res) => {
 
     try {
         // 1. Gather Data
-        const allItems = await getCombinedItems();
+        const allItems = await getLatestItems();
         const item = allItems.find((i) => i.id === id);
 
         if (!item) {
