@@ -2,7 +2,9 @@
 import { Router } from "express";
 import { authenticateToken } from "../auth";
 import { getCombinedItems, fetchWikiDescription } from "../osrsClient";
-import { getPriceHistory } from "../database";
+import { getPriceHistory, getBatchPriceHistory } from "../database";
+import { MERCHANTING_GUIDE } from "../analysis";
+import { NewsService } from "../news";
 import { logger } from "@osrstradingtools/shared";
 import dotenv from "dotenv";
 
@@ -56,10 +58,19 @@ router.get("/risk/:id", async (req, res) => {
             return res.status(404).json({ error: "Item not found" });
         }
 
-        // Get 30 days of history for context
+        // Get 30 days of history for high-level context
         const endTime = Math.floor(now / 1000);
-        const startTime = endTime - 30 * 24 * 60 * 60;
-        const historyData = await getPriceHistory(id, startTime, endTime);
+        const startTime30d = endTime - 30 * 24 * 60 * 60;
+        const historyData = await getPriceHistory(id, startTime30d, endTime);
+
+        // Get 7 days of 6h granular history for detailed trend analysis
+        const startTime7d = endTime - 7 * 24 * 60 * 60;
+        const granularHistoryMap = await getBatchPriceHistory([id], startTime7d, endTime, '6h');
+        const granularHistory = granularHistoryMap[id] || [];
+
+        // Fetch latest news
+        const news = await NewsService.fetchNewestNews();
+        const recentNews = news.slice(0, 3);
 
         // Combine buy/sell/volume into flat array for analysis
         const buyPrices = historyData.buy.map(b => b.price);
@@ -95,29 +106,38 @@ router.get("/risk/:id", async (req, res) => {
         const wikiDescription = await fetchWikiDescription(item.name);
 
         const context = {
-            name: item.name,
-            currentPrice: item.buyPrice,
-            dayChange: item.dayChange,
-            margin: item.margin,
-            roi: item.roi,
-            avgDailyVolume: Math.round(avgVolume),
-            priceVolatility30d: `${volatilityPercent.toFixed(2)}%`,
-            priceRange30d: `${lowPrice} - ${highPrice}`,
-            isMembers: item.members,
-            wikiDescription: wikiDescription ? (wikiDescription.length > 500 ? wikiDescription.substring(0, 500) + "..." : wikiDescription) : "No description available."
+            item: {
+                ...item, // Include full combined item data
+                wikiDescription: wikiDescription ? (wikiDescription.length > 500 ? wikiDescription.substring(0, 500) + "..." : wikiDescription) : "No description available.",
+                priceVolatility30d: `${volatilityPercent.toFixed(2)}%`,
+                priceRange30d: `${lowPrice} - ${highPrice}`,
+                avgDailyVolume: Math.round(avgVolume),
+            },
+            history7d_6h: granularHistory.map(p => ({
+                time: new Date(p.timestamp * 1000).toISOString(),
+                price: p.price
+            })),
+            recentNews: recentNews.map(n => ({ title: n.title, date: n.date, category: n.category }))
         };
 
         const prompt = `
       You are a conservative expert financial risk advisor for Old School RuneScape (OSRS) flipping.
       Analyze the following item data and determine the risk profile for a short-term flip (1-2 days).
       
-      Item Data:
+      You must strictly follow the principles in the **Merchanting Guide** below.
+
+      ${MERCHANTING_GUIDE}
+
+      **Item Analysis Context (JSON):**
       ${JSON.stringify(context, null, 2)}
 
-      Use the 'wikiDescription' to understand the item's actual utility (e.g. is it a useful weapon, a quest item, or junk?).
-      Items with high utility are safer than "junk" items even if volatile.
+      **Instructions:**
+      1. Use the 'wikiDescription' to understand the item's actual utility (e.g. is it a useful weapon, a quest item, or junk?).
+      2. Analyze the 'history7d_6h' to see recent trends. Are prices crashing or spiking?
+      3. Check 'recentNews' to see if any updates might affect this item (e.g. game updates).
+      4. Consider the item's liquidity (volume) and margins.
 
-      Rules:
+      **Risk Rules:**
       1. High Volatility (>10%) is risky but profitable.
       2. Low Volume (<100/day) is VERY risky (hard to sell).
       3. Negative trends or massive recent spikes are red flags.
@@ -127,12 +147,11 @@ router.get("/risk/:id", async (req, res) => {
       7. GE tax is capped at 5 million gp per item.
       8. ROI is calculated after tax.
 
-
       Respond ONLY with valid JSON in this format:
       {
         "riskScore": number (1-10, 10=Extreme Risk),
         "rating": string ("Safe", "Moderate", "High Risk"),
-        "reasoning": string (Max 2 short sentences explaining why)
+        "reasoning": string (Max 2 short sentences explaining why, citing specific data like volume, volatility, or news)
       }
     `;
 
