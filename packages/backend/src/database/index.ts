@@ -1021,3 +1021,44 @@ export async function deleteSavedFilter(userId: number, filterId: number): Promi
   `;
   await pool.query(query, [filterId, userId]);
 }
+
+export async function getBatchPriceHistory(
+  itemIds: number[],
+  startTime: number,
+  endTime: number,
+  granularity: '5m' | '1h' | '6h' | '24h' = '24h'
+): Promise<Record<number, { timestamp: number; price: number }[]>> {
+  if (itemIds.length === 0) return {};
+
+  let table = 'item_history_24h';
+  if (granularity === '5m') table = 'item_history_5m';
+  else if (granularity === '1h') table = 'item_history_1h';
+  else if (granularity === '6h') table = 'item_history_6h';
+
+  const query = `
+    SELECT item_id, timestamp, avg_high_price, avg_low_price
+    FROM ${table}
+    WHERE item_id = ANY($1) AND timestamp >= $2 AND timestamp <= $3
+    ORDER BY timestamp ASC
+  `;
+
+  const result = await pool.query(query, [itemIds, startTime, endTime]);
+  const map: Record<number, { timestamp: number; price: number }[]> = {};
+
+  for (const id of itemIds) {
+    map[id] = [];
+  }
+
+  for (const row of result.rows) {
+    if (!map[row.item_id]) map[row.item_id] = [];
+    const price = row.avg_high_price || row.avg_low_price;
+    if (price) {
+      map[row.item_id].push({
+        timestamp: parseInt(row.timestamp),
+        price: price
+      });
+    }
+  }
+
+  return map;
+}
