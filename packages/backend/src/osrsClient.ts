@@ -17,6 +17,7 @@ export interface OsrsItemMapping {
   wiki_url: string;
   icon: string;
   limit?: number;
+  highalch?: number;
 }
 
 export interface OsrsLatestItem {
@@ -80,6 +81,9 @@ export interface CombinedItem {
   profit: number | null; // Net margin per item (Sell - Tax - Buy)
   roi: number | null; // Return on Investment percentage
   potentialProfit: number | null; // Net Profit * Limit
+  highAlch: number | null;
+  highAlchProfit: number | null;
+  highAlchRoi: number | null;
 }
 
 interface CacheEntry<T> {
@@ -178,6 +182,12 @@ export async function getCombinedItems(): Promise<CombinedItem[]> {
 
   const [prices24h, prices1h] = await Promise.all([prices24hPromise, prices1hPromise]);
 
+  // Get current nature rune price (ID 561)
+  const natureRuneId = 561;
+  const natureRuneLatest = latest.data[String(natureRuneId)];
+  const natureRunePrice = natureRuneLatest ? (natureRuneLatest.low ?? natureRuneLatest.high ?? 0) : 0;
+
+
   const items = mapping.map((m) => {
     const latestEntry = latest.data[String(m.id)];
     const fiveMinEntry = fiveMin.data[String(m.id)];
@@ -256,6 +266,19 @@ export async function getCombinedItems(): Promise<CombinedItem[]> {
       }
     }
 
+    // Calculate High Alch Metrics
+    let highAlchProfit: number | null = null;
+    let highAlchRoi: number | null = null;
+    const highAlch = m.highalch || null;
+
+    if (highAlch !== null && buyPrice !== null && natureRunePrice > 0) {
+      const totalCost = buyPrice + natureRunePrice;
+      highAlchProfit = highAlch - totalCost;
+      if (totalCost > 0) {
+        highAlchRoi = (highAlchProfit / totalCost) * 100;
+      }
+    }
+
     return {
       id: m.id,
       name: m.name,
@@ -283,7 +306,10 @@ export async function getCombinedItems(): Promise<CombinedItem[]> {
       tax,
       profit,
       roi,
-      potentialProfit
+      potentialProfit,
+      highAlch,
+      highAlchProfit,
+      highAlchRoi
     };
   });
 

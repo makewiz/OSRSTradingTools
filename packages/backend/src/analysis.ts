@@ -21,6 +21,7 @@ export interface MarketAnalysis {
     topRecurring: HighlightItem[];
     topAnomalies: HighlightItem[];
     topIntraday: HighlightItem[];
+    topHighAlch: HighlightItem[];
     summary: string;
     news?: NewsItem[];
     itemContext?: Record<string, string>;
@@ -100,6 +101,18 @@ export class AnalysisService {
         const topAnomalies = await this.detectAnomalies(items);
         const topIntraday = await this.detectIntradayPatterns(items);
 
+        const topHighAlch = items
+            .filter(i =>
+                (i.highAlchProfit || 0) > 0 &&
+                (i.volume || 0) > 50 // Ensure some volume so it's buyable
+            )
+            .sort((a, b) => (b.highAlchProfit || 0) - (a.highAlchProfit || 0))
+            .slice(0, 5)
+            .map(i => ({
+                ...i,
+                reason: `Alch Profit: ${i.highAlchProfit?.toLocaleString()}gp (ROI: ${i.highAlchRoi?.toFixed(1)}%)`
+            } as HighlightItem));
+
         // Fetch Wiki context for top items
         const itemsToFetch = new Set<string>();
         if (highMargin.length > 0) itemsToFetch.add(highMargin[0].name);
@@ -109,6 +122,7 @@ export class AnalysisService {
         if (topRecurring.length > 0) itemsToFetch.add(topRecurring[0].name);
         if (topAnomalies.length > 0) itemsToFetch.add(topAnomalies[0].name);
         if (topIntraday.length > 0) itemsToFetch.add(topIntraday[0].name);
+        if (topHighAlch.length > 0) itemsToFetch.add(topHighAlch[0].name);
 
         const itemContext: Record<string, string> = {};
         await Promise.all(Array.from(itemsToFetch).map(async (name) => {
@@ -119,7 +133,7 @@ export class AnalysisService {
             }
         }));
 
-        const summary = await this.generateSummary(highMargin, highVolume, priceSpikes, priceDrops, topRecurring, topAnomalies, topIntraday, news, itemContext);
+        const summary = await this.generateSummary(highMargin, highVolume, priceSpikes, priceDrops, topRecurring, topAnomalies, topIntraday, topHighAlch, news, itemContext);
 
         this.lastAnalysis = {
             timestamp: now,
@@ -130,6 +144,7 @@ export class AnalysisService {
             topRecurring,
             topAnomalies,
             topIntraday,
+            topHighAlch,
             summary,
             news,
             itemContext
@@ -147,6 +162,7 @@ export class AnalysisService {
         recurring: HighlightItem[],
         anomalies: HighlightItem[],
         intraday: HighlightItem[],
+        highAlch: HighlightItem[],
         news: NewsItem[],
         itemContext?: Record<string, string>
     ): Promise<string> {
@@ -161,6 +177,7 @@ export class AnalysisService {
             seasonality: recurring.map(i => ({ ...i, reason: undefined })),
             anomalies: anomalies.map(i => ({ ...i, reason: undefined })),
             intraday: intraday.map(i => ({ ...i, reason: undefined })),
+            highAlch: highAlch.map(i => ({ ...i, reason: undefined })),
             news: news.slice(0, 5)
         };
 
@@ -168,6 +185,7 @@ export class AnalysisService {
 You are an expert Old School RuneScape (OSRS) trading assistant.
 Your goal is to summarize the market highlights based on the DETAILED data provided below.
 You MUST apply the principles of the Merchanting Guide (e.g. checking volume, ROI, limits) to identify the best opportunities.
+Include High Alchemy opportunities if they are exceptionally profitable.
 
 ${MERCHANTING_GUIDE}
 
@@ -250,6 +268,10 @@ ${JSON.stringify(marketContext, null, 2)}
 
         if (intraday.length > 0) {
             parts.push(`${intraday[0].name} appears to have a consistent daily cycle.`);
+        }
+
+        if (highAlch.length > 0) {
+            parts.push(`High alchemy opportunity: ${highAlch[0].name}.`);
         }
 
         if (parts.length === 0) {

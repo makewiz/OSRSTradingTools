@@ -21,6 +21,7 @@ interface MarketAnalysis {
     topRecurring?: HighlightItem[];
     topAnomalies?: HighlightItem[];
     topIntraday?: HighlightItem[];
+    topHighAlch?: HighlightItem[];
     summary: string;
 }
 
@@ -81,6 +82,9 @@ export const Highlights: React.FC = () => {
                 )}
                 {analysis.topIntraday && analysis.topIntraday.length > 0 && (
                     <HighlightSection title="🕑 Daily Cycles" items={analysis.topIntraday} type="success" />
+                )}
+                {analysis.topHighAlch && analysis.topHighAlch.length > 0 && (
+                    <HighlightSection title="🧙 High Alch Profit" items={analysis.topHighAlch} type="success" />
                 )}
             </div>
         </div>
