@@ -82,9 +82,10 @@ export async function ensurePartitionedHistoryTable(
         await client.query(`CREATE INDEX IF NOT EXISTS idx_${tableName}_time ON ${tableName}(item_id, timestamp DESC)`);
     }
 
-    // Ensure partitions exist for now and near future
+    // Ensure partitions exist for the full retention period (plus some future buffer)
     const now = Math.floor(Date.now() / 1000);
-    await ensurePartitionsExist(client, tableName, now - partitionInterval, now + partitionInterval * 2, partitionInterval);
+    const retentionStart = now - retentionSeconds;
+    await ensurePartitionsExist(client, tableName, retentionStart, now + partitionInterval * 2, partitionInterval);
 }
 
 async function ensurePartitionsExist(

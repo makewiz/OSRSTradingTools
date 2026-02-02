@@ -123,7 +123,7 @@ client.on("interactionCreate", async (interaction) => {
       const threshold = interaction.options.getNumber("threshold") ?? 5.0;
       const period = (interaction.options.getString("period") as '1h' | '24h') ?? '1h';
 
-      // Used default item name for now, in a real app we'd fetch the name to confirm
+      // NOTE: Using current threshold without name check.
       await addWatch(discordId, itemId, threshold, period);
       await interaction.reply({ content: `✅ Watching item ${itemId} with threshold ${threshold}% (${period} change)`, ephemeral: true });
 
@@ -207,7 +207,7 @@ client.on("interactionCreate", async (interaction) => {
         if (start === -1 || end === -1) {
           await interaction.reply({ content: `✅ Bot sleep disabled (set to -1)`, ephemeral: true });
         } else {
-          // If start and end are the same the bot will sleep all day. This is allowed for now.
+          // If start and end are the same, the bot will sleep for 24 hours.
           await interaction.reply({ content: `✅ Bot sleep time set to ${start}:00 - ${end}:00`, ephemeral: true });
         }
       } else if (interaction.options.getSubcommand() === "channel") {

@@ -38,7 +38,7 @@ const EXEMPT_ITEMS = new Set([
     "Camelot teleport",
     "Civitas illa fortis teleport",
     "Falador teleport",
-    "Games necklace(8)", // Note: User said "Games necklace (8)", wiki usually has no space before (8) or sometimes with space. I'll check.
+    "Games necklace(8)", // Wiki usually has no space before (8).
     "Games necklace (8)",
     "Kourend castle teleport",
     "Lumbridge teleport",
@@ -70,7 +70,7 @@ export function isTaxExempt(name: string): boolean {
 
     // Check case-insensitive
     // (optimization: could lowercase the set keys once)
-    // For now, this is simple and fast enough for a small list
+    // Check case-insensitive
     const lowerName = name.toLowerCase();
     for (const item of EXEMPT_ITEMS) {
         if (item.toLowerCase() === lowerName) return true;

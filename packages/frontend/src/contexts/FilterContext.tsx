@@ -38,11 +38,8 @@ const FilterContext = createContext<FilterContextType | undefined>(undefined);
 export const FilterProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
     const { user, token, fetchWithAuth } = useAuth();
 
-    // Initial state: try to see if we want to restore "current" state? 
-    // For now, let's just default to clean state. 
-    // Ideally we might want to stash "current session" in session storage or similar, 
-    // but the requirement is mainly about "moving back from selected item wont lose filters". 
-    // Since this Provider will be high up in App, state will be preserved in memory as long as we don't reload.
+    // Default to clean state on load.
+    // Provider state is preserved in memory during session.
     const [filterState, setFilterState] = useState<FilterState>(defaultFilterState);
     const [savedPresets, setSavedPresets] = useState<SavedFilter[]>([]);
 

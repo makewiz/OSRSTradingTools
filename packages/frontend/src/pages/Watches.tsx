@@ -52,6 +52,7 @@ export const Watches: React.FC = () => {
     const [advancedWatches, setAdvancedWatches] = useState<AdvancedWatch[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [isDiscordLinked, setIsDiscordLinked] = useState(false);
 
     // Edit state for Simple Watches
     const [editingWatchId, setEditingWatchId] = useState<number | null>(null);
@@ -90,6 +91,7 @@ export const Watches: React.FC = () => {
             const data1 = await res1.json();
             const data2 = await res2.json();
 
+            setIsDiscordLinked(!!data1.linked); // Store linked status
             setWatches(data1.watches || []);
             setAdvancedWatches(data2.watches || []);
         } catch (err: any) {
@@ -285,10 +287,35 @@ export const Watches: React.FC = () => {
         <div className="watches-page app-main" style={{ maxWidth: '1000px', margin: '0 auto', paddingBottom: '50px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
                 <h1>My Price Alerts</h1>
-                <button className="page-button" onClick={openCreateAdvanced} style={{ background: '#4caf50', padding: '10px 20px', fontSize: '1em' }}>+ New Smart Watch</button>
+                <button
+                    className="page-button"
+                    onClick={isDiscordLinked ? openCreateAdvanced : undefined}
+                    style={{
+                        background: isDiscordLinked ? '#4caf50' : '#555',
+                        padding: '10px 20px',
+                        fontSize: '1em',
+                        cursor: isDiscordLinked ? 'pointer' : 'not-allowed',
+                        opacity: isDiscordLinked ? 1 : 0.7
+                    }}
+                    disabled={!isDiscordLinked}
+                    title={!isDiscordLinked ? "Link Discord to create watches" : ""}
+                >
+                    + New Smart Watch
+                </button>
             </div>
 
             {error && <div className="error-message">{error}</div>}
+
+            {!loading && !isDiscordLinked && (
+                <div style={{ background: 'rgba(255, 152, 0, 0.15)', border: '1px solid #ff9800', color: '#ff9800', padding: '15px', borderRadius: '8px', marginBottom: '20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <div>
+                        <strong style={{ display: 'block', marginBottom: '4px' }}>⚠️ Discord Not Linked</strong>
+                        <div style={{ fontSize: '0.9em', color: '#ccc' }}>You must link your Discord account in your profile to create and receive watch alerts.</div>
+                    </div>
+                    <Link to="/profile" className="page-button" style={{ background: '#ff9800', color: '#000', fontWeight: 'bold', textDecoration: 'none' }}>Link Discord</Link>
+                </div>
+            )}
+
             {loading && <p>Loading...</p>}
 
             {!loading && (

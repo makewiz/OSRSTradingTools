@@ -3,9 +3,8 @@ dotenv.config();
 
 import express from "express";
 import cors from "cors";
-import { getCombinedItems } from "./osrsClient";
 import { initializeDatabase, closeDatabase } from "./database";
-import { startPriceScheduler, getLatestItems, touchActivity, getLastFetchTime } from "./scheduler";
+import { startPriceScheduler, getLatestItems, runRetentionPolicy } from "./scheduler";
 import { logger } from "@osrstradingtools/shared";
 
 import itemsRouter from "./routes/items";
@@ -16,6 +15,8 @@ import highlightsRouter from "./routes/highlights";
 import adminRouter from "./routes/admin";
 import configRouter from "./routes/config";
 import analysisRouter from "./routes/analysis";
+import recipesRouter from "./routes/recipes";
+import chatRouter from "./routes/chat"; // [NEW] Chat route
 
 // Initialize database
 // Initialize database
@@ -33,7 +34,7 @@ const app = express();
 const port = process.env.PORT || 4000;
 
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: "1mb" }));
 
 app.get("/api/health", (_req, res) => {
   res.json({ status: "ok", service: "osrs-trading-tools-backend" });
@@ -57,6 +58,13 @@ app.use("/api/analysis", analysisRouter);
 // Filter routes
 import filtersRouter from "./routes/filters";
 app.use("/api/filters", filtersRouter);
+// Recipe routes
+app.use("/api/recipes", recipesRouter);
+// Chat routes
+app.use("/api/chat", chatRouter); // [NEW] Chat route
+// Hiscore routes
+import hiscoresRouter from "./routes/hiscores";
+app.use("/api/hiscores", hiscoresRouter);
 
 
 import { authenticateToken } from "./auth";
@@ -69,15 +77,8 @@ app.get("/api/items", async (req, res, next) => {
   }
 }, async (_req, res) => {
   try {
-    touchActivity();
-    const cached = getLatestItems();
-    if (cached && cached.length > 0 && Date.now() - getLastFetchTime() < 120000) {
-      res.json({ items: cached });
-    } else {
-      // Fallback if cache is empty (e.g. startup)
-      const items = await getCombinedItems();
-      res.json({ items });
-    }
+    const items = await getLatestItems();
+    res.json({ items });
   } catch (err) {
     logger.error("Failed to fetch OSRS prices:", err);
     res.status(502).json({ error: "Failed to fetch OSRS prices" });

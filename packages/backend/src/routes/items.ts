@@ -1,6 +1,5 @@
 import express from "express";
-import { getCombinedItems } from "../osrsClient";
-import { getLatestItems, touchActivity, getLastFetchTime } from "../scheduler";
+import { getLatestItems } from "../scheduler";
 import { getPriceHistory, getLatestPrice } from "../database";
 import { authenticateToken } from "../auth";
 import { logger } from "@osrstradingtools/shared";
@@ -20,12 +19,7 @@ router.get("/:id", async (req, res) => {
       return res.status(400).json({ error: "Invalid item ID" });
     }
 
-    touchActivity();
-
-    let items = getLatestItems();
-    if (!items || items.length === 0 || Date.now() - getLastFetchTime() > 120000) {
-      items = await getCombinedItems();
-    }
+    const items = await getLatestItems();
     const item = items.find((i) => i.id === itemId);
 
     if (!item) {
@@ -68,7 +62,7 @@ router.get("/:id/history", async (req, res) => {
       return res.status(400).json({ error: "Invalid timestamp" });
     }
 
-    let items = getLatestItems();
+    const items = await getLatestItems();
     const item = items.find((i) => i.id === itemId);
     const dailyVolume = item?.volume ?? null;
 

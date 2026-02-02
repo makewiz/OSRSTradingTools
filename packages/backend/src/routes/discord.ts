@@ -13,9 +13,8 @@ import {
     getAdvancedWatches,
     updateAdvancedWatch
 } from "../database";
-import { exchangeCodeForToken, getDiscordUser } from "../oauth";
-import { getCombinedItems } from "../osrsClient";
-import { getLatestItems, touchActivity, getLastFetchTime } from "../scheduler";
+import { exchangeCodeForToken, getDiscordUser, assignLinkedRole } from "../oauth";
+import { getLatestItems } from "../scheduler";
 import { AnalysisService } from "../analysis";
 import { logger } from "@osrstradingtools/shared";
 
@@ -43,11 +42,7 @@ router.get("/bot/items", async (req, res) => {
     }
 
     try {
-        touchActivity();
-        let items = getLatestItems();
-        if (!items || items.length === 0 || Date.now() - getLastFetchTime() > 120000) {
-            items = await getCombinedItems();
-        }
+        const items = await getLatestItems();
         res.json({ items });
     } catch (err) {
         // eslint-disable-next-line no-console
@@ -101,6 +96,10 @@ router.post("/link-oauth", async (req, res) => {
         const discordProfile = await getDiscordUser(tokenData.access_token);
 
         await linkDiscordUser(userId, discordProfile.id);
+
+        // Assign "Linked User"
+        await assignLinkedRole(discordProfile.id, discordProfile.username);
+
         res.json({ success: true });
     } catch (err: any) {
         // eslint-disable-next-line no-console
@@ -128,13 +127,8 @@ router.get("/settings", async (req, res) => {
         const watches = await getBackendWatches(discordUser.discord_id);
 
         // Enrich with item names
-        // Note: In a production app with DB "items" table, we would JOIN. 
-        // Here we fetch from cache.
-        // Here we fetch from cache.
-        let allItems = getLatestItems();
-        if (!allItems || allItems.length === 0) {
-            allItems = await getCombinedItems();
-        }
+        // Fetch detailed item information from cache to enrich watches with names.
+        let allItems = await getLatestItems();
         const enrichedWatches = watches.map(w => {
             const item = allItems.find(i => i.id === w.item_id);
             return {
@@ -262,7 +256,7 @@ router.delete("/watch/:itemId", async (req, res) => {
     try {
         const discordUser = await getDiscordUserByUserId(userId);
         if (!discordUser) {
-            // If not linked, maybe they are just trying to clean up? But we can't do anything.
+            // User not linked, cannot remove backend watches.
             return res.status(404).json({ error: "No Discord account linked" });
         }
 

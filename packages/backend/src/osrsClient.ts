@@ -1,4 +1,4 @@
-import { calculateDayChange, calculateHourChange, getLatestPricesBefore } from "./database";
+import { getLatestPricesBefore } from "./database";
 import { calculateTax, calculateProfit, calculateROI } from "./tax";
 
 const MAPPING_URL = "https://prices.runescape.wiki/api/v1/osrs/mapping";
@@ -7,6 +7,7 @@ const FIVE_MIN_URL = "https://prices.runescape.wiki/api/v1/osrs/5m";
 const TIMESERIES_URL = "https://prices.runescape.wiki/api/v1/osrs/timeseries";
 const VOLUMES_URL =
   "https://oldschool.runescape.wiki/?title=Module:GEVolumes/data.json&action=raw&ctype=application%2Fjson";
+const WIKI_API_URL = "https://oldschool.runescape.wiki/api.php";
 
 export interface OsrsItemMapping {
   id: number;
@@ -16,6 +17,7 @@ export interface OsrsItemMapping {
   wiki_url: string;
   icon: string;
   limit?: number;
+  highalch?: number;
 }
 
 export interface OsrsLatestItem {
@@ -79,6 +81,10 @@ export interface CombinedItem {
   profit: number | null; // Net margin per item (Sell - Tax - Buy)
   roi: number | null; // Return on Investment percentage
   potentialProfit: number | null; // Net Profit * Limit
+  highAlch: number | null;
+  highAlchProfit: number | null;
+  highAlchRoi: number | null;
+  highAlchProfitPerHour: number | null; // Profit based on max casts (1200/hr) and buy limit
 }
 
 interface CacheEntry<T> {
@@ -109,7 +115,7 @@ async function fetchJson<T>(url: string): Promise<T> {
   return (await res.json()) as T;
 }
 
-async function getMapping(): Promise<OsrsItemMapping[]> {
+export async function getMapping(): Promise<OsrsItemMapping[]> {
   const now = Date.now();
   if (mappingCache && now - mappingCache.fetchedAt < MAPPING_TTL) {
     return mappingCache.data;
@@ -176,6 +182,12 @@ export async function getCombinedItems(): Promise<CombinedItem[]> {
   const prices1hPromise = getLatestPricesBefore(itemIds, timeAgo1h, 'item_history_5m');
 
   const [prices24h, prices1h] = await Promise.all([prices24hPromise, prices1hPromise]);
+
+  // Get current nature rune price (ID 561)
+  const natureRuneId = 561;
+  const natureRuneLatest = latest.data[String(natureRuneId)];
+  const natureRunePrice = natureRuneLatest ? (natureRuneLatest.low ?? natureRuneLatest.high ?? 0) : 0;
+
 
   const items = mapping.map((m) => {
     const latestEntry = latest.data[String(m.id)];
@@ -255,6 +267,33 @@ export async function getCombinedItems(): Promise<CombinedItem[]> {
       }
     }
 
+    // Calculate High Alch Metrics
+    let highAlchProfit: number | null = null;
+    let highAlchRoi: number | null = null;
+    let highAlchProfitPerHour: number | null = null;
+    const highAlch = m.highalch || null;
+
+    if (highAlch !== null && buyPrice !== null && natureRunePrice > 0) {
+      const totalCost = buyPrice + natureRunePrice;
+      highAlchProfit = highAlch - totalCost;
+      if (totalCost > 0) {
+        highAlchRoi = (highAlchProfit / totalCost) * 100;
+
+        // Profit Per Hour Calculation
+        // 1. Max casts per hour = 1200 (5 ticks = 3s. 3600s / 3s = 1200)
+        // 2. Item Limit constraints: Limit is per 4 hours.
+        //    Hourly limit = limit / 4.
+        const maxCastsPerHour = 1200;
+        const itemLimit = m.limit || 0; // Assume 0 if unknown to be safe (or could be Infinity if we want to risk it)
+        const hourlyLimit = itemLimit / 4;
+
+        // Effective casts is min of max theoretical and what we can actually buy
+        const effectiveCastsPerHour = Math.min(maxCastsPerHour, hourlyLimit);
+
+        highAlchProfitPerHour = highAlchProfit * effectiveCastsPerHour;
+      }
+    }
+
     return {
       id: m.id,
       name: m.name,
@@ -282,9 +321,31 @@ export async function getCombinedItems(): Promise<CombinedItem[]> {
       tax,
       profit,
       roi,
-      potentialProfit
+      potentialProfit,
+      highAlch,
+      highAlchProfit,
+      highAlchRoi,
+      highAlchProfitPerHour
     };
   });
 
   return items;
+}
+
+export async function fetchWikiDescription(itemName: string): Promise<string | null> {
+  const url = `${WIKI_API_URL}?action=query&prop=extracts&exintro&explaintext&titles=${encodeURIComponent(itemName)}&format=json`;
+  try {
+    const response = await fetchJson<any>(url);
+    const pages = response?.query?.pages;
+    if (!pages) return null;
+
+    // keys are page IDs, e.g. "54321": { ... }
+    const pageId = Object.keys(pages)[0];
+    if (pageId === "-1") return null; // Page not found
+
+    return pages[pageId].extract || null;
+  } catch (err) {
+    // console.error("Error fetching wiki description:", err);
+    return null;
+  }
 }

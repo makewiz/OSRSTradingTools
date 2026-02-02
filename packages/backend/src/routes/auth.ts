@@ -12,8 +12,7 @@ import {
     generateToken,
     authenticateToken
 } from "../auth";
-import { exchangeCodeForToken, getDiscordUser, checkGuildMembership } from "../oauth";
-import crypto from "crypto";
+import { exchangeCodeForToken, getDiscordUser, checkGuildMembership, assignLinkedRole } from "../oauth";
 import { authLimiter } from "../middleware/rateLimiter";
 import { logger } from "@osrstradingtools/shared";
 
@@ -146,7 +145,7 @@ router.post("/discord/login", authLimiter, async (req, res) => {
 
             // 3. If not, treat as "Register via Discord"
             // We need to create a new user. We'll generate a random username if collision, or random password.
-            // NOTE: In a real app, might ask user to choose username. For now, auto-create.
+            // Create new user with Discord username.
             let username = discordProfile.username;
 
             // Check collision
@@ -164,6 +163,9 @@ router.post("/discord/login", authLimiter, async (req, res) => {
 
             // Link Immediately
             await linkDiscordUser(user.id, discordProfile.id);
+
+            // Assign "Linked User" role
+            await assignLinkedRole(discordProfile.id, discordProfile.username);
         }
 
         // 4. Generate Token

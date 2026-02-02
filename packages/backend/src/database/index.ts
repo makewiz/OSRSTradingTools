@@ -1,8 +1,9 @@
 import { Pool } from "pg";
 import dotenv from "dotenv";
-import { fetchWikiTimeSeries } from "./osrsClient";
+import { fetchWikiTimeSeries } from "../osrsClient";
 import { logger } from "@osrstradingtools/shared";
-import { ensurePartitionedHistoryTable } from "./db/partitions";
+import { ensurePartitionedHistoryTable } from "./partitions";
+import { createRecipeTables } from "./recipes";
 
 dotenv.config();
 
@@ -200,10 +201,15 @@ export async function initializeDatabase(): Promise<void> {
     // 6h:  Retention 30d,  Partition 7d (604800s)
     // 24h: Retention 365d, Partition 30d (2592000s)
 
-    await ensurePartitionedHistoryTable(client, 'item_history_5m', 24 * 3600, 24 * 3600);
-    await ensurePartitionedHistoryTable(client, 'item_history_1h', 7 * 24 * 3600, 24 * 3600);
-    await ensurePartitionedHistoryTable(client, 'item_history_6h', 30 * 24 * 3600, 7 * 24 * 3600);
-    await ensurePartitionedHistoryTable(client, 'item_history_24h', 365 * 24 * 3600, 30 * 24 * 3600);
+    const maxRetentionDays = process.env.DATA_RETENTION_DAYS
+      ? parseInt(process.env.DATA_RETENTION_DAYS, 10)
+      : 3650;
+    const maxRetentionSeconds = maxRetentionDays * 24 * 3600;
+
+    await ensurePartitionedHistoryTable(client, 'item_history_5m', Math.min(24 * 3600, maxRetentionSeconds), 24 * 3600);
+    await ensurePartitionedHistoryTable(client, 'item_history_1h', Math.min(7 * 24 * 3600, maxRetentionSeconds), 24 * 3600);
+    await ensurePartitionedHistoryTable(client, 'item_history_6h', Math.min(30 * 24 * 3600, maxRetentionSeconds), 7 * 24 * 3600);
+    await ensurePartitionedHistoryTable(client, 'item_history_24h', Math.min(365 * 24 * 3600, maxRetentionSeconds), 30 * 24 * 3600);
 
     // --- ADVANCED WATCHES ---
     await client.query(`
@@ -252,6 +258,7 @@ export async function initializeDatabase(): Promise<void> {
       ADD COLUMN IF NOT EXISTS cooldown_minutes INTEGER DEFAULT 60
     `);
 
+
     // Saved Filters
     await client.query(`
       CREATE TABLE IF NOT EXISTS saved_filters (
@@ -263,6 +270,9 @@ export async function initializeDatabase(): Promise<void> {
         FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
       )
     `);
+
+    // Recipes
+    await createRecipeTables();
 
     // Deprecate cooldown_seconds (migrate data if needed, or just ignore it)
     // We will assume new watches use cooldown_minutes.
@@ -425,36 +435,48 @@ export async function getPriceHistory(
 
       // Save to database asynchronously to populate history for future requests
       // Save to database using bulk insert
-      // Determine retention cutoff for the target table
-      const now = Math.floor(Date.now() / 1000);
-      let retentionSeconds = 24 * 3600; // default 5m
-      if (table === 'item_history_1h') retentionSeconds = 7 * 24 * 3600;
-      else if (table === 'item_history_6h') retentionSeconds = 30 * 24 * 3600;
-      else if (table === 'item_history_24h') retentionSeconds = 365 * 24 * 3600;
+      try {
+        // Determine retention cutoff for the target table
+        const now = Math.floor(Date.now() / 1000);
+        const maxRetentionDays = process.env.DATA_RETENTION_DAYS
+          ? parseInt(process.env.DATA_RETENTION_DAYS, 10)
+          : 3650;
+        const maxRetentionSeconds = maxRetentionDays * 24 * 3600;
 
-      const retentionCutoff = now - retentionSeconds;
+        let retentionSeconds = 24 * 3600; // default 5m
+        if (table === 'item_history_1h') retentionSeconds = 7 * 24 * 3600;
+        else if (table === 'item_history_6h') retentionSeconds = 30 * 24 * 3600;
+        else if (table === 'item_history_24h') retentionSeconds = 365 * 24 * 3600;
 
-      // Filter points to only insert those that fit in the table's retention window
-      const historyPoints = apiData
-        .filter(d => d.timestamp >= retentionCutoff)
-        .map(d => ({
-          itemId,
-          timestamp: d.timestamp,
-          avgHighPrice: d.avgHighPrice,
-          avgLowPrice: d.avgLowPrice,
-          highPriceVolume: d.highPriceVolume,
-          lowPriceVolume: d.lowPriceVolume
-        }));
+        // Apply global cap
+        retentionSeconds = Math.min(retentionSeconds, maxRetentionSeconds);
 
-      // Split into chunks of 1000
-      if (historyPoints.length > 0) {
-        const chunkSize = 1000;
-        for (let i = 0; i < historyPoints.length; i += chunkSize) {
-          await bulkInsertItemHistory(table, historyPoints.slice(i, i + chunkSize));
+        const retentionCutoff = now - retentionSeconds;
+
+        // Filter points to only insert those that fit in the table's retention window
+        const historyPoints = apiData
+          .filter(d => d.timestamp >= retentionCutoff)
+          .map(d => ({
+            itemId,
+            timestamp: d.timestamp,
+            avgHighPrice: d.avgHighPrice,
+            avgLowPrice: d.avgLowPrice,
+            highPriceVolume: d.highPriceVolume,
+            lowPriceVolume: d.lowPriceVolume
+          }));
+
+        // Split into chunks of 1000
+        if (historyPoints.length > 0) {
+          const chunkSize = 1000;
+          for (let i = 0; i < historyPoints.length; i += chunkSize) {
+            await bulkInsertItemHistory(table, historyPoints.slice(i, i + chunkSize));
+          }
+          logger.info(`[PriceHistory] Persisted ${historyPoints.length} points to ${table} from Wiki API (Filtered from ${apiData.length}).`);
+        } else {
+          logger.info(`[PriceHistory] All Wiki API data was older than retention for ${table}. Skiping insert.`);
         }
-        logger.info(`[PriceHistory] Persisted ${historyPoints.length} points to ${table} from Wiki API (Filtered from ${apiData.length}).`);
-      } else {
-        logger.info(`[PriceHistory] All Wiki API data was older than retention for ${table}. Skiping insert.`);
+      } catch (persistErr) {
+        logger.warn(`[PriceHistory] Failed to persist Wiki data for ${itemId} (non-fatal):`, persistErr);
       }
 
       // Filter and map API data to row format
@@ -525,7 +547,7 @@ export async function getLatestPrice(itemId: number): Promise<{ buyPrice: number
 
 
 // Obsolete legacy helpers (remove if unused, or keep empty if exported and used elsewhere)
-// For now, I've replaced getPriceHistory with the new implementation above.
+// Obsolete legacy helpers (remove if unused, or keep empty if exported and used elsewhere)
 
 
 async function calculatePriceChange(
@@ -651,7 +673,6 @@ export async function getLatestPricesBefore(
  * User Management Functions
  */
 
-// Create new user
 // Create new user
 export async function createUser(
   username: string,
@@ -999,4 +1020,45 @@ export async function deleteSavedFilter(userId: number, filterId: number): Promi
     DELETE FROM saved_filters WHERE id = $1 AND user_id = $2
   `;
   await pool.query(query, [filterId, userId]);
+}
+
+export async function getBatchPriceHistory(
+  itemIds: number[],
+  startTime: number,
+  endTime: number,
+  granularity: '5m' | '1h' | '6h' | '24h' = '24h'
+): Promise<Record<number, { timestamp: number; price: number }[]>> {
+  if (itemIds.length === 0) return {};
+
+  let table = 'item_history_24h';
+  if (granularity === '5m') table = 'item_history_5m';
+  else if (granularity === '1h') table = 'item_history_1h';
+  else if (granularity === '6h') table = 'item_history_6h';
+
+  const query = `
+    SELECT item_id, timestamp, avg_high_price, avg_low_price
+    FROM ${table}
+    WHERE item_id = ANY($1) AND timestamp >= $2 AND timestamp <= $3
+    ORDER BY timestamp ASC
+  `;
+
+  const result = await pool.query(query, [itemIds, startTime, endTime]);
+  const map: Record<number, { timestamp: number; price: number }[]> = {};
+
+  for (const id of itemIds) {
+    map[id] = [];
+  }
+
+  for (const row of result.rows) {
+    if (!map[row.item_id]) map[row.item_id] = [];
+    const price = row.avg_high_price || row.avg_low_price;
+    if (price) {
+      map[row.item_id].push({
+        timestamp: parseInt(row.timestamp),
+        price: price
+      });
+    }
+  }
+
+  return map;
 }

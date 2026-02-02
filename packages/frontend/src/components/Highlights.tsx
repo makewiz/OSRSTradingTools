@@ -18,6 +18,10 @@ interface MarketAnalysis {
     highVolume: HighlightItem[];
     priceSpikes: HighlightItem[];
     priceDrops: HighlightItem[];
+    topRecurring?: HighlightItem[];
+    topAnomalies?: HighlightItem[];
+    topIntraday?: HighlightItem[];
+    topHighAlch?: HighlightItem[];
     summary: string;
 }
 
@@ -70,6 +74,18 @@ export const Highlights: React.FC = () => {
                 <HighlightSection title="📈 Spikes" items={analysis.priceSpikes} type="warning" />
                 <HighlightSection title="📉 Drops" items={analysis.priceDrops} type="danger" />
                 <HighlightSection title="📦 Bulk Profit" items={analysis.highVolume} type="info" />
+                {analysis.topRecurring && analysis.topRecurring.length > 0 && (
+                    <HighlightSection title="📅 Weekend Seasonality" items={analysis.topRecurring} type="success" />
+                )}
+                {analysis.topAnomalies && analysis.topAnomalies.length > 0 && (
+                    <HighlightSection title="⚠️ Anomalies" items={analysis.topAnomalies} type="warning" />
+                )}
+                {analysis.topIntraday && analysis.topIntraday.length > 0 && (
+                    <HighlightSection title="🕑 Daily Cycles" items={analysis.topIntraday} type="success" />
+                )}
+                {analysis.topHighAlch && analysis.topHighAlch.length > 0 && (
+                    <HighlightSection title="🧙 High Alch Profit" items={analysis.topHighAlch} type="success" />
+                )}
             </div>
         </div>
     );
