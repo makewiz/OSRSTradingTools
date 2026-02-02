@@ -84,6 +84,7 @@ export interface CombinedItem {
   highAlch: number | null;
   highAlchProfit: number | null;
   highAlchRoi: number | null;
+  highAlchProfitPerHour: number | null; // Profit based on max casts (1200/hr) and buy limit
 }
 
 interface CacheEntry<T> {
@@ -269,6 +270,7 @@ export async function getCombinedItems(): Promise<CombinedItem[]> {
     // Calculate High Alch Metrics
     let highAlchProfit: number | null = null;
     let highAlchRoi: number | null = null;
+    let highAlchProfitPerHour: number | null = null;
     const highAlch = m.highalch || null;
 
     if (highAlch !== null && buyPrice !== null && natureRunePrice > 0) {
@@ -276,6 +278,19 @@ export async function getCombinedItems(): Promise<CombinedItem[]> {
       highAlchProfit = highAlch - totalCost;
       if (totalCost > 0) {
         highAlchRoi = (highAlchProfit / totalCost) * 100;
+
+        // Profit Per Hour Calculation
+        // 1. Max casts per hour = 1200 (5 ticks = 3s. 3600s / 3s = 1200)
+        // 2. Item Limit constraints: Limit is per 4 hours.
+        //    Hourly limit = limit / 4.
+        const maxCastsPerHour = 1200;
+        const itemLimit = m.limit || 0; // Assume 0 if unknown to be safe (or could be Infinity if we want to risk it)
+        const hourlyLimit = itemLimit / 4;
+
+        // Effective casts is min of max theoretical and what we can actually buy
+        const effectiveCastsPerHour = Math.min(maxCastsPerHour, hourlyLimit);
+
+        highAlchProfitPerHour = highAlchProfit * effectiveCastsPerHour;
       }
     }
 
@@ -309,7 +324,8 @@ export async function getCombinedItems(): Promise<CombinedItem[]> {
       potentialProfit,
       highAlch,
       highAlchProfit,
-      highAlchRoi
+      highAlchRoi,
+      highAlchProfitPerHour
     };
   });
 

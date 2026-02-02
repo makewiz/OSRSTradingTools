@@ -103,14 +103,14 @@ export class AnalysisService {
 
         const topHighAlch = items
             .filter(i =>
-                (i.highAlchProfit || 0) > 0 &&
-                (i.volume || 0) > 50 // Ensure some volume so it's buyable
+                (i.highAlchProfitPerHour || 0) > 0 &&
+                (i.volume || 0) > 50 // Basic liquidity check
             )
-            .sort((a, b) => (b.highAlchProfit || 0) - (a.highAlchProfit || 0))
+            .sort((a, b) => (b.highAlchProfitPerHour || 0) - (a.highAlchProfitPerHour || 0))
             .slice(0, 5)
             .map(i => ({
                 ...i,
-                reason: `Alch Profit: ${i.highAlchProfit?.toLocaleString()}gp (ROI: ${i.highAlchRoi?.toFixed(1)}%)`
+                reason: `Alch Profit: ${Math.round(i.highAlchProfitPerHour || 0).toLocaleString()}gp/hr (Item Profit: ${i.highAlchProfit?.toLocaleString()}gp, Limit: ${i.limit || '?'})`
             } as HighlightItem));
 
         // Fetch Wiki context for top items
