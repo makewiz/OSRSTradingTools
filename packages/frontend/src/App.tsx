@@ -17,7 +17,9 @@ import { Watches } from "./pages/Watches";
 import { Favorites } from "./pages/Favorites";
 import { HighlightsPage } from "./pages/HighlightsPage";
 import { Recipes } from "./pages/Recipes";
+import ArbitragePage from "./pages/Arbitrage";
 import { ChatWidget } from "./components/ChatWidget"; // [NEW]
+
 
 export const App: React.FC = () => {
   return (
@@ -28,7 +30,9 @@ export const App: React.FC = () => {
           <Routes>
             <Route path="/" element={<HighlightsPage />} />
             <Route path="/recipes" element={<Recipes />} />
+            <Route path="/arbitrage" element={<ArbitragePage />} />
             {/* Route /assistant removed, replaced by global widget */}
+
             <Route path="/items" element={<ItemList />} />
             <Route path="/item/:id" element={<ItemDetail />} />
             <Route path="/login" element={<Login />} />

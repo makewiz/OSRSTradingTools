@@ -733,3 +733,45 @@ a:hover {
   color: var(--text-color);
   font-size: 0.95rem;
 }
+
+/* Tooltips */
+.with-tooltip {
+  position: relative;
+  cursor: help;
+  text-decoration: underline dotted;
+}
+
+.with-tooltip::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  top: 100%;
+  /* Show below the header to avoid clipping by table-wrapper's top edge */
+  left: 50%;
+  transform: translateX(-50%);
+  margin-top: 5px;
+  /* space between text and tooltip */
+  background: #333;
+  color: #fff;
+  padding: 8px 12px;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  white-space: normal;
+  width: max-content;
+  max-width: 200px;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.2s, visibility 0.2s;
+  z-index: 9999;
+  /* Ensure high z-index */
+  pointer-events: none;
+  border: 1px solid var(--border-color);
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.5);
+  font-weight: normal;
+  text-align: center;
+  line-height: 1.4;
+}
+
+.with-tooltip:hover::after {
+  opacity: 1;
+  visibility: visible;
+}

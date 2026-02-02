@@ -66,6 +66,13 @@ app.use("/api/chat", chatRouter); // [NEW] Chat route
 import hiscoresRouter from "./routes/hiscores";
 app.use("/api/hiscores", hiscoresRouter);
 
+// Arbitrage routes
+import { createArbitrageRouter } from "./routes/arbitrage";
+import { itemService } from "./services/itemService"; // Fixed path
+app.use("/api/arbitrage", createArbitrageRouter(itemService));
+
+
+
 
 import { authenticateToken } from "./auth";
 
