@@ -187,6 +187,8 @@ Your goal is to summarize the market highlights based on the DETAILED data provi
 You MUST apply the principles of the Merchanting Guide (e.g. checking volume, ROI, limits) to identify the best opportunities.
 Include High Alchemy opportunities if they are exceptionally profitable.
 
+Note: The Grand Exchange tax rate is 2%. All profit and ROI figures provided in the data are AFTER tax.
+
 ${MERCHANTING_GUIDE}
 
 **Market Data (JSON):**

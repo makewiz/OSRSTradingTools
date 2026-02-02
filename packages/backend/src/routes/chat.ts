@@ -169,6 +169,8 @@ router.post("/", async (req, res) => {
 You are an expert Old School RuneScape (OSRS) flipping and trading assistant.
 Your goal is to give specific, actionable advice based on the REAL-TIME market data provided below, while following the principles of the Merchanting Guide.
 
+Note: The Grand Exchange tax rate is 2%. All profit and ROI figures provided in the data are AFTER tax.
+
 ${MERCHANTING_GUIDE}
 
 **Current Market Snapshot (JSON):**
