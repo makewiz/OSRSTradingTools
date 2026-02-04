@@ -9,7 +9,7 @@ This guide walks you through deploying your application (frontend, backend, Disc
 ## Prerequisites
 
 - [ ] GitHub account with your code pushed to a repository
-- [ ] Railway account (sign up at https://railway.app)
+- [ ] Railway account (sign up at https://railway.com?referralCode=HI3d1h)
 - [ ] Discord application credentials (Client ID, Client Secret, Bot Token)
 
 ---
@@ -18,7 +18,7 @@ This guide walks you through deploying your application (frontend, backend, Disc
 
 ### 1. Sign up for Railway
 
-1. Go to https://railway.app
+1. Go to https://railway.com?referralCode=HI3d1h
 2. Click "Login" and authenticate with GitHub
 3. Grant Railway access to your repositories
 

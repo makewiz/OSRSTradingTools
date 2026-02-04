@@ -5,7 +5,7 @@ This document provides quick reference for deploying OSRS Trading Tools.
 ## Quick Links
 
 - **Full Railway Guide**: See [`.agent/workflows/deploy-to-railway.md`](.agent/workflows/deploy-to-railway.md)
-- **Railway Dashboard**: https://railway.app
+- **Railway Dashboard**: https://railway.com?referralCode=HI3d1h
 - **Discord Developer Portal**: https://discord.com/developers/applications
 
 ## Prerequisites

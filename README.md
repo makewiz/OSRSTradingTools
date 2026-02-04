@@ -31,7 +31,7 @@ Ready to deploy to production? See our comprehensive deployment guides:
 
 **Quick Start Deployment:**
 1. Push your code to GitHub
-2. Sign up at [Railway](https://railway.app)
+2. Sign up at [Railway](https://railway.com?referralCode=HI3d1h)
 3. Follow the [Railway deployment workflow](.agent/workflows/deploy-to-railway.md)
 4. Your app will be live in ~15 minutes! 🚀
 
