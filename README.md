@@ -12,10 +12,14 @@ Hobby web app to help Old School RuneScape traders browse items, inspect GE marg
 
 ### Features
 - **Real-time Pricing**: Fetches latest OSRS prices every minute.
-- **Market Analysis**: Identifies high margin items, volume spikes, and price drops.
-- **Profitable Recipes**: Calculate profit for crafting, smithing, and other processing skills.
-- **AI Integration**: Generates daily market summaries using OpenAI (optional).
-- **Discord Alerts**: Users can watch items and get notified of price changes.
+- **Market Analysis**: 
+  - **Arbitrage**: Find profitable item sets and potion decanting opportunities.
+  - **Risk Analysis**: View item volatility and risk metrics alongside profit potential.
+  - **Pattern Detection**: Identify daily trends and price anomalies in the Highlights feed.
+- **Profitable Recipes**: Calculate profit for crafting, smithing, and processing skills with **tax-aware** calculations.
+- **Global Chat Widget**: Integrated AI assistant to query market data from anywhere in the app.
+- **Discord Alerts**: Watch items and get notified of significant price changes.
+- **Admin Dashboard**: Manage recipes (sync, export/import), backfill historical data, and configure bot settings.
 
 ### Deployment
 
@@ -59,9 +63,14 @@ DISCORD_CLIENT_SECRET=your-discord-client-secret
 DISCORD_REDIRECT_URI=http://localhost:5173/auth/callback
 BOT_API_KEY=your-secure-random-api-key
 OPENAI_API_KEY=your-openai-api-key-optional
+
+# Feature Flags & Config
+DISABLE_REGISTRATION=false # Set true to close public registration
+REQUIRE_AUTH=false         # Set true to force login for viewing items
+DATA_RETENTION_DAYS=7      # Limit for historical data retention (affects backfill)
 ```
 
-See [`.env.example`](.env.example) for a complete template.
+See [`.env.example`](packages/backend/.env.example) for a complete template.
 
 Then start the backend:
 
@@ -72,25 +81,18 @@ npm run dev:backend
 The backend starts on `http://localhost:4000` and exposes:
 
 - `GET /api/health` – simple healthcheck
-- `GET /api/items` – combined OSRS item mapping, latest prices, and volumes, with:
-  - name, examine, members flag
-  - wiki URL, icon URL
-  - buy price, sell price, margin, daily volume
+- `GET /api/items` – combined OSRS item mapping, latest prices, and volumes
 - `POST /api/auth/*` - Authentication endpoints (register, login, Discord OAuth)
 - `GET/POST /api/watch` - Item watch management
 - `GET /api/recipes` - Get profitable recipes with various filters
-- `POST /api/admin/*` - Admin management (sync recipes, cache control)
+- `POST /api/admin/*` - Admin management (sync recipes, cache control, history backfill)
 
 **Database & Scheduled Fetching**:
 - PostgreSQL database stores price history and user data
-- **Caching**: Latest prices are fetched every minute while the system is active (user/bot activity).
+- **Caching**: Latest prices are fetched every minute while the system is active.
 - **History**: Price history is fetched every 5 minutes (persisted regardless of activity).
-- Data retention strategy:
-  - **5-minute resolution**: Kept for 24 hours
-  - **Hourly resolution**: Kept for 7 days
-  - **6-hour resolution**: Kept for 30 days
-  - **Daily resolution**: Kept for 1 year
-- Aggregation runs automatically every hour to downsample data and clean up old records.
+- **Data Retention**: Configurable via `DATA_RETENTION_DAYS`.
+- Aggregation runs automatically every hour.
 
 ### Running the frontend
 
@@ -104,11 +106,19 @@ Open the printed Vite URL (usually `http://localhost:5173`).
 
 The UI lets you:
 
-- Search items by name or examine text
-- **Profitable Recipes**: filter by skill, profit, volume, and ROI
-- Sort by **name, buy price, sell price, margin, volume**
-- Mark items as **favourites** (stored in `localStorage`)
-- Copy a simple `/watch <id> // <name>` command for Discord to your clipboard
+- **Interact with Market Data**:
+    - Search items by name or examine text.
+    - View **Highlights** with pattern and anomaly detection.
+    - Explore **Arbitrage** tables for item sets and potion decanting.
+- **Profitable Recipes**: Filter by skill, profit, volume, ROI (tax-aware).
+- **Global Chat Widget**: Ask questions about the market from any page.
+- **Account**:
+    - Mark items as favourites.
+    - Manage watchlists.
+- **Admin**:
+    - Sync recipes manually or Import/Export recipe JSON.
+    - Backfill historical data from Wiki.
+    - Create users and configure bot sleep times.
 
 ### Running the Discord bot
 
@@ -140,8 +150,10 @@ The bot logs in and provides slash commands:
 
 ### Next steps / ideas
 
-- Add a proper login system and user-specific server-side favourites & watchlists
-- Implement Discord commands to subscribe to items and push price/AI highlights
-- Add more trading tools (ROI calculators, flip tracking, price-change history)
+- Add user specific trading portfolio
+- Add premium roles and limit features to premium users (e.g. watch limit, chat request limit, risk analysis limit) These limits should be configurable in the admin panel. They are important in large production environments to prevent abuse and manage costs.
+- Add more filtering options to arbritage page
+- Add hourly profit calculation like the one on arbritage page to items page, taking into account both the buy limit and the volume data.
+
 
 
