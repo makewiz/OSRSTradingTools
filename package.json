@@ -1,7 +1,9 @@
 {
   "name": "osrstradingtools",
   "version": "1.0.0",
-  "description": "",
+  "description": "A comprehensive web application for Old School RuneScape requiring trading tools, arbitrage, and market analysis.",
+  "license": "MIT",
+  "author": "Markus",
   "private": true,
   "scripts": {
     "dev:backend": "npm run dev --workspace backend",
