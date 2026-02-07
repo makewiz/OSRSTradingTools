@@ -39,6 +39,17 @@ Ready to deploy to production? See our comprehensive deployment guides:
 ### Prerequisites
 
 - Recent **Node.js LTS** (18+ recommended for built-in `fetch`)
+- **Docker** and **Docker Compose** (for easy database setup)
+
+### Database Setup with Docker
+
+The easiest way to get a PostgreSQL database running locally is using Docker Compose:
+
+```bash
+docker compose up -d
+```
+
+This will start a PostgreSQL instance on port `5432` with the database `osrs_trading`.
 
 ### Install dependencies
 
@@ -56,7 +67,7 @@ This will install dependencies for all workspaces.
 
 ```bash
 PORT=4000
-DATABASE_URL=postgresql://user:password@localhost:5432/osrs_trading_tools
+DATABASE_URL=postgresql://user:password@localhost:5432/osrs_trading
 JWT_SECRET=your-secret-key-here
 DISCORD_CLIENT_ID=your-discord-client-id
 DISCORD_CLIENT_SECRET=your-discord-client-secret
