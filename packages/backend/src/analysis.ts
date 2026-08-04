@@ -219,21 +219,22 @@ ${JSON.stringify(marketContext, null, 2)}
 
         if (apiKey) {
             try {
-                const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${apiKey}`, {
+                const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/interactions?key=${apiKey}`, {
                     method: "POST",
                     headers: {
-                        "Content-Type": "application/json"
+                        "Content-Type": "application/json",
+                        "x-goog-api-key": apiKey
                     },
                     body: JSON.stringify({
-                        contents: [{
-                            parts: [{ text: promptContext }]
-                        }]
+                        model: "gemini-3.5-flash-lite",
+                        input: promptContext
                     })
                 });
 
                 const data = await response.json();
-                if (data.candidates && data.candidates[0]?.content?.parts?.[0]?.text) {
-                    return data.candidates[0].content.parts[0].text;
+                const content = data.output_text || data.outputs?.[0]?.text || data.candidates?.[0]?.content?.parts?.[0]?.text;
+                if (content) {
+                    return content;
                 }
             } catch (error) {
                 console.error("Error generating AI summary:", error);

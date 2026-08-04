@@ -156,30 +156,30 @@ router.get("/risk/:id", async (req, res) => {
       }
     `;
 
-        // 3. Call Google Gemini
-        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${apiKey}`, {
+        // 3. Call Google Gemini Interactions API
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/interactions?key=${apiKey}`, {
             method: "POST",
             headers: {
-                "Content-Type": "application/json"
+                "Content-Type": "application/json",
+                "x-goog-api-key": apiKey
             },
             body: JSON.stringify({
-                contents: [{
-                    parts: [{ text: prompt }]
-                }]
+                model: "gemini-3.5-flash-lite",
+                input: prompt
             })
         });
 
         const aiData = await response.json();
 
         // Debug logging
-        if (!response.ok || !aiData.candidates) {
+        if (!response.ok) {
             logger.error("Gemini API Error:", JSON.stringify(aiData, null, 2));
         }
 
         let result: RiskAnalysisResponse;
 
         try {
-            const content = aiData.candidates?.[0]?.content?.parts?.[0]?.text;
+            const content = aiData.output_text || aiData.outputs?.[0]?.text || aiData.candidates?.[0]?.content?.parts?.[0]?.text;
             if (!content) throw new Error("No content in AI response");
 
             // Clean up markdown code blocks if present (Gemini often wraps JSON in ```json ... ```)

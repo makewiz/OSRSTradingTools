@@ -193,12 +193,16 @@ ${Object.entries(wikiContext).map(([name, desc]) => `- ${name}: ${desc}`).join("
 7.  Do not hallucinate prices. Only use what is provided.
 `;
 
-        // 3. Call Gemini
-        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${apiKey}`, {
+        // 3. Call Gemini Interactions API
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/interactions?key=${apiKey}`, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: {
+                "Content-Type": "application/json",
+                "x-goog-api-key": apiKey
+            },
             body: JSON.stringify({
-                contents: [{ parts: [{ text: prompt }] }]
+                model: "gemini-3.5-flash-lite",
+                input: prompt
             })
         });
 
@@ -209,7 +213,7 @@ ${Object.entries(wikiContext).map(([name, desc]) => `- ${name}: ${desc}`).join("
             return res.status(502).json({ error: "Failed to get response from AI" });
         }
 
-        const reply = data.candidates?.[0]?.content?.parts?.[0]?.text || "I couldn't generate a response at this time.";
+        const reply = data.output_text || data.outputs?.[0]?.text || data.candidates?.[0]?.content?.parts?.[0]?.text || "I couldn't generate a response at this time.";
 
         res.json({ response: reply });
 
