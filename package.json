@@ -13,12 +13,19 @@
     "build:shared": "npm run build --workspace @osrstradingtools/shared",
     "build:backend": "npm run build:shared && npm run build --workspace backend",
     "build:bot": "npm run build:shared && npm run build --workspace discord-bot",
-    "build:frontend": "npm run build:shared && npm run build --workspace frontend"
+    "build:frontend": "npm run build:shared && npm run build --workspace frontend",
+    "create-admin": "npm run create-admin --workspace backend"
   },
   "workspaces": [
     "packages/backend",
     "packages/frontend",
     "packages/discord-bot",
     "packages/shared"
-  ]
+  ],
+  "overrides": {
+    "react-router-dom": {
+      "react-router": "8.3.0"
+    },
+    "react-router": "8.3.0"
+  }
 }

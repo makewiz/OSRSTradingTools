@@ -1,9 +1,17 @@
+import path from "path";
 import { Pool } from "pg";
 import dotenv from "dotenv";
+
+dotenv.config();
+if (!process.env.DATABASE_URL) {
+  dotenv.config({ path: path.resolve(__dirname, "../../.env") });
+}
+
 import { fetchWikiTimeSeries } from "../osrsClient";
 import { logger } from "@osrstradingtools/shared";
 import { ensurePartitionedHistoryTable } from "./partitions";
 import { createRecipeTables } from "./recipes";
+import { seedAdminUser } from "./seedAdmin";
 
 dotenv.config();
 
@@ -273,6 +281,9 @@ export async function initializeDatabase(): Promise<void> {
 
     // Recipes
     await createRecipeTables();
+
+    // Seed default admin user if environment variables are set
+    await seedAdminUser();
 
     // Deprecate cooldown_seconds (migrate data if needed, or just ignore it)
     // We will assume new watches use cooldown_minutes.
@@ -712,6 +723,11 @@ export async function getBackendWatches(discordId: string): Promise<Notification
     ...row,
     created_at: parseInt(row.created_at)
   })) as NotificationSetting[];
+}
+
+export async function getUserCount(): Promise<number> {
+  const result = await pool.query("SELECT COUNT(*) FROM users");
+  return parseInt(result.rows[0].count, 10);
 }
 
 export async function getUserByUsername(username: string): Promise<User | null> {
