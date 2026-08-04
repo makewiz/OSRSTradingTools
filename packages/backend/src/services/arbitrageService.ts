@@ -90,8 +90,8 @@ export class ArbitrageService {
                     allComponentsFound = false;
                     break;
                 }
-                componentsSumBuy += comp.sellPrice || 0; // Buy at high (instant)
-                componentsSumSell += comp.buyPrice || 0; // Sell at low (instant)
+                componentsSumBuy += comp.buyPrice || 0; // Buy at high (instant)
+                componentsSumSell += comp.sellPrice || 0; // Sell at low (instant)
 
                 // Track the lowest volume item to gauge liquidity
                 const vol = comp.volume || 0;
@@ -110,7 +110,7 @@ export class ArbitrageService {
             // Cost: Sum of Parts High
             // Revenue: Set Low (Instant Sell) - Tax
             const partsCost = componentsSumBuy;
-            const setLow = setItem.buyPrice || 0;
+            const setLow = setItem.sellPrice || 0;
             const setRevenue = setLow - calculateTax(setLow, setItem.name);
             const assembleProfit = setRevenue - partsCost;
 
@@ -147,7 +147,7 @@ export class ArbitrageService {
             for (const compId of set.componentIds) {
                 const comp = items.find(i => i.id === compId);
                 if (comp) {
-                    const sellPrice = comp.buyPrice || 0;
+                    const sellPrice = comp.sellPrice || 0;
                     partsRevenue += (sellPrice - calculateTax(sellPrice, comp.name));
 
                     const compSellCap = (comp.volume || 0) / 24;
@@ -157,7 +157,7 @@ export class ArbitrageService {
                 }
             }
 
-            const setCost = setItem.sellPrice || 0;
+            const setCost = setItem.buyPrice || 0;
             const breakProfit = partsRevenue - setCost;
 
 
@@ -208,8 +208,8 @@ export class ArbitrageService {
 
                 // To make it integer math friendly:
                 // Batch: 4x (3) -> 3x (4)
-                const costBatch = 4 * (dose3.sellPrice || 0);
-                const dose4Low = dose4.buyPrice || 0;
+                const costBatch = 4 * (dose3.buyPrice || 0);
+                const dose4Low = dose4.sellPrice || 0;
                 const revenueBatch = 3 * (dose4Low - calculateTax(dose4Low, dose4.name));
 
                 const profitBatch = revenueBatch - costBatch;
@@ -245,8 +245,8 @@ export class ArbitrageService {
             const dose2 = items.find(i => i.id === doses.dose2);
             if (dose2) {
                 // Batch: 2x (2) -> 1x (4)
-                const costBatch = 2 * (dose2.sellPrice || 0);
-                const dose4Low = dose4.buyPrice || 0;
+                const costBatch = 2 * (dose2.buyPrice || 0);
+                const dose4Low = dose4.sellPrice || 0;
                 const revenueBatch = 1 * (dose4Low - calculateTax(dose4Low, dose4.name));
                 const profitBatch = revenueBatch - costBatch;
 
@@ -278,8 +278,8 @@ export class ArbitrageService {
             const dose1 = items.find(i => i.id === doses.dose1);
             if (dose1) {
                 // Batch: 4x (1) -> 1x (4)
-                const costBatch = 4 * (dose1.sellPrice || 0);
-                const dose4Low = dose4.buyPrice || 0;
+                const costBatch = 4 * (dose1.buyPrice || 0);
+                const dose4Low = dose4.sellPrice || 0;
                 const revenueBatch = 1 * (dose4Low - calculateTax(dose4Low, dose4.name));
                 const profitBatch = revenueBatch - costBatch;
 

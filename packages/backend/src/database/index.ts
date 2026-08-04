@@ -520,17 +520,17 @@ export async function getPriceHistory(
 
   for (const row of rows) {
     const ts = parseInt(row.timestamp);
-    if (row.avg_low_price !== null && row.avg_low_price !== undefined) {
-      buy.push({ timestamp: ts, price: row.avg_low_price });
-    }
     if (row.avg_high_price !== null && row.avg_high_price !== undefined) {
-      sell.push({ timestamp: ts, price: row.avg_high_price });
+      buy.push({ timestamp: ts, price: row.avg_high_price });
+    }
+    if (row.avg_low_price !== null && row.avg_low_price !== undefined) {
+      sell.push({ timestamp: ts, price: row.avg_low_price });
     }
     if (row.high_price_volume !== null || row.low_price_volume !== null) {
       volume.push({
         timestamp: ts,
-        buy_volume: row.low_price_volume ?? null,
-        sell_volume: row.high_price_volume ?? null
+        buy_volume: row.high_price_volume ?? null,
+        sell_volume: row.low_price_volume ?? null
       });
     }
   }
@@ -550,8 +550,8 @@ export async function getLatestPrice(itemId: number): Promise<{ buyPrice: number
   const result = await pool.query(query, [itemId]);
 
   return {
-    buyPrice: result.rows[0]?.avg_low_price ?? null,
-    sellPrice: result.rows[0]?.avg_high_price ?? null
+    buyPrice: result.rows[0]?.avg_high_price ?? null,
+    sellPrice: result.rows[0]?.avg_low_price ?? null
   };
 }
 
@@ -591,8 +591,8 @@ async function calculatePriceChange(
 
   const result = await pool.query(query, [itemId, timeAgo]);
 
-  const oldBuyPrice = result.rows[0]?.avg_low_price;
-  const oldSellPrice = result.rows[0]?.avg_high_price;
+  const oldBuyPrice = result.rows[0]?.avg_high_price;
+  const oldSellPrice = result.rows[0]?.avg_low_price;
 
   let buyChange: number | null = null;
   if (currentBuyPrice !== null && oldBuyPrice) {

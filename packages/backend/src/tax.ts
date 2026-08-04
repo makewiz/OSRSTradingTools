@@ -93,12 +93,12 @@ export function calculateTax(price: number, name: string): number {
 }
 
 export function calculateProfit(buyPrice: number, sellPrice: number, name: string): number {
-    const tax = calculateTax(sellPrice, name);
-    return (sellPrice - tax) - buyPrice;
+    const tax = calculateTax(buyPrice, name);
+    return (buyPrice - tax) - sellPrice;
 }
 
 export function calculateROI(buyPrice: number, sellPrice: number, name: string): number {
-    if (buyPrice <= 0) return 0;
+    if (sellPrice <= 0) return 0;
     const profit = calculateProfit(buyPrice, sellPrice, name);
-    return (profit / buyPrice) * 100;
+    return (profit / sellPrice) * 100;
 }
