@@ -4,6 +4,7 @@ import { getLatestItems } from "./scheduler";
 import { NewsService, NewsItem } from "./news";
 import { getBatchPriceHistory } from "./database";
 import dotenv from "dotenv";
+import { getGeminiClient, DEFAULT_GEMINI_MODEL } from "./gemini";
 
 dotenv.config();
 
@@ -166,8 +167,6 @@ export class AnalysisService {
         news: NewsItem[],
         itemContext?: Record<string, string>
     ): Promise<string> {
-        const apiKey = process.env.GEMINI_API_KEY;
-
         // Construct full data context for the AI
         const marketContext = {
             highMargin: highMargin.map(i => ({ ...i, reason: undefined })), // Send raw data, AI can deduce "reason"
@@ -217,24 +216,15 @@ ${JSON.stringify(marketContext, null, 2)}
 5. Focus on the best trading opportunities found in the "highMargin" and "highVolume" sections.
 `;
 
-        if (apiKey) {
+        const client = getGeminiClient();
+        if (client) {
             try {
-                const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/interactions?key=${apiKey}`, {
-                    method: "POST",
-                    headers: {
-                        "Content-Type": "application/json",
-                        "x-goog-api-key": apiKey
-                    },
-                    body: JSON.stringify({
-                        model: "gemini-3.5-flash-lite",
-                        input: promptContext
-                    })
+                const interaction = await client.interactions.create({
+                    model: DEFAULT_GEMINI_MODEL,
+                    input: promptContext
                 });
-
-                const data = await response.json();
-                const content = data.output_text || data.outputs?.[0]?.text || data.candidates?.[0]?.content?.parts?.[0]?.text;
-                if (content) {
-                    return content;
+                if (interaction.output_text) {
+                    return interaction.output_text;
                 }
             } catch (error) {
                 console.error("Error generating AI summary:", error);

@@ -5,6 +5,7 @@ import { CombinedItem } from "../osrsClient";
 import { getLatestItems } from "../scheduler";
 import { logger } from "@osrstradingtools/shared";
 import { authenticateToken } from "../auth";
+import { getGeminiClient, DEFAULT_GEMINI_MODEL } from "../gemini";
 
 const router = express.Router();
 
@@ -98,8 +99,8 @@ router.post("/", async (req, res) => {
             return res.status(400).json({ error: "Message is required" });
         }
 
-        const apiKey = process.env.GEMINI_API_KEY;
-        if (!apiKey) {
+        const client = getGeminiClient();
+        if (!client) {
             return res.status(503).json({ error: "AI service not configured (missing API key)" });
         }
 
@@ -194,27 +195,12 @@ ${Object.entries(wikiContext).map(([name, desc]) => `- ${name}: ${desc}`).join("
 `;
 
         // 3. Call Gemini Interactions API
-        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/interactions?key=${apiKey}`, {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-                "x-goog-api-key": apiKey
-            },
-            body: JSON.stringify({
-                model: "gemini-3.5-flash-lite",
-                input: prompt
-            })
+        const interaction = await client.interactions.create({
+            model: DEFAULT_GEMINI_MODEL,
+            input: prompt
         });
 
-        const data = await response.json();
-
-        if (!response.ok) {
-            logger.error("Gemini API error:", data);
-            return res.status(502).json({ error: "Failed to get response from AI" });
-        }
-
-        const reply = data.output_text || data.outputs?.[0]?.text || data.candidates?.[0]?.content?.parts?.[0]?.text || "I couldn't generate a response at this time.";
-
+        const reply = interaction.output_text || "I couldn't generate a response at this time.";
         res.json({ response: reply });
 
     } catch (err) {
