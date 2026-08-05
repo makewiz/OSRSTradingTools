@@ -74,3 +74,24 @@ export async function authenticateToken(req: Request, res: Response, next: NextF
         return res.status(403).json({ error: "Invalid or expired token" });
     }
 }
+
+/**
+ * Optional authentication middleware: populates req.user if valid token provided, but doesn't block if unauthenticated.
+ */
+export async function optionalAuthenticateToken(req: Request, _res: Response, next: NextFunction) {
+    const authHeader = req.headers["authorization"];
+    const token = authHeader && authHeader.split(" ")[1];
+    if (!token) return next();
+
+    try {
+        const decoded: any = jwt.verify(token, JWT_SECRET);
+        const user = await getUserById(decoded.sub);
+        if (user) {
+            req.user = user;
+        }
+    } catch (err) {
+        // Ignore invalid token in optional mode
+    }
+    next();
+}
+

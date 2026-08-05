@@ -1,211 +1,210 @@
-
 import express from "express";
-import { AnalysisService, MERCHANTING_GUIDE } from "../analysis";
-import { CombinedItem } from "../osrsClient";
-import { getLatestItems } from "../scheduler";
+import { MERCHANTING_GUIDE } from "../analysis";
 import { logger } from "@osrstradingtools/shared";
-import { authenticateToken } from "../auth";
+import { authenticateToken, optionalAuthenticateToken } from "../auth";
 import { getGeminiClient, DEFAULT_GEMINI_MODEL } from "../gemini";
+import { geminiTools, executeGeminiTool, ContextUser } from "../tools/geminiTools";
 
 const router = express.Router();
 
 if (process.env.REQUIRE_AUTH === "true") {
     router.use(authenticateToken);
+} else {
+    router.use(optionalAuthenticateToken);
 }
 
-// Helper to simple search items
-// Helper to clean strings for better matching
-const normalize = (str: string) => str.toLowerCase().replace(/[^\w\s]|_/g, "").replace(/\s+/g, " ");
+const APP_GUIDE = `
+**Application Navigation & Feature Guide (How to guide the user):**
+- **Home / Highlights ('/')**: Real-time market summary, top margin flips, volume spikes, and recent news.
+- **Item Explorer ('/items')**: Browse, search, and filter all OSRS items by buy/sell price, margin, ROI %, and volume. Allows creating and saving filter presets.
+- **Item Detail ('/item/:id')**: Detailed view for a specific item with 7-day price charts, volume trends, and tax details. Users can click the Heart button to favorite an item.
+- **Recipes ('/recipes')**: Calculates skill processing profitability (Herblore, Smithing, Cooking, Fletching, Crafting) with profit per hour, daily volume, and ingredient costs.
+- **Arbitrage ('/arbitrage')**: Shows Set Arbitrage (assembling parts into sets or breaking sets) and Decanting Arbitrage (combining 1/2/3-dose potions into 4-dose potions).
+- **Price Watches ('/watches')**: Create and manage percentage price change alerts or custom advanced watch filters.
+- **Favorites ('/favorites')**: Quick access list of all items favorited by the user.
+- **Profile & Discord Settings ('/profile')**: Link Discord account to receive price alerts via Discord bot notifications.
+- **Hiscores ('/hiscores')**: Search OSRS player stats and skill levels.
 
-// Common stop words to ignore in search to reduce noise
-const STOP_WORDS = new Set(["the", "a", "an", "are", "is", "test", "hello", "hi", "how", "what", "where", "when", "why", "who", "do", "you", "still", "popular", "good", "bad", "buy", "sell", "price", "margin", "flip", "trading", "investment", "worth"]);
+When the user asks how to do something in the app (e.g. "Where do I see set arbitrage?", "How do I save a favorite?", "Where are price charts?"), explain clearly which page or button to use based on this guide.
+`;
 
-// Robust search with scoring
-const searchItems = (query: string, allItems: CombinedItem[]): CombinedItem[] => {
-    if (!query || query.length < 2) return [];
-
-    // 1. Prepare query variants
-    const cleanQuery = normalize(query).trim();
-    if (!cleanQuery) return [];
-
-    // Tokenize and filter stop words
-    const queryTokens = cleanQuery.split(" ")
-        .filter(t => t.length > 1 && !STOP_WORDS.has(t));
-
-    // 2. Score items
-    const matches = allItems
-        .map(item => {
-            const nameOriginal = item.name.toLowerCase();
-            const nameClean = normalize(item.name);
-            let score = 0;
-
-            // -- Exact Matches --
-            if (nameOriginal === query.toLowerCase()) score += 1000;
-            else if (nameClean === cleanQuery) score += 500;
-
-            // -- Starts With --
-            else if (nameOriginal.startsWith(cleanQuery)) score += 200;
-            else if (nameClean.startsWith(cleanQuery)) score += 150;
-
-            // -- Token Matching --
-            let matchedTokens = 0;
-            queryTokens.forEach(token => {
-                // Handle plurals (simple 's' stripper)
-                const singular = token.endsWith("s") ? token.slice(0, -1) : token;
-
-                // Check exact token, singular version, or if item name contains it
-                const tokenMatches =
-                    nameClean.includes(token) ||
-                    (token.length > 3 && nameClean.includes(singular));
-
-                if (tokenMatches) {
-                    score += 10;
-                    matchedTokens++;
-
-                    // Bonus: Word boundary start
-                    if (
-                        nameClean.startsWith(token) || nameClean.includes(" " + token) ||
-                        nameClean.startsWith(singular) || nameClean.includes(" " + singular)
-                    ) {
-                        score += 5;
-                    }
-                }
-            });
-
-            // Boost if high percentage of significant tokens matched
-            if (queryTokens.length > 0) {
-                const matchRatio = matchedTokens / queryTokens.length;
-                // Higher multiplier since we filtered stop words
-                score += matchRatio * 80;
-            }
-
-            // -- Substring fallback --
-            if (nameClean.includes(cleanQuery)) score += 20;
-
-            return { item, score };
-        })
-        .filter(match => match.score > 25) // Slightly higher threshold
-        .sort((a, b) => b.score - a.score)
-        .slice(0, 8)
-        .map(match => match.item);
-
-    return matches;
-};
+interface ChatMessage {
+    role: "user" | "model" | "ai" | "assistant";
+    content: string;
+}
 
 router.post("/", async (req, res) => {
     try {
-        const { message } = req.body;
-        if (!message) {
-            return res.status(400).json({ error: "Message is required" });
+        const { message, history, currentPath } = req.body;
+        if (!message || typeof message !== "string") {
+            return res.status(400).json({ error: "Message string is required" });
         }
 
         const client = getGeminiClient();
         if (!client) {
-            return res.status(503).json({ error: "AI service not configured (missing API key)" });
+            return res.status(503).json({ error: "AI service not configured (missing GEMINI_API_KEY)" });
         }
 
-        // 1. Get real-time market context
-        // Get generic highlights
-        const marketData = await AnalysisService.getAnalysis();
+        const contextUser: ContextUser | undefined = req.user
+            ? { id: req.user.id, username: req.user.username, is_admin: req.user.is_admin }
+            : undefined;
 
-        // [NEW] Get all items for RAG
-        const allItems = await getLatestItems();
+        // Current temporal context
+        const now = new Date();
+        const currentDateUTC = now.toUTCString();
+        const currentDateISO = now.toISOString();
+        const activeRoute = typeof currentPath === "string" ? currentPath : "/";
 
-        // [NEW] Search for relevant items based on user query
-        const relevantItems = searchItems(message, allItems);
+        const systemInstruction = `
+You are an expert Old School RuneScape (OSRS) flipping, merchanting, and market analysis assistant.
+You have direct access to a harness of interactive tools to read and filter data from recipes, arbitrage, and OSRS items, as well as manage user favorites and price watch alerts.
 
-        // 2. Format context for the LLM
-        // We act as an expert assistant.
-        // We only include top items to save context window, but with FULL data.
+**Current Session Context:**
+- **Current Server Time**: ${currentDateUTC} (ISO: ${currentDateISO})
+- **User's Current Page/Route**: ${activeRoute}
+- **User Status**: ${contextUser ? `Logged in as '${contextUser.username}' (ID: ${contextUser.id})` : "Not logged in (Anonymous)"}
 
-        const context = {
-            relevantItems: relevantItems.map(i => ({
-                name: i.name,
-                buy: i.buyPrice,
-                sell: i.sellPrice,
-                margin: i.margin,
-                roi: i.roi,
-                volume: i.volume,
-                limit: i.limit,
-                tax: i.tax
-            })),
-            marketSummary: marketData.summary,
-            highMargin: marketData.highMargin.map(i => ({
-                name: i.name,
-                buy: i.buyPrice,
-                sell: i.sellPrice,
-                margin: i.margin,
-                profit: i.profit,
-                roi: i.roi,
-                volume: i.volume,
-                limit: i.limit,
-                tax: i.tax
-            })),
-            highVolume: marketData.highVolume.map(i => ({
-                name: i.name,
-                buy: i.buyPrice,
-                sell: i.sellPrice,
-                potentialProfit: i.potentialProfit,
-                volume: i.volume
-            })),
-            spikes: marketData.priceSpikes.map(i => ({
-                name: i.name,
-                change: i.dayChange,
-                buy: i.buyPrice,
-                volume: i.volume
-            })),
-            drops: marketData.priceDrops.map(i => ({
-                name: i.name,
-                change: i.dayChange,
-                buy: i.buyPrice,
-                volume: i.volume
-            })),
-            news: marketData.news?.slice(0, 3) // Latest 3 news items
-        };
+**System Capabilities & Available Harness Tools:**
+1. **Recipes**: 'get_recipes' - Fetch/filter processing & crafting recipes by profit, volume, or limit.
+2. **Set Arbitrage**: 'get_set_arbitrage' - Fetch set packing and unpacking arbitrage opportunities.
+3. **Decanting Arbitrage**: 'get_decant_arbitrage' - Fetch potion decanting profit opportunities.
+4. **Items & Market**:
+   - 'search_items': Search items by query, minimum margin, ROI, or volume.
+   - 'get_item_detail': Fetch detailed market stats for an item by ID or name.
+5. **Favorites**:
+   - 'get_favorites': List favorited items for the logged-in user.
+   - 'add_favorite': Add an item to user's favorites.
+   - 'remove_favorite': Remove an item from user's favorites.
+6. **Watches & Price Alerts**:
+   - 'get_watches': View user's active price watches.
+   - 'add_watch': Add a price watch alert for an item.
+   - 'remove_watch': Remove a price watch alert.
+   - 'get_advanced_watches': View advanced market watch filters.
+   - 'add_advanced_watch': Add a new custom advanced market watch.
 
-        const wikiContext = marketData.itemContext || {};
+${APP_GUIDE}
 
-
-        const prompt = `
-You are an expert Old School RuneScape (OSRS) flipping and trading assistant.
-Your goal is to give specific, actionable advice based on the REAL-TIME market data provided below, while following the principles of the Merchanting Guide.
-
-Note: The Grand Exchange tax rate is 2%. All profit and ROI figures provided in the data are AFTER tax.
-
-${MERCHANTING_GUIDE}
-
-**Current Market Snapshot (JSON):**
-\`\`\`json
-${JSON.stringify(context, null, 2)}
-\`\`\`
-
-**Item Wiki Context (Lore/Uses):**
-${Object.entries(wikiContext).map(([name, desc]) => `- ${name}: ${desc}`).join("\n")}
-
-**User Query:** "${message}"
+**General Guidelines:**
+- The Grand Exchange tax rate is 2%. All profit and ROI figures provided by tools are AFTER tax.
+- ${MERCHANTING_GUIDE}
 
 **Instructions:**
-1.  **Analyze the 'relevantItems' array first.** If the user asked about a specific item, its data will be there. Use that data to answer the question.
-2.  If the user's question is general, use the other market data sections (marketSummary, highMargin, etc.).
-3.  If recommending items, cite specific prices, volumes, and *why* it's good (e.g., "High ROI of 15%").
-4.  Use the Wiki Context to explain demand (e.g., "Zulrah scales are high volume because they fuel the Toxic Blowpipe").
-5.  Be concise but helpful. Use Markdown for formatting (bold items, lists).
-6.  If the user asks about something NOT in the data, try to answer generally about OSRS trading principles or mention you don't have that specific item's live data right now.
-7.  Do not hallucinate prices. Only use what is provided.
+1. ALWAYS use the appropriate tool whenever specific, real-time market data or user state (favorites/watches) is needed to answer a user prompt.
+2. If a user asks to add/remove an item from favorites or set price watches, execute the action using the tools and confirm the outcome in natural language.
+3. If user is NOT logged in and requests a user-bound action (favorites/watches), state clearly that they need to log in first.
+4. Cite exact numbers (prices, ROI, volume, profit) when offering advice.
+5. If the user asks about the current date/time, use the Current Server Time provided above.
+6. Be concise, clear, and structure your responses with GitHub Flavored Markdown (bolding, lists, tables).
 `;
 
-        // 3. Call Gemini Interactions API
-        const interaction = await client.interactions.create({
-            model: DEFAULT_GEMINI_MODEL,
-            input: prompt
+        // Build Gemini contents history array from prior conversation turns
+        const contents: any[] = [];
+
+        if (Array.isArray(history)) {
+            for (const item of history as ChatMessage[]) {
+                if (!item.content || typeof item.content !== "string") continue;
+                const role = item.role === "ai" || item.role === "assistant" || item.role === "model" ? "model" : "user";
+                contents.push({
+                    role,
+                    parts: [{ text: item.content }]
+                });
+            }
+        }
+
+        // Append current turn user prompt
+        contents.push({
+            role: "user",
+            parts: [{ text: message }]
         });
 
-        const reply = interaction.output_text || "I couldn't generate a response at this time.";
-        res.json({ response: reply });
+        let finalReply = "";
+        let turns = 0;
+        const maxTurns = 10;
 
-    } catch (err) {
-        logger.error("Error in chat endpoint:", err);
-        res.status(500).json({ error: "Internal server error" });
+        while (turns < maxTurns) {
+            turns++;
+
+            // Call Gemini API with tool definitions
+            const response = await client.models.generateContent({
+                model: DEFAULT_GEMINI_MODEL,
+                contents: contents,
+                config: {
+                    systemInstruction: systemInstruction,
+                    tools: [{ functionDeclarations: geminiTools as any }]
+                }
+            });
+
+            const functionCalls = response.functionCalls;
+
+            if (functionCalls && functionCalls.length > 0) {
+                // Preserve exact model content (including thought signatures) returned by Gemini
+                const modelContent = response.candidates?.[0]?.content;
+                if (modelContent) {
+                    contents.push(modelContent);
+                } else {
+                    contents.push({
+                        role: "model",
+                        parts: functionCalls.map(fc => ({
+                            functionCall: { name: fc.name, args: fc.args }
+                        }))
+                    });
+                }
+
+                // Execute each requested tool in parallel
+                const toolResponseParts: any[] = [];
+                for (const fc of functionCalls) {
+                    const toolName = fc.name || "";
+                    const rawResult = await executeGeminiTool(toolName, fc.args || {}, contextUser);
+                    
+                    let responsePayload: Record<string, any>;
+                    if (Array.isArray(rawResult)) {
+                        responsePayload = { items: rawResult };
+                    } else if (typeof rawResult === "object" && rawResult !== null) {
+                        responsePayload = rawResult;
+                    } else {
+                        responsePayload = { output: rawResult };
+                    }
+
+                    toolResponseParts.push({
+                        functionResponse: {
+                            name: toolName,
+                            response: responsePayload
+                        }
+                    });
+                }
+
+                // Send tool execution results back to model under 'user' role
+                contents.push({
+                    role: "user",
+                    parts: toolResponseParts
+                });
+            } else {
+                // Model provided final text response
+                finalReply = (typeof response.text === "string" && response.text) ? response.text : "I have processed your request.";
+                break;
+            }
+        }
+
+        // If loop finished after maximum tool turns without generating text, force a final synthesis response
+        if (!finalReply) {
+            logger.info("Max tool turns reached. Executing final synthesis response without tools.");
+            const finalResponse = await client.models.generateContent({
+                model: DEFAULT_GEMINI_MODEL,
+                contents: contents,
+                config: {
+                    systemInstruction: systemInstruction + "\n\nProvide your final detailed natural language answer and recommendations to the user based on all the gathered data above."
+                }
+            });
+            finalReply = (typeof finalResponse.text === "string" && finalResponse.text)
+                ? finalResponse.text
+                : "Based on the market data gathered, I have found the item recommendations for you.";
+        }
+
+        res.json({ response: finalReply });
+
+    } catch (err: any) {
+        logger.error("Error in chat route:", err);
+        res.status(500).json({ error: "Failed to generate chat response: " + (err.message || String(err)) });
     }
 });
 
