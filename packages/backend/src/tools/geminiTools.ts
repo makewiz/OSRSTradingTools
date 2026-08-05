@@ -1,7 +1,9 @@
 import { getProfitableRecipes } from "../database/recipes";
 import { ArbitrageService } from "../services/arbitrageService";
 import { itemService } from "../services/itemService";
+import { fetchWikiDescription, CombinedItem } from "../osrsClient";
 import { getLatestItems } from "../scheduler";
+import { NewsService } from "../news";
 import {
     getUserFavorites,
     addFavorite,
@@ -66,12 +68,32 @@ export const geminiTools = [
     },
     {
         name: "get_item_detail",
-        description: "Get detailed current market snapshot (buy/sell prices, margin, tax, volume, buy limit) for a specific item.",
+        description: "Get detailed current market snapshot (buy/sell prices, margin, tax, volume, buy limit) and Wiki summary for a specific item.",
         parameters: {
             type: "OBJECT",
             properties: {
                 itemId: { type: "NUMBER", description: "Numeric item ID." },
                 itemName: { type: "STRING", description: "Name of the item if ID is not known." }
+            }
+        }
+    },
+    {
+        name: "get_latest_news",
+        description: "Fetch recent official Old School RuneScape game updates, news posts, and system announcements to analyze price impact.",
+        parameters: {
+            type: "OBJECT",
+            properties: {
+                limit: { type: "NUMBER", description: "Maximum number of news items to fetch (default 5)." }
+            }
+        }
+    },
+    {
+        name: "get_wiki_summary",
+        description: "Fetch the official OSRS Wiki intro extract for an item, boss, skill, or game topic to understand its in-game utility, combat use, quest relevance, or demand drivers.",
+        parameters: {
+            type: "OBJECT",
+            properties: {
+                itemName: { type: "STRING", description: "The item or topic name to look up on the OSRS Wiki." }
             }
         }
     },
@@ -165,14 +187,14 @@ export const geminiTools = [
 async function resolveItemId(itemId?: number, itemName?: string): Promise<{ id: number; name: string } | null> {
     const allItems = await getLatestItems();
     if (itemId) {
-        const item = allItems.find(i => i.id === itemId);
+        const item = allItems.find((i: CombinedItem) => i.id === itemId);
         if (item) return { id: item.id, name: item.name };
     }
     if (itemName) {
         const queryLower = itemName.toLowerCase().trim();
-        const exact = allItems.find(i => i.name.toLowerCase() === queryLower);
+        const exact = allItems.find((i: CombinedItem) => i.name.toLowerCase() === queryLower);
         if (exact) return { id: exact.id, name: exact.name };
-        const partial = allItems.find(i => i.name.toLowerCase().includes(queryLower));
+        const partial = allItems.find((i: CombinedItem) => i.name.toLowerCase().includes(queryLower));
         if (partial) return { id: partial.id, name: partial.name };
     }
     return null;
@@ -222,20 +244,20 @@ export async function executeGeminiTool(
 
                 if (args.query) {
                     const q = args.query.toLowerCase().trim();
-                    filtered = filtered.filter(i => i.name.toLowerCase().includes(q));
+                    filtered = filtered.filter((i: CombinedItem) => i.name.toLowerCase().includes(q));
                 }
                 if (typeof args.minMargin === "number") {
-                    filtered = filtered.filter(i => (i.margin ?? 0) >= args.minMargin);
+                    filtered = filtered.filter((i: CombinedItem) => (i.margin ?? 0) >= args.minMargin);
                 }
                 if (typeof args.minRoi === "number") {
-                    filtered = filtered.filter(i => (i.roi ?? 0) >= args.minRoi);
+                    filtered = filtered.filter((i: CombinedItem) => (i.roi ?? 0) >= args.minRoi);
                 }
                 if (typeof args.minVolume === "number") {
-                    filtered = filtered.filter(i => (i.volume ?? 0) >= args.minVolume);
+                    filtered = filtered.filter((i: CombinedItem) => (i.volume ?? 0) >= args.minVolume);
                 }
 
                 const limit = args.limit ?? 10;
-                return filtered.slice(0, limit).map(i => ({
+                return filtered.slice(0, limit).map((i: CombinedItem) => ({
                     id: i.id,
                     name: i.name,
                     buyPrice: i.buyPrice,
@@ -254,10 +276,11 @@ export async function executeGeminiTool(
                     return { error: `Item not found matching ${args.itemName || args.itemId}` };
                 }
                 const allItems = await getLatestItems();
-                const item = allItems.find(i => i.id === found.id);
+                const item = allItems.find((i: CombinedItem) => i.id === found.id);
                 if (!item) {
                     return { error: "Item price data not available." };
                 }
+                const wikiExtract = await fetchWikiDescription(item.name);
                 return {
                     id: item.id,
                     name: item.name,
@@ -270,7 +293,28 @@ export async function executeGeminiTool(
                     limit: item.limit,
                     tax: item.tax,
                     members: item.members,
-                    iconUrl: item.iconUrl
+                    iconUrl: item.iconUrl,
+                    wikiUrl: item.wikiUrl,
+                    wikiExtract: wikiExtract || "No wiki summary extract available."
+                };
+            }
+
+            case "get_latest_news": {
+                const limit = typeof args.limit === "number" ? args.limit : 5;
+                const newsItems = await NewsService.fetchNewestNews();
+                return { news: newsItems.slice(0, limit) };
+            }
+
+            case "get_wiki_summary": {
+                const title = args.itemName || args.query || args.title;
+                if (!title || typeof title !== "string") {
+                    return { error: "itemName is required for get_wiki_summary" };
+                }
+                const extract = await fetchWikiDescription(title);
+                return {
+                    title,
+                    extract: extract || "No wiki extract found.",
+                    wikiUrl: `https://oldschool.runescape.wiki/w/${encodeURIComponent(title.replace(/ /g, "_"))}`
                 };
             }
 
@@ -281,9 +325,9 @@ export async function executeGeminiTool(
                 const favIds = await getUserFavorites(user.id);
                 const allItems = await getLatestItems();
                 const favItems = favIds
-                    .map(id => allItems.find(i => i.id === id))
+                    .map(id => allItems.find((i: CombinedItem) => i.id === id))
                     .filter(Boolean)
-                    .map(i => ({
+                    .map((i: any) => ({
                         id: i!.id,
                         name: i!.name,
                         buyPrice: i!.buyPrice,
@@ -327,7 +371,7 @@ export async function executeGeminiTool(
                 const watches = await getBackendWatches(discordId);
                 const allItems = await getLatestItems();
                 const enriched = watches.map(w => {
-                    const item = allItems.find(i => i.id === w.item_id);
+                    const item = allItems.find((i: CombinedItem) => i.id === w.item_id);
                     const cooldownSeconds = (w as any).cooldown_seconds ?? 3600;
                     return {
                         ...w,
