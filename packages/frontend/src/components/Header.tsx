@@ -45,6 +45,7 @@ export const Header: React.FC = () => {
 
                     {user ? (
                         <>
+                            <Link to="/portfolio" className="nav-link font-semibold text-amber-300" onClick={closeMenu}>Portfolio 📦</Link>
                             <Link to="/favorites" className="nav-link" onClick={closeMenu}>Favorites</Link>
                             <Link to="/watches" className="nav-link" onClick={closeMenu}>Watches</Link>
                             {user.is_admin && (

@@ -92,10 +92,38 @@ app.get("/api/items", async (req, res, next) => {
   } else {
     next();
   }
-}, async (_req, res) => {
+}, async (req, res) => {
   try {
     const items = await getLatestItems();
-    res.json({ items });
+    const search = typeof req.query.search === "string" ? req.query.search.trim().toLowerCase() : "";
+    const pageSizeParam = req.query.pageSize || req.query.limit;
+    const pageSize = pageSizeParam ? parseInt(pageSizeParam as string, 10) : 0;
+
+    let filtered = items;
+    if (search) {
+      filtered = items.filter(i => i.name.toLowerCase().includes(search));
+      filtered.sort((a, b) => {
+        const aName = a.name.toLowerCase();
+        const bName = b.name.toLowerCase();
+        const aExact = aName === search;
+        const bExact = bName === search;
+        if (aExact && !bExact) return -1;
+        if (!aExact && bExact) return 1;
+
+        const aStarts = aName.startsWith(search);
+        const bStarts = bName.startsWith(search);
+        if (aStarts && !bStarts) return -1;
+        if (!aStarts && bStarts) return 1;
+
+        return aName.localeCompare(bName);
+      });
+    }
+
+    if (pageSize > 0 && !isNaN(pageSize)) {
+      filtered = filtered.slice(0, pageSize);
+    }
+
+    res.json({ items: filtered });
   } catch (err) {
     logger.error("Failed to fetch OSRS prices:", err);
     res.status(502).json({ error: "Failed to fetch OSRS prices" });

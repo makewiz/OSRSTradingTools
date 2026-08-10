@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useAuth } from "../contexts/AuthContext";
 import { API_BASE_URL } from "../config";
+import "./TradingGame.css";
 
 interface TradingGameAccount {
   id: number;
@@ -119,14 +120,12 @@ export const TradingGame: React.FC = () => {
   const fetchInitialData = async () => {
     try {
       setLoading(true);
-      // Fetch user's agents
       const agentRes = await fetchWithAuth(`${API_BASE_URL}/api/agents`);
       if (agentRes.ok) {
         const agentData = await agentRes.json();
         setAgents(agentData.agents || []);
       }
 
-      // Fetch items for offer modal search
       const itemsRes = await fetch(`${API_BASE_URL}/api/items`);
       if (itemsRes.ok) {
         const itemsData = await itemsRes.json();
@@ -292,7 +291,7 @@ export const TradingGame: React.FC = () => {
   };
 
   if (loading && !gameState) {
-    return <div className="text-center py-20 text-gray-400 text-lg">Loading Grand Exchange Trading Game...</div>;
+    return <div style={{ textAlign: "center", padding: "80px", color: "#94a3b8", fontSize: "1.2rem" }}>Loading Grand Exchange Trading Game...</div>;
   }
 
   const activeOffersMap = new Map<number, TradingGameOffer>();
@@ -315,33 +314,25 @@ export const TradingGame: React.FC = () => {
     : [];
 
   return (
-    <div className="max-w-7xl mx-auto px-4 py-8 space-y-8">
+    <div className="tg-container">
       {/* Header Banner */}
-      <div className="bg-gradient-to-r from-amber-950 via-slate-900 to-amber-950 p-6 rounded-2xl border border-amber-500/30 shadow-2xl relative overflow-hidden">
-        <div className="flex flex-wrap items-center justify-between gap-6 relative z-10">
-          <div>
-            <div className="flex items-center gap-3">
-              <h1 className="text-3xl font-extrabold text-amber-400 tracking-wide font-serif">
-                OSRS Grand Exchange Trading Game
-              </h1>
-              <span className="bg-amber-500/20 text-amber-300 text-xs px-3 py-1 rounded-full font-mono border border-amber-500/40">
-                10M Starting Stack
-              </span>
-            </div>
-            <p className="text-gray-300 text-sm mt-1 max-w-2xl">
+      <div className="tg-header-banner">
+        <div className="tg-header-top">
+          <div className="tg-title-area">
+            <h1>
+              <span>🏆</span>
+              <span>OSRS Grand Exchange Trading Game</span>
+            </h1>
+            <p className="tg-subtitle">
               Buy low, sell high using authentic Grand Exchange 8-slot mechanics & 4-hour trade limits matched in real time against live OSRS trade volumes!
             </p>
           </div>
 
-          {/* Account/Agent Switcher */}
-          <div className="flex items-center gap-2 bg-slate-800/90 p-1.5 rounded-xl border border-slate-700">
+          {/* Trader Switcher */}
+          <div className="tg-trader-switcher">
             <button
               onClick={() => setSelectedAgentId(null)}
-              className={`px-4 py-2 text-sm font-semibold rounded-lg transition-all ${
-                selectedAgentId === null
-                  ? "bg-amber-500 text-slate-950 shadow-md font-bold"
-                  : "text-gray-300 hover:text-white hover:bg-slate-700/50"
-              }`}
+              className={`tg-trader-btn ${selectedAgentId === null ? "active-human" : ""}`}
             >
               🎮 You ({user?.username || "Player"})
             </button>
@@ -350,11 +341,7 @@ export const TradingGame: React.FC = () => {
               <button
                 key={agent.id}
                 onClick={() => setSelectedAgentId(agent.id)}
-                className={`px-3 py-2 text-sm font-semibold rounded-lg flex items-center gap-2 transition-all ${
-                  selectedAgentId === agent.id
-                    ? "bg-purple-600 text-white shadow-md font-bold"
-                    : "text-purple-300 hover:text-white hover:bg-purple-900/40"
-                }`}
+                className={`tg-trader-btn ${selectedAgentId === agent.id ? "active-agent" : ""}`}
               >
                 🤖 {agent.name}
               </button>
@@ -362,33 +349,33 @@ export const TradingGame: React.FC = () => {
           </div>
         </div>
 
-        {/* Stats Strip */}
+        {/* Stats Grid */}
         {gameState && (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6 pt-6 border-t border-slate-800">
-            <div className="bg-slate-900/80 p-4 rounded-xl border border-slate-800/80">
-              <div className="text-xs font-medium text-gray-400 uppercase tracking-wider">Cash Stack</div>
-              <div className="text-2xl font-bold text-amber-400 font-mono mt-1">
+          <div className="tg-stats-grid">
+            <div className="tg-stat-card">
+              <div className="tg-stat-label">Cash Stack</div>
+              <div className="tg-stat-value gold">
                 {gameState.account.cash_stack.toLocaleString()} GP
               </div>
             </div>
 
-            <div className="bg-slate-900/80 p-4 rounded-xl border border-slate-800/80">
-              <div className="text-xs font-medium text-gray-400 uppercase tracking-wider">Total Net Worth</div>
-              <div className="text-2xl font-bold text-emerald-400 font-mono mt-1">
+            <div className="tg-stat-card">
+              <div className="tg-stat-label">Total Net Worth</div>
+              <div className="tg-stat-value emerald">
                 {gameState.netWorth.toLocaleString()} GP
               </div>
             </div>
 
-            <div className="bg-slate-900/80 p-4 rounded-xl border border-slate-800/80">
-              <div className="text-xs font-medium text-gray-400 uppercase tracking-wider">Monthly Profit</div>
-              <div className={`text-2xl font-bold font-mono mt-1 ${gameState.monthlyProfit >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
+            <div className="tg-stat-card">
+              <div className="tg-stat-label">Monthly Profit</div>
+              <div className={`tg-stat-value ${gameState.monthlyProfit >= 0 ? "emerald" : "rose"}`}>
                 {gameState.monthlyProfit >= 0 ? "+" : ""}{gameState.monthlyProfit.toLocaleString()} GP
               </div>
             </div>
 
-            <div className="bg-slate-900/80 p-4 rounded-xl border border-slate-800/80">
-              <div className="text-xs font-medium text-gray-400 uppercase tracking-wider">Reset Schedule</div>
-              <div className="text-sm font-semibold text-gray-300 mt-1">
+            <div className="tg-stat-card">
+              <div className="tg-stat-label">Reset Schedule</div>
+              <div className="tg-stat-value gray">
                 1st of Next Month (00:00 UTC)
               </div>
             </div>
@@ -398,47 +385,35 @@ export const TradingGame: React.FC = () => {
 
       {/* Notifications */}
       {error && (
-        <div className="bg-rose-950/80 border border-rose-500/50 text-rose-200 px-4 py-3 rounded-xl flex items-center justify-between">
+        <div className="tg-alert error">
           <span>⚠️ {error}</span>
-          <button onClick={() => setError(null)} className="text-rose-400 hover:text-white font-bold text-lg">×</button>
+          <button onClick={() => setError(null)} className="tg-alert-close">×</button>
         </div>
       )}
       {successMessage && (
-        <div className="bg-emerald-950/80 border border-emerald-500/50 text-emerald-200 px-4 py-3 rounded-xl flex items-center justify-between">
+        <div className="tg-alert success">
           <span>✅ {successMessage}</span>
-          <button onClick={() => setSuccessMessage(null)} className="text-emerald-400 hover:text-white font-bold text-lg">×</button>
+          <button onClick={() => setSuccessMessage(null)} className="tg-alert-close">×</button>
         </div>
       )}
 
       {/* Navigation Tabs */}
-      <div className="flex border-b border-slate-800 gap-4 text-sm font-semibold">
+      <div className="tg-tabs-bar">
         <button
           onClick={() => setActiveTab("ge")}
-          className={`pb-3 px-4 transition-colors relative ${
-            activeTab === "ge"
-              ? "text-amber-400 border-b-2 border-amber-400 font-bold"
-              : "text-gray-400 hover:text-white"
-          }`}
+          className={`tg-tab-btn ${activeTab === "ge" ? "active" : ""}`}
         >
           🏛️ GE Slots (8 Max)
         </button>
         <button
           onClick={() => setActiveTab("inventory")}
-          className={`pb-3 px-4 transition-colors relative ${
-            activeTab === "inventory"
-              ? "text-amber-400 border-b-2 border-amber-400 font-bold"
-              : "text-gray-400 hover:text-white"
-          }`}
+          className={`tg-tab-btn ${activeTab === "inventory" ? "active" : ""}`}
         >
           🎒 Bank & Inventory ({gameState?.inventory.length || 0})
         </button>
         <button
           onClick={() => setActiveTab("leaderboard")}
-          className={`pb-3 px-4 transition-colors relative ${
-            activeTab === "leaderboard"
-              ? "text-amber-400 border-b-2 border-amber-400 font-bold"
-              : "text-gray-400 hover:text-white"
-          }`}
+          className={`tg-tab-btn ${activeTab === "leaderboard" ? "active" : ""}`}
         >
           🏆 Leaderboards
         </button>
@@ -446,17 +421,17 @@ export const TradingGame: React.FC = () => {
 
       {/* TAB 1: GE 8-SLOT GRID */}
       {activeTab === "ge" && gameState && (
-        <div className="space-y-6">
-          <div className="flex items-center justify-between">
-            <h2 className="text-xl font-bold text-gray-200">
+        <div>
+          <div className="tg-slots-header">
+            <h2>
               Active Trade Offers ({gameState.offers.filter(o => o.status === "ACTIVE").length} / 8 Slots Used)
             </h2>
-            <span className="text-xs text-gray-400">
+            <span style={{ fontSize: "0.8rem", color: "#64748b" }}>
               Offers fill automatically when live OSRS trades occur at your price or better.
             </span>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="tg-slots-grid">
             {Array.from({ length: 8 }).map((_, slotIndex) => {
               const offer = activeOffersMap.get(slotIndex);
               const hasClaimable = offer && (offer.claimed_gp > 0 || offer.claimed_items > 0);
@@ -465,66 +440,50 @@ export const TradingGame: React.FC = () => {
               return (
                 <div
                   key={slotIndex}
-                  className={`rounded-2xl border p-5 flex flex-col justify-between transition-all min-h-[220px] relative overflow-hidden ${
+                  className={`tg-slot-card ${
                     offer
                       ? offer.type === "BUY"
-                        ? "bg-slate-900/90 border-blue-500/40 shadow-lg shadow-blue-950/20"
-                        : "bg-slate-900/90 border-emerald-500/40 shadow-lg shadow-emerald-950/20"
-                      : "bg-slate-900/40 border-slate-800 hover:border-amber-500/40 border-dashed"
+                        ? "buy"
+                        : "sell"
+                      : "empty"
                   }`}
                 >
                   {offer ? (
                     <>
-                      {/* Slot Header */}
                       <div>
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="text-xs font-mono font-bold text-gray-400 uppercase tracking-wider">
-                            Slot #{slotIndex + 1}
-                          </span>
-                          <span
-                            className={`text-xs px-2.5 py-0.5 rounded-full font-bold uppercase tracking-wide ${
-                              offer.type === "BUY" ? "bg-blue-500/20 text-blue-400 border border-blue-500/30" : "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"
-                            }`}
-                          >
+                        <div className="tg-slot-header">
+                          <span className="tg-slot-num">SLOT #{slotIndex + 1}</span>
+                          <span className={`tg-badge-type ${offer.type === "BUY" ? "buy" : "sell"}`}>
                             {offer.type}
                           </span>
                         </div>
 
-                        <div className="font-bold text-lg text-gray-100 truncate mt-1">
-                          {offer.item_name}
-                        </div>
-
-                        <div className="text-sm font-mono text-gray-300 mt-1">
+                        <div className="tg-item-title">{offer.item_name}</div>
+                        <div className="tg-item-details">
                           {offer.filled_quantity.toLocaleString()} / {offer.target_quantity.toLocaleString()} @ {offer.price.toLocaleString()} GP
                         </div>
 
-                        {/* Progress Bar */}
-                        <div className="w-full bg-slate-950 h-3 rounded-full overflow-hidden mt-3 p-0.5 border border-slate-800">
+                        <div className="tg-progress-track">
                           <div
-                            className={`h-full rounded-full transition-all duration-500 ${
-                              offer.type === "BUY" ? "bg-blue-500" : "bg-emerald-500"
-                            }`}
+                            className={`tg-progress-fill ${offer.type === "BUY" ? "buy" : "sell"}`}
                             style={{ width: `${progressPct}%` }}
                           />
                         </div>
-                        <div className="text-right text-xs font-mono text-gray-400 mt-1">
-                          {progressPct}% Filled
-                        </div>
+                        <div className="tg-progress-text">{progressPct}% Filled</div>
                       </div>
 
-                      {/* Slot Action Footer */}
-                      <div className="pt-4 border-t border-slate-800/80 flex items-center justify-between gap-2 mt-2">
+                      <div className="tg-slot-footer">
                         {hasClaimable ? (
                           <button
                             onClick={() => handleCollectSlot(offer.id)}
-                            className="w-full py-2 px-3 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-xl text-sm transition-all shadow-md flex items-center justify-center gap-1.5"
+                            className="tg-btn-collect"
                           >
                             🎁 Collect ({offer.claimed_items > 0 ? `${offer.claimed_items} Items` : `${offer.claimed_gp.toLocaleString()} GP`})
                           </button>
                         ) : (
                           <button
                             onClick={() => handleCancelOffer(offer.id)}
-                            className="w-full py-2 px-3 bg-slate-800 hover:bg-rose-900/60 text-gray-300 hover:text-rose-200 border border-slate-700 rounded-xl text-xs font-medium transition-all"
+                            className="tg-btn-cancel"
                           >
                             Cancel Offer
                           </button>
@@ -532,19 +491,16 @@ export const TradingGame: React.FC = () => {
                       </div>
                     </>
                   ) : (
-                    /* Empty Slot */
-                    <div className="flex flex-col items-center justify-center h-full my-auto text-center space-y-3 py-6">
-                      <div className="w-12 h-12 rounded-full bg-slate-800/80 flex items-center justify-center text-gray-500 font-bold text-xl border border-slate-700">
-                        {slotIndex + 1}
-                      </div>
-                      <div className="text-sm text-gray-400 font-medium">Empty GE Slot</div>
+                    <>
+                      <div className="tg-empty-number">{slotIndex + 1}</div>
+                      <div style={{ fontSize: "0.85rem", color: "#64748b", fontWeight: 600 }}>Empty GE Slot</div>
                       <button
                         onClick={() => openCreateOfferModal(slotIndex, "BUY")}
-                        className="px-4 py-2 bg-amber-500/20 hover:bg-amber-500 text-amber-300 hover:text-slate-950 border border-amber-500/40 font-semibold rounded-xl text-xs transition-all"
+                        className="tg-btn-create"
                       >
                         + Create Offer
                       </button>
-                    </div>
+                    </>
                   )}
                 </div>
               );
@@ -555,46 +511,43 @@ export const TradingGame: React.FC = () => {
 
       {/* TAB 2: INVENTORY & BANK */}
       {activeTab === "inventory" && gameState && (
-        <div className="space-y-6">
-          <div className="flex items-center justify-between">
-            <h2 className="text-xl font-bold text-gray-200">
-              Held Items ({gameState.inventory.length} Unique Items)
-            </h2>
-            <span className="text-xs text-gray-400">
+        <div>
+          <div className="tg-slots-header">
+            <h2>Held Items ({gameState.inventory.length} Unique Items)</h2>
+            <span style={{ fontSize: "0.8rem", color: "#64748b" }}>
               Items acquired from completed buy offers.
             </span>
           </div>
 
           {gameState.inventory.length === 0 ? (
-            <div className="bg-slate-900/60 p-12 rounded-2xl border border-slate-800 text-center text-gray-400">
+            <div className="tg-table-card" style={{ padding: "48px", textAlign: "center", color: "#64748b" }}>
               No items in your bank inventory yet. Complete buy offers in GE to accumulate items!
             </div>
           ) : (
-            <div className="bg-slate-900/80 rounded-2xl border border-slate-800 overflow-hidden shadow-xl">
-              <table className="w-full text-left text-sm text-gray-300">
-                <thead className="bg-slate-950 text-xs text-gray-400 uppercase tracking-wider font-semibold border-b border-slate-800">
+            <div className="tg-table-card">
+              <table className="tg-table">
+                <thead>
                   <tr>
-                    <th className="px-6 py-4">Item Name</th>
-                    <th className="px-6 py-4 text-right">Quantity</th>
-                    <th className="px-6 py-4 text-right">Avg Buy Price</th>
-                    <th className="px-6 py-4 text-right">Total Invested</th>
-                    <th className="px-6 py-4 text-center">Action</th>
+                    <th>Item Name</th>
+                    <th style={{ textAlign: "right" }}>Quantity</th>
+                    <th style={{ textAlign: "right" }}>Avg Buy Price</th>
+                    <th style={{ textAlign: "right" }}>Total Invested</th>
+                    <th style={{ textAlign: "center" }}>Action</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-800/80">
+                <tbody>
                   {gameState.inventory.map(inv => {
                     const totalInvested = Math.round(inv.quantity * inv.avg_buy_price);
                     return (
-                      <tr key={inv.id} className="hover:bg-slate-800/40 transition-colors">
-                        <td className="px-6 py-4 font-bold text-gray-100">{inv.item_name}</td>
-                        <td className="px-6 py-4 text-right font-mono font-semibold">{inv.quantity.toLocaleString()}</td>
-                        <td className="px-6 py-4 text-right font-mono text-gray-300">{Math.round(inv.avg_buy_price).toLocaleString()} GP</td>
-                        <td className="px-6 py-4 text-right font-mono text-amber-400 font-semibold">{totalInvested.toLocaleString()} GP</td>
-                        <td className="px-6 py-4 text-center">
+                      <tr key={inv.id}>
+                        <td style={{ fontWeight: 700 }}>{inv.item_name}</td>
+                        <td style={{ textAlign: "right", fontFamily: "monospace", fontWeight: 600 }}>{inv.quantity.toLocaleString()}</td>
+                        <td style={{ textAlign: "right", fontFamily: "monospace" }}>{Math.round(inv.avg_buy_price).toLocaleString()} GP</td>
+                        <td style={{ textAlign: "right", fontFamily: "monospace", color: "#f59e0b", fontWeight: 700 }}>{totalInvested.toLocaleString()} GP</td>
+                        <td style={{ textAlign: "center" }}>
                           <button
                             onClick={() => {
                               const marketItem = allMarketItems.find(i => i.id === inv.item_id);
-                              // Find empty slot
                               const emptySlot = Array.from({ length: 8 }).findIndex((_, idx) => !activeOffersMap.has(idx));
                               if (emptySlot === -1) {
                                 setError("All 8 GE slots are full. Cancel an offer first to sell.");
@@ -603,7 +556,8 @@ export const TradingGame: React.FC = () => {
                               setActiveTab("ge");
                               openCreateOfferModal(emptySlot, "SELL", marketItem, inv.quantity, marketItem?.sellPrice || Math.round(inv.avg_buy_price * 1.02));
                             }}
-                            className="px-3 py-1.5 bg-emerald-500/20 hover:bg-emerald-500 text-emerald-300 hover:text-slate-950 font-bold border border-emerald-500/40 rounded-lg text-xs transition-all"
+                            className="tg-btn-create"
+                            style={{ margin: 0 }}
                           >
                             Sell in GE
                           </button>
@@ -620,101 +574,89 @@ export const TradingGame: React.FC = () => {
 
       {/* TAB 3: LEADERBOARDS */}
       {activeTab === "leaderboard" && (
-        <div className="space-y-6">
-          <div className="flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <div className="tg-lb-controls">
             {/* Timeframe Switcher */}
-            <div className="flex items-center gap-2 bg-slate-900/90 p-1.5 rounded-xl border border-slate-800">
+            <div className="tg-pill-group">
               <button
                 onClick={() => setLeaderboardTimeframe("current")}
-                className={`px-4 py-2 text-xs font-bold rounded-lg transition-all ${
-                  leaderboardTimeframe === "current" ? "bg-amber-500 text-slate-950" : "text-gray-400 hover:text-white"
-                }`}
+                className={`tg-pill-btn ${leaderboardTimeframe === "current" ? "active" : ""}`}
               >
                 Current Month
               </button>
               <button
                 onClick={() => setLeaderboardTimeframe("last_month")}
-                className={`px-4 py-2 text-xs font-bold rounded-lg transition-all ${
-                  leaderboardTimeframe === "last_month" ? "bg-amber-500 text-slate-950" : "text-gray-400 hover:text-white"
-                }`}
+                className={`tg-pill-btn ${leaderboardTimeframe === "last_month" ? "active" : ""}`}
               >
                 Last Month Top Traders
               </button>
               <button
                 onClick={() => setLeaderboardTimeframe("all_time")}
-                className={`px-4 py-2 text-xs font-bold rounded-lg transition-all ${
-                  leaderboardTimeframe === "all_time" ? "bg-amber-500 text-slate-950" : "text-gray-400 hover:text-white"
-                }`}
+                className={`tg-pill-btn ${leaderboardTimeframe === "all_time" ? "active" : ""}`}
               >
                 All-Time Cumulative
               </button>
             </div>
 
             {/* Entity Filter */}
-            <div className="flex items-center gap-2 bg-slate-900/90 p-1.5 rounded-xl border border-slate-800">
+            <div className="tg-pill-group">
               <button
                 onClick={() => setLeaderboardFilter("all")}
-                className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all ${
-                  leaderboardFilter === "all" ? "bg-slate-700 text-white" : "text-gray-400 hover:text-white"
-                }`}
+                className={`tg-pill-btn ${leaderboardFilter === "all" ? "active" : ""}`}
               >
                 All
               </button>
               <button
                 onClick={() => setLeaderboardFilter("humans")}
-                className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all ${
-                  leaderboardFilter === "humans" ? "bg-slate-700 text-white" : "text-gray-400 hover:text-white"
-                }`}
+                className={`tg-pill-btn ${leaderboardFilter === "humans" ? "active" : ""}`}
               >
                 🎮 Humans
               </button>
               <button
                 onClick={() => setLeaderboardFilter("agents")}
-                className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all ${
-                  leaderboardFilter === "agents" ? "bg-slate-700 text-white" : "text-gray-400 hover:text-white"
-                }`}
+                className={`tg-pill-btn ${leaderboardFilter === "agents" ? "active" : ""}`}
               >
                 🤖 AI Agents
               </button>
             </div>
           </div>
 
-          <div className="bg-slate-900/80 rounded-2xl border border-slate-800 overflow-hidden shadow-xl">
-            <table className="w-full text-left text-sm text-gray-300">
-              <thead className="bg-slate-950 text-xs text-gray-400 uppercase tracking-wider font-semibold border-b border-slate-800">
+          <div className="tg-table-card">
+            <table className="tg-table">
+              <thead>
                 <tr>
-                  <th className="px-6 py-4 w-16 text-center">Rank</th>
-                  <th className="px-6 py-4">Trader</th>
-                  <th className="px-6 py-4 text-right">Net Worth</th>
-                  <th className="px-6 py-4 text-right">Net Profit</th>
+                  <th style={{ width: "60px", textAlign: "center" }}>Rank</th>
+                  <th>Trader</th>
+                  <th style={{ textAlign: "right" }}>Net Worth</th>
+                  <th style={{ textAlign: "right" }}>Net Profit</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-800/80">
+              <tbody>
                 {filteredLeaderboard.length === 0 ? (
                   <tr>
-                    <td colSpan={4} className="px-6 py-8 text-center text-gray-500">
+                    <td colSpan={4} style={{ textAlign: "center", color: "#64748b", padding: "32px" }}>
                       No leaderboard data for this category.
                     </td>
                   </tr>
                 ) : (
                   filteredLeaderboard.map((entry) => (
-                    <tr key={entry.accountId} className="hover:bg-slate-800/40 transition-colors">
-                      <td className="px-6 py-4 text-center font-bold font-mono">
+                    <tr key={entry.accountId}>
+                      <td style={{ textAlign: "center", fontWeight: 800, fontFamily: "monospace" }}>
                         {entry.rank === 1 ? "🥇" : entry.rank === 2 ? "🥈" : entry.rank === 3 ? "🥉" : `#${entry.rank}`}
                       </td>
-                      <td className="px-6 py-4 font-bold text-gray-100 flex items-center gap-2">
+                      <td style={{ fontWeight: 700, display: "flex", alignItems: "center", gap: "8px" }}>
                         <span>{entry.isAgent ? "🤖" : "🎮"}</span>
                         <span>{entry.name}</span>
                         {entry.isAgent && (
-                          <span className="text-[10px] bg-purple-950 text-purple-300 border border-purple-800 px-2 py-0.5 rounded-full font-mono">
+                          <span className="tg-badge-stack" style={{ fontSize: "0.65rem", padding: "2px 6px" }}>
                             AI Agent
                           </span>
                         )}
                       </td>
-                      <td className="px-6 py-4 text-right font-mono text-emerald-400 font-bold">
+                      <td style={{ textAlign: "right", fontFamily: "monospace", color: "#10b981", fontWeight: 700 }}>
                         {entry.netWorth.toLocaleString()} GP
                       </td>
-                      <td className={`px-6 py-4 text-right font-mono font-bold ${entry.profit >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
+                      <td style={{ textAlign: "right", fontFamily: "monospace", fontWeight: 700, color: entry.profit >= 0 ? "#10b981" : "#f43f5e" }}>
                         {entry.profit >= 0 ? "+" : ""}{entry.profit.toLocaleString()} GP
                       </td>
                     </tr>
@@ -728,48 +670,37 @@ export const TradingGame: React.FC = () => {
 
       {/* MODAL: CREATE OFFER */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-amber-500/40 rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-6 relative">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-4">
-              <h3 className="text-xl font-bold text-amber-400 font-serif">
-                Place Offer in GE Slot #{modalSlot + 1}
-              </h3>
-              <button
-                onClick={() => setIsModalOpen(false)}
-                className="text-gray-400 hover:text-white text-xl font-bold"
-              >
-                ×
-              </button>
+        <div className="tg-modal-overlay">
+          <div className="tg-modal-box">
+            <div className="tg-modal-header">
+              <h3>Place Offer in GE Slot #{modalSlot + 1}</h3>
+              <button onClick={() => setIsModalOpen(false)} className="tg-alert-close">×</button>
             </div>
 
-            <form onSubmit={handlePlaceOffer} className="space-y-4">
+            <form onSubmit={handlePlaceOffer}>
               {/* Type Switcher */}
-              <div className="grid grid-cols-2 gap-2 bg-slate-950 p-1 rounded-xl border border-slate-800">
+              <div className="tg-pill-group" style={{ width: "100%", marginBottom: "16px" }}>
                 <button
                   type="button"
                   onClick={() => setOfferType("BUY")}
-                  className={`py-2 text-sm font-bold rounded-lg transition-all ${
-                    offerType === "BUY" ? "bg-blue-600 text-white" : "text-gray-400 hover:text-white"
-                  }`}
+                  className={`tg-pill-btn ${offerType === "BUY" ? "active" : ""}`}
+                  style={{ flex: 1, padding: "8px" }}
                 >
                   Buy Offer
                 </button>
                 <button
                   type="button"
                   onClick={() => setOfferType("SELL")}
-                  className={`py-2 text-sm font-bold rounded-lg transition-all ${
-                    offerType === "SELL" ? "bg-emerald-600 text-white" : "text-gray-400 hover:text-white"
-                  }`}
+                  className={`tg-pill-btn ${offerType === "SELL" ? "active" : ""}`}
+                  style={{ flex: 1, padding: "8px" }}
                 >
                   Sell Offer
                 </button>
               </div>
 
               {/* Item Search */}
-              <div>
-                <label className="block text-xs font-semibold text-gray-300 uppercase tracking-wider mb-1">
-                  Search Item
-                </label>
+              <div className="tg-form-group">
+                <label className="tg-form-label">Search Item</label>
                 <input
                   type="text"
                   value={itemSearchQuery}
@@ -778,19 +709,19 @@ export const TradingGame: React.FC = () => {
                     setSelectedItem(null);
                   }}
                   placeholder="e.g. Shark, Zulrah's scale, Abyssal whip..."
-                  className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-2.5 text-gray-100 focus:outline-none focus:border-amber-500 text-sm"
+                  className="tg-input"
                 />
 
                 {matchingItems.length > 0 && !selectedItem && (
-                  <div className="mt-1 bg-slate-950 border border-slate-800 rounded-xl max-h-48 overflow-y-auto divide-y divide-slate-800">
+                  <div className="tg-autocomplete-list">
                     {matchingItems.map((item) => (
                       <div
                         key={item.id}
                         onClick={() => handleSelectItem(item)}
-                        className="p-3 hover:bg-slate-800 cursor-pointer flex items-center justify-between text-sm"
+                        className="tg-autocomplete-item"
                       >
-                        <span className="font-semibold text-gray-200">{item.name}</span>
-                        <span className="text-xs font-mono text-amber-400">
+                        <span style={{ fontWeight: 600 }}>{item.name}</span>
+                        <span style={{ color: "#f59e0b", fontFamily: "monospace", fontSize: "0.8rem" }}>
                           {offerType === "BUY" ? `Buy: ${item.buyPrice?.toLocaleString() || "?"} GP` : `Sell: ${item.sellPrice?.toLocaleString() || "?"} GP`}
                         </span>
                       </div>
@@ -800,19 +731,19 @@ export const TradingGame: React.FC = () => {
               </div>
 
               {selectedItem && (
-                <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-2 text-xs text-gray-300">
-                  <div className="flex justify-between">
-                    <span className="text-gray-400">Market Buy Price:</span>
-                    <span className="font-mono text-amber-400">{selectedItem.buyPrice?.toLocaleString() || "?"} GP</span>
+                <div style={{ background: "#0f131d", padding: "12px", borderRadius: "8px", border: "1px solid #1e293b", marginBottom: "16px", fontSize: "0.8rem" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px" }}>
+                    <span style={{ color: "#64748b" }}>Market Buy Price:</span>
+                    <span style={{ fontFamily: "monospace", color: "#f59e0b" }}>{selectedItem.buyPrice?.toLocaleString() || "?"} GP</span>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-400">Market Sell Price:</span>
-                    <span className="font-mono text-emerald-400">{selectedItem.sellPrice?.toLocaleString() || "?"} GP</span>
+                  <div style={{ display: "flex", justifyContent: "space-between" }}>
+                    <span style={{ color: "#64748b" }}>Market Sell Price:</span>
+                    <span style={{ fontFamily: "monospace", color: "#10b981" }}>{selectedItem.sellPrice?.toLocaleString() || "?"} GP</span>
                   </div>
                   {itemLimitInfo && (
-                    <div className="flex justify-between pt-1 border-t border-slate-800/80">
-                      <span className="text-gray-400">4-Hour Buy Limit:</span>
-                      <span className="font-mono text-blue-400">
+                    <div style={{ display: "flex", justifyContent: "space-between", marginTop: "6px", paddingTop: "6px", borderTop: "1px solid #1e293b" }}>
+                      <span style={{ color: "#64748b" }}>4-Hour Buy Limit:</span>
+                      <span style={{ fontFamily: "monospace", color: "#3b82f6" }}>
                         {itemLimitInfo.boughtInLast4Hours} / {itemLimitInfo.buyLimit} used ({itemLimitInfo.remainingLimit} remaining)
                       </span>
                     </div>
@@ -821,58 +752,53 @@ export const TradingGame: React.FC = () => {
               )}
 
               {/* Quantity & Price */}
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-semibold text-gray-300 uppercase tracking-wider mb-1">
-                    Quantity
-                  </label>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "16px" }}>
+                <div className="tg-form-group" style={{ margin: 0 }}>
+                  <label className="tg-form-label">Quantity</label>
                   <input
                     type="number"
                     min="1"
                     value={quantity}
                     onChange={(e) => setQuantity(Math.max(1, parseInt(e.target.value, 10) || 1))}
-                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-2.5 text-gray-100 font-mono text-sm focus:outline-none focus:border-amber-500"
+                    className="tg-input"
+                    style={{ fontFamily: "monospace" }}
                   />
                 </div>
 
-                <div>
-                  <label className="block text-xs font-semibold text-gray-300 uppercase tracking-wider mb-1">
-                    Price per item (GP)
-                  </label>
+                <div className="tg-form-group" style={{ margin: 0 }}>
+                  <label className="tg-form-label">Price per item (GP)</label>
                   <input
                     type="number"
                     min="1"
                     value={price}
                     onChange={(e) => setPrice(Math.max(1, parseInt(e.target.value, 10) || 1))}
-                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-2.5 text-gray-100 font-mono text-sm focus:outline-none focus:border-amber-500"
+                    className="tg-input"
+                    style={{ fontFamily: "monospace" }}
                   />
                 </div>
               </div>
 
               {/* Total Escrow Calculation */}
-              <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 flex items-center justify-between text-sm">
-                <span className="text-gray-400 font-medium">Total Escrow Cost:</span>
-                <span className="font-mono font-bold text-amber-400 text-base">
+              <div style={{ background: "#0f131d", padding: "12px 16px", borderRadius: "8px", border: "1px solid #1e293b", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <span style={{ color: "#94a3b8", fontWeight: 600, fontSize: "0.85rem" }}>Total Escrow Cost:</span>
+                <span style={{ fontFamily: "monospace", fontWeight: 800, color: "#f59e0b", fontSize: "1.1rem" }}>
                   {(quantity * price).toLocaleString()} GP
                 </span>
               </div>
 
-              <div className="pt-2 flex gap-3">
+              <div className="tg-modal-footer">
                 <button
                   type="button"
                   onClick={() => setIsModalOpen(false)}
-                  className="w-1/2 py-2.5 bg-slate-800 hover:bg-slate-700 text-gray-300 font-semibold rounded-xl text-sm transition-all"
+                  className="tg-btn-cancel-modal"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={submitting || !selectedItem}
-                  className={`w-1/2 py-2.5 font-bold rounded-xl text-sm transition-all shadow-md ${
-                    offerType === "BUY"
-                      ? "bg-blue-600 hover:bg-blue-500 text-white"
-                      : "bg-emerald-600 hover:bg-emerald-500 text-white"
-                  } disabled:opacity-50`}
+                  className={`tg-btn-submit ${offerType === "SELL" ? "sell" : ""}`}
+                  style={{ opacity: submitting || !selectedItem ? 0.5 : 1 }}
                 >
                   {submitting ? "Placing..." : `Place ${offerType} Offer`}
                 </button>

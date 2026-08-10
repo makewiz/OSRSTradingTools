@@ -78,6 +78,54 @@ export const ItemDetail: React.FC = () => {
   // Favorites logic
   const [favorites, setFavorites] = useState<number[]>([]);
 
+  // Portfolio modal logic
+  const [showPortfolioModal, setShowPortfolioModal] = useState(false);
+  const [portfolioQuantity, setPortfolioQuantity] = useState(1);
+  const [portfolioBuyPrice, setPortfolioBuyPrice] = useState(0);
+  const [submittingPortfolio, setSubmittingPortfolio] = useState(false);
+
+  const handleOpenPortfolioModal = () => {
+    if (!user || !token) {
+      alert("Please log in to add items to your portfolio.");
+      navigate("/login");
+      return;
+    }
+    setPortfolioQuantity(1);
+    setPortfolioBuyPrice(item?.buyPrice || item?.sellPrice || 0);
+    setShowPortfolioModal(true);
+  };
+
+  const handlePortfolioSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!item) return;
+
+    setSubmittingPortfolio(true);
+    try {
+      const res = await fetchWithAuth(`${API_BASE_URL}/api/portfolio`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          itemId: item.id,
+          itemName: item.name,
+          quantity: portfolioQuantity,
+          buyPrice: portfolioBuyPrice
+        })
+      });
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || "Failed to add item to portfolio");
+      }
+
+      setShowPortfolioModal(false);
+      alert(`Added ${item.name} (${portfolioQuantity}x @ ${portfolioBuyPrice.toLocaleString()} GP) to your Portfolio!`);
+    } catch (err: any) {
+      alert(err.message || "Error adding item to portfolio");
+    } finally {
+      setSubmittingPortfolio(false);
+    }
+  };
+
   useEffect(() => {
     const loadFavorites = async () => {
       if (user && token) {
@@ -370,6 +418,23 @@ export const ItemDetail: React.FC = () => {
                   Copy /watch
                 </button>
               )}
+              <button
+                className="watch-button"
+                style={{
+                  background: '#f59e0b',
+                  color: '#0f172a',
+                  border: 'none',
+                  fontWeight: 'bold',
+                  fontSize: '0.9rem',
+                  padding: '6px 14px',
+                  borderRadius: '8px',
+                  cursor: 'pointer'
+                }}
+                onClick={handleOpenPortfolioModal}
+                title="Add item to your Trading Portfolio"
+              >
+                📦 Add to Portfolio
+              </button>
             </div>
 
             <p className="item-examine">{item.examine}</p>
@@ -588,6 +653,91 @@ export const ItemDetail: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Portfolio Modal */}
+      {showPortfolioModal && item && (
+        <div className="modal-overlay" onClick={() => setShowPortfolioModal(false)}>
+          <div className="modal-card" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>📦 Add to Portfolio</h3>
+              <button
+                className="modal-close-btn"
+                onClick={() => setShowPortfolioModal(false)}
+              >
+                &times;
+              </button>
+            </div>
+
+            <form onSubmit={handlePortfolioSubmit} style={{ display: "flex", flexDirection: "column", gap: "15px" }}>
+              <div
+                style={{
+                  padding: "10px 12px",
+                  background: "#1e1e1e",
+                  borderRadius: "6px",
+                  border: "1px solid var(--border-color)",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "10px"
+                }}
+              >
+                <img src={item.iconUrl} alt={item.name} className="suggestion-icon" />
+                <div>
+                  <div style={{ fontWeight: 700, color: "#fff" }}>{item.name}</div>
+                  <div style={{ fontSize: "0.8rem", color: "#aaa" }}>
+                    Instant Buy Price: <span style={{ color: "var(--primary-color)", fontWeight: 600 }}>{item.buyPrice ? item.buyPrice.toLocaleString() + " GP" : "N/A"}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+                <div>
+                  <label style={{ display: "block", fontSize: "0.85rem", color: "#aaa", marginBottom: "5px" }}>
+                    Count Bought
+                  </label>
+                  <input
+                    type="number"
+                    min={1}
+                    className="filter-input"
+                    value={portfolioQuantity}
+                    onChange={(e) => setPortfolioQuantity(Math.max(1, parseInt(e.target.value) || 0))}
+                    required
+                  />
+                </div>
+                <div>
+                  <label style={{ display: "block", fontSize: "0.85rem", color: "#aaa", marginBottom: "5px" }}>
+                    Buy Price (GP)
+                  </label>
+                  <input
+                    type="number"
+                    min={1}
+                    className="filter-input"
+                    value={portfolioBuyPrice}
+                    onChange={(e) => setPortfolioBuyPrice(Math.max(1, parseInt(e.target.value) || 0))}
+                    required
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px", marginTop: "10px" }}>
+                <button
+                  type="button"
+                  className="secondary-btn"
+                  onClick={() => setShowPortfolioModal(false)}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="primary-btn"
+                  disabled={submittingPortfolio}
+                >
+                  {submittingPortfolio ? "Adding..." : "Add to Portfolio"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </main>
   );
 };

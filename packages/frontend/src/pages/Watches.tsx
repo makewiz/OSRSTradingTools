@@ -1,11 +1,10 @@
 
 import React, { useEffect, useState } from "react";
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, Navigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { API_BASE_URL } from "../config";
 
 import { TradingAgentsSection } from "../components/TradingAgentsSection";
-import { TradingPortfolioSection } from "../components/TradingPortfolioSection";
 
 interface Watch {
     id: number;
@@ -81,8 +80,14 @@ export const Watches: React.FC = () => {
     const queryParams = new URLSearchParams(location.search);
     const initialTab = (queryParams.get("tab") as any) || "agents";
 
+    if (initialTab === "portfolio") {
+        return <Navigate to="/portfolio" replace />;
+    }
+
     // Active Tab state
-    const [activeTab, setActiveTab] = useState<'agents' | 'portfolio' | 'smart' | 'alerts'>(initialTab);
+    const [activeTab, setActiveTab] = useState<'agents' | 'smart' | 'alerts'>(
+        initialTab === 'portfolio' ? 'agents' : initialTab
+    );
 
     useEffect(() => {
         if (token) fetchDat();
@@ -343,21 +348,23 @@ export const Watches: React.FC = () => {
                 >
                     🤖 AI Trading Agents
                 </button>
-                <button
-                    onClick={() => setActiveTab('portfolio')}
+                <Link
+                    to="/portfolio"
                     className="page-button"
                     style={{
-                        background: activeTab === 'portfolio' ? '#f59e0b' : 'rgba(255,255,255,0.05)',
-                        color: activeTab === 'portfolio' ? '#fff' : '#aaa',
-                        border: activeTab === 'portfolio' ? '1px solid #fbbf24' : '1px solid border-slate-700',
+                        background: 'rgba(255,255,255,0.05)',
+                        color: '#fbbf24',
+                        border: '1px solid #f59e0b',
                         fontWeight: 'bold',
                         padding: '10px 18px',
                         borderRadius: '8px',
-                        cursor: 'pointer'
+                        cursor: 'pointer',
+                        textDecoration: 'none',
+                        display: 'inline-block'
                     }}
                 >
-                    📦 Trading Portfolio
-                </button>
+                    📦 Trading Portfolio ↗
+                </Link>
                 <button
                     onClick={() => setActiveTab('smart')}
                     className="page-button"
@@ -397,11 +404,6 @@ export const Watches: React.FC = () => {
                     {/* Tab 1: AI Trading Agents */}
                     {activeTab === 'agents' && (
                         <TradingAgentsSection />
-                    )}
-
-                    {/* Tab 2: Trading Portfolio */}
-                    {activeTab === 'portfolio' && (
-                        <TradingPortfolioSection />
                     )}
 
                     {/* Tab 2: Smart Watches */}

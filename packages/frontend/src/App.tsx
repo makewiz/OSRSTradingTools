@@ -19,6 +19,7 @@ import { HighlightsPage } from "./pages/HighlightsPage";
 import { Recipes } from "./pages/Recipes";
 import ArbitragePage from "./pages/Arbitrage";
 import { TradingGame } from "./pages/TradingGame";
+import { Portfolio } from "./pages/Portfolio";
 import { ChatWidget } from "./components/ChatWidget"; // [NEW]
 
 
@@ -37,6 +38,7 @@ export const App: React.FC = () => {
 
             <Route path="/items" element={<ItemList />} />
             <Route path="/item/:id" element={<ItemDetail />} />
+            <Route path="/portfolio" element={<Portfolio />} />
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
             <Route path="/profile" element={<Profile />} />

@@ -1436,12 +1436,13 @@ export async function addPortfolioItem(
   itemName: string,
   quantity: number,
   buyPrice: number,
-  targetSellPrice: number,
+  targetSellPrice?: number | null,
   agentId?: number | null,
   notes?: string | null,
   stopLossPrice?: number | null
 ): Promise<PortfolioItem> {
   const now = Math.floor(Date.now() / 1000);
+  const effectiveTargetSell = targetSellPrice ?? buyPrice;
   const query = `
     INSERT INTO user_portfolio (
       user_id, agent_id, item_id, item_name, quantity, buy_price, target_sell_price, stop_loss_price, notes, created_at, updated_at
@@ -1449,7 +1450,7 @@ export async function addPortfolioItem(
     RETURNING *
   `;
   const params = [
-    userId, agentId ?? null, itemId, itemName, quantity, buyPrice, targetSellPrice, stopLossPrice ?? null, notes ?? null, now
+    userId, agentId ?? null, itemId, itemName, quantity, buyPrice, effectiveTargetSell, stopLossPrice ?? null, notes ?? null, now
   ];
   const result = await pool.query(query, params);
   const row = result.rows[0];

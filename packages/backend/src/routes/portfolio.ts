@@ -12,6 +12,7 @@ import {
 } from "../database";
 import { getLatestItems } from "../scheduler";
 import { CombinedItem } from "../osrsClient";
+import { calculateTax } from "../tax";
 import { logger } from "@osrstradingtools/shared";
 
 const router = express.Router();
@@ -22,7 +23,7 @@ const createPortfolioSchema = z.object({
     itemName: z.string().min(1),
     quantity: z.number().int().positive().default(1),
     buyPrice: z.number().int().positive(),
-    targetSellPrice: z.number().int().positive(),
+    targetSellPrice: z.number().int().positive().optional(),
     stopLossPrice: z.number().int().positive().optional(),
     agentId: z.number().int().positive().optional(),
     notes: z.string().optional()
@@ -50,48 +51,32 @@ router.get("/", async (req, res) => {
 
         const enriched = portfolio.map(pos => {
             const geItem = itemMap.get(pos.item_id);
-            const currentBuyPrice = geItem?.buyPrice ?? null;
+            const currentBuyPrice = geItem?.buyPrice ?? geItem?.sellPrice ?? null;
             const currentSellPrice = geItem?.sellPrice ?? null;
 
-            // Calculate profit after 2% GE tax on sell
+            // Calculate profit after OSRS GE tax on sell (2% rate, 5M max cap, <50gp threshold, exempt items)
+            let taxPerItem = 0;
             let currentProfitPerItem = 0;
             let currentRoi = 0;
-            if (currentSellPrice && pos.buy_price) {
-                const tax = Math.floor(currentSellPrice * 0.02);
-                const netSell = currentSellPrice - tax;
+            if (currentBuyPrice && pos.buy_price) {
+                taxPerItem = calculateTax(currentBuyPrice, pos.item_name);
+                const netSell = currentBuyPrice - taxPerItem;
                 currentProfitPerItem = netSell - pos.buy_price;
                 currentRoi = (currentProfitPerItem / pos.buy_price) * 100;
             }
 
-            let targetProfitPerItem = 0;
-            let targetRoi = 0;
-            if (pos.target_sell_price && pos.buy_price) {
-                const tax = Math.floor(pos.target_sell_price * 0.02);
-                const netTargetSell = pos.target_sell_price - tax;
-                targetProfitPerItem = netTargetSell - pos.buy_price;
-                targetRoi = (targetProfitPerItem / pos.buy_price) * 100;
-            }
-
+            const totalNetWorth = currentBuyPrice ? (currentBuyPrice * pos.quantity) : (pos.buy_price * pos.quantity);
             const totalCurrentProfit = currentProfitPerItem * pos.quantity;
-            const totalTargetProfit = targetProfitPerItem * pos.quantity;
-
-            // Target price completion percentage
-            let progressPct = 0;
-            if (currentSellPrice && pos.target_sell_price > pos.buy_price) {
-                progressPct = Math.min(100, Math.max(0, ((currentSellPrice - pos.buy_price) / (pos.target_sell_price - pos.buy_price)) * 100));
-            }
 
             return {
                 ...pos,
                 currentBuyPrice,
                 currentSellPrice,
+                taxPerItem,
                 currentProfitPerItem,
+                totalNetWorth,
                 totalCurrentProfit,
                 currentRoi,
-                targetProfitPerItem,
-                totalTargetProfit,
-                targetRoi,
-                progressPct,
                 iconUrl: geItem?.iconUrl
             };
         });
@@ -137,7 +122,7 @@ router.post("/", async (req, res) => {
                     itemId,
                     itemName,
                     "sell_price_above",
-                    targetSellPrice,
+                    targetSellPrice || buyPrice,
                     600 // 10 min cooldown
                 );
             } catch (trigErr) {

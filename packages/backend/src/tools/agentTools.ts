@@ -94,7 +94,7 @@ export const autonomousAgentTools = [
     },
     {
         name: "get_user_portfolio",
-        description: "Fetch the user's active trading portfolio positions (bought items, quantities, buy prices, target sell prices, and current holding statuses). ALWAYS call this first to check user's open holdings.",
+        description: "Fetch the user's active trading portfolio items (bought items, quantities, average buy prices, current instant buy prices, net worth, and tax-adjusted profit). ALWAYS call this first to check user's portfolio.",
         parameters: {
             type: "OBJECT",
             properties: {}
@@ -102,28 +102,29 @@ export const autonomousAgentTools = [
     },
     {
         name: "add_to_portfolio",
-        description: "Record a confirmed trade into the user's active trading portfolio. IMPORTANT: DO NOT call this for trade recommendations! ONLY call this tool if the user explicitly states in their prompt that they HAVE ALREADY BOUGHT/executed the trade (e.g. 'I bought 500 Prayer pots'). For recommendations, call set_price_trigger instead.",
+        description: "Add an item entry into the user's trading portfolio. Requires itemId, itemName, quantity, and buyPrice paid per item.",
         parameters: {
             type: "OBJECT",
             properties: {
                 itemId: { type: "NUMBER", description: "Numeric OSRS item ID." },
                 itemName: { type: "STRING", description: "Name of the item." },
                 quantity: { type: "NUMBER", description: "Quantity of items bought (e.g. 1000)." },
-                buyPrice: { type: "NUMBER", description: "Buy price paid per item in GP." },
-                targetSellPrice: { type: "NUMBER", description: "Target sell price per item in GP." },
+                buyPrice: { type: "NUMBER", description: "Average buy price paid per item in GP." },
+                targetSellPrice: { type: "NUMBER", description: "Optional target sell price per item in GP." },
                 notes: { type: "STRING", description: "Trade notes or strategy." }
             },
-            required: ["itemId", "itemName", "quantity", "buyPrice", "targetSellPrice"]
+            required: ["itemId", "itemName", "quantity", "buyPrice"]
         }
     },
     {
         name: "update_portfolio_position",
-        description: "Update a user's portfolio position status ('buying', 'holding', 'selling', 'completed', 'cancelled') or sell target.",
+        description: "Update a user's portfolio entry quantity or average buy price.",
         parameters: {
             type: "OBJECT",
             properties: {
                 positionId: { type: "NUMBER", description: "ID of the portfolio position." },
-                status: { type: "STRING", description: "New status: 'buying', 'holding', 'selling', 'completed', 'cancelled'." },
+                quantity: { type: "NUMBER", description: "Updated quantity of items." },
+                buyPrice: { type: "NUMBER", description: "Updated average buy price per item in GP." },
                 targetSellPrice: { type: "NUMBER", description: "Updated target sell price per item in GP." },
                 notes: { type: "STRING", description: "Updated notes." }
             },
@@ -132,7 +133,7 @@ export const autonomousAgentTools = [
     },
     {
         name: "remove_from_portfolio",
-        description: "Remove a closed or cancelled position from the user's portfolio.",
+        description: "Remove an item from the user's trading portfolio.",
         parameters: {
             type: "OBJECT",
             properties: {
@@ -331,28 +332,32 @@ export async function executeAgentTool(
         }
 
         case "add_to_portfolio": {
+            const targetSell = args.targetSellPrice ?? args.buyPrice;
             const item = await addPortfolioItem(
                 agent.user_id,
                 args.itemId,
                 args.itemName,
                 args.quantity,
                 args.buyPrice,
-                args.targetSellPrice,
+                targetSell,
                 agent.id,
                 args.notes
             );
-            // Auto set sell price trigger
-            await addAgentTrigger(agent.id, args.itemId, args.itemName, "sell_price_above", args.targetSellPrice, 600);
+            if (args.targetSellPrice) {
+                await addAgentTrigger(agent.id, args.itemId, args.itemName, "sell_price_above", args.targetSellPrice, 600);
+            }
             contextState.actionsTaken.push({ action: "add_to_portfolio", item });
-            return { success: true, item, message: `Added ${args.itemName} (${args.quantity}x @ ${args.buyPrice} GP) to user portfolio with target sell price ${args.targetSellPrice} GP.` };
+            return { success: true, item, message: `Added ${args.itemName} (${args.quantity}x @ ${args.buyPrice} GP) to user portfolio.` };
         }
 
         case "update_portfolio_position": {
-            const updated = await updatePortfolioItem(args.positionId, agent.user_id, {
-                status: args.status,
-                target_sell_price: args.targetSellPrice,
-                notes: args.notes
-            });
+            const updates: any = {};
+            if (args.quantity !== undefined) updates.quantity = args.quantity;
+            if (args.buyPrice !== undefined) updates.buy_price = args.buyPrice;
+            if (args.targetSellPrice !== undefined) updates.target_sell_price = args.targetSellPrice;
+            if (args.notes !== undefined) updates.notes = args.notes;
+
+            const updated = await updatePortfolioItem(args.positionId, agent.user_id, updates);
             contextState.actionsTaken.push({ action: "update_portfolio_position", positionId: args.positionId, updated });
             return { success: true, updated, message: `Updated portfolio position ${args.positionId}.` };
         }

@@ -1,5 +1,6 @@
 import { pool, TradingGameAccount, TradingGameOffer, TradingGameInventoryItem, getOrCreateGameAccount, getAccountOffers, getAccountInventory, get4HourBoughtQuantity } from "../database";
 import { CombinedItem, getCombinedItems } from "../osrsClient";
+import { calculateTax } from "../tax";
 import { logger } from "@osrstradingtools/shared";
 
 export interface AccountGameState {
@@ -508,9 +509,8 @@ export class TradingGameEngine {
           [newFilledQty, fillQty, refundGP, newStatus, now, offer.id]
         );
       } else {
-        // SELL offer: Add GP earned (minus 1% OSRS GE tax capped at 5M per item)
-        const rawEarned = fillQty * fillPrice;
-        const taxPerItem = Math.min(5000000, Math.floor(fillPrice * 0.01));
+        // SELL offer: Add GP earned (minus 2% OSRS GE tax capped at 5M per item & tax exemptions)
+        const taxPerItem = calculateTax(fillPrice, offer.item_name);
         const netEarned = (fillPrice - taxPerItem) * fillQty;
 
         await client.query(
