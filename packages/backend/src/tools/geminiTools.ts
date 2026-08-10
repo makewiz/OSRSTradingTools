@@ -60,9 +60,13 @@ export const geminiTools = [
             properties: {
                 query: { type: "STRING", description: "Item name search string (e.g. 'Dragon', 'Rune', 'Shark')." },
                 minMargin: { type: "NUMBER", description: "Minimum margin in GP." },
-                minRoi: { type: "NUMBER", description: "Minimum ROI percentage (e.g., 5 for 5%)." },
-                minVolume: { type: "NUMBER", description: "Minimum 24-hour trading volume." },
-                limit: { type: "NUMBER", description: "Maximum number of items to return (default 10)." }
+                minRoi: { type: "NUMBER", description: "Minimum ROI percentage." },
+                minVolume: { type: "NUMBER", description: "Minimum 24h trading volume." },
+                maxBuyPrice: { type: "NUMBER", description: "Maximum buy price threshold in GP." },
+                maxSellPrice: { type: "NUMBER", description: "Maximum sell price threshold in GP." },
+                sortBy: { type: "STRING", description: "Property to sort results by: 'margin', 'roi', 'volume', 'profit'." },
+                sortOrder: { type: "STRING", description: "Sort direction: 'desc' or 'asc' (default 'desc')." },
+                limit: { type: "NUMBER", description: "Max results to return (default 10)." }
             }
         }
     },
@@ -255,6 +259,22 @@ export async function executeGeminiTool(
                 if (typeof args.minVolume === "number") {
                     filtered = filtered.filter((i: CombinedItem) => (i.volume ?? 0) >= args.minVolume);
                 }
+                if (typeof args.maxBuyPrice === "number") {
+                    filtered = filtered.filter((i: CombinedItem) => (i.buyPrice ?? 0) <= args.maxBuyPrice);
+                }
+                if (typeof args.maxSellPrice === "number") {
+                    filtered = filtered.filter((i: CombinedItem) => (i.sellPrice ?? 0) <= args.maxSellPrice);
+                }
+
+                // Sorting
+                const sortBy = args.sortBy || "margin";
+                const isAsc = args.sortOrder === "asc";
+                filtered.sort((a: CombinedItem, b: CombinedItem) => {
+                    let valA = (a as any)[sortBy] ?? 0;
+                    let valB = (b as any)[sortBy] ?? 0;
+                    if (valA === valB) return 0;
+                    return isAsc ? (valA > valB ? 1 : -1) : (valA < valB ? 1 : -1);
+                });
 
                 const limit = args.limit ?? 10;
                 return filtered.slice(0, limit).map((i: CombinedItem) => ({

@@ -5,7 +5,7 @@ dotenv.config();
 
 let clientInstance: GoogleGenAI | null = null;
 
-export const DEFAULT_GEMINI_MODEL = "gemini-3.5-flash-lite";
+export const DEFAULT_GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-3.5-flash-lite";
 
 /**
  * Returns a singleton instance of GoogleGenAI client if GEMINI_API_KEY is configured.

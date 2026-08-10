@@ -4,6 +4,8 @@ import { bulkInsertItemHistory, pool } from "./database";
 import { maintainPartitions } from "./database/partitions";
 import { logger } from "@osrstradingtools/shared";
 
+import { AgentRunnerService } from "./services/agentRunnerService";
+
 let isRunningLatest = false;
 let isRunningHistory = false;
 let latestItemsCache: CombinedItem[] = [];
@@ -255,6 +257,7 @@ export function startPriceScheduler(): void {
   // Run Latest fetch every minute (checked for activity inside)
   cron.schedule("* * * * *", () => {
     fetchLatestJob().catch(err => logger.error("[Scheduler] Latest job failed:", err));
+    AgentRunnerService.evaluateTriggers().catch(err => logger.error("[Scheduler] Agent triggers evaluation failed:", err));
   });
 
   // Run History fetch every 5 minutes

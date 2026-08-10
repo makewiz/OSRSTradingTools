@@ -251,6 +251,18 @@ export async function setSystemSetting(key: string, value: string): Promise<void
   await pool.query(query, [key, value]);
 }
 
+export async function getUnprocessedAgentDiscordNotifications(): Promise<any[]> {
+  const query = `SELECT * FROM agent_discord_notifications WHERE processed = FALSE ORDER BY created_at ASC`;
+  const result = await pool.query(query);
+  return result.rows.map(row => ({ ...row, created_at: parseInt(row.created_at) }));
+}
+
+export async function markAgentDiscordNotificationsProcessed(ids: number[]): Promise<void> {
+  if (ids.length === 0) return;
+  const query = `UPDATE agent_discord_notifications SET processed = TRUE WHERE id = ANY($1)`;
+  await pool.query(query, [ids]);
+}
+
 export async function closeDatabase() {
   await pool.end();
 }

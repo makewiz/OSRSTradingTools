@@ -279,6 +279,99 @@ export async function initializeDatabase(): Promise<void> {
       )
     `);
 
+    // --- AUTONOMOUS TRADING AGENTS ---
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS trading_agents (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL,
+        name TEXT NOT NULL,
+        goal TEXT NOT NULL,
+        cash_stack BIGINT NOT NULL DEFAULT 0,
+        enabled BOOLEAN NOT NULL DEFAULT TRUE,
+        status TEXT NOT NULL DEFAULT 'idle',
+        memory JSONB NOT NULL DEFAULT '{}'::jsonb,
+        created_at BIGINT NOT NULL DEFAULT (CAST(EXTRACT(EPOCH FROM NOW()) AS BIGINT)),
+        last_run_at BIGINT,
+        next_run_at BIGINT,
+        runs_today INTEGER NOT NULL DEFAULT 0,
+        last_run_date TEXT,
+        error_message TEXT,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+      )
+    `);
+
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS agent_triggers (
+        id SERIAL PRIMARY KEY,
+        agent_id INTEGER NOT NULL,
+        item_id INTEGER,
+        item_name TEXT,
+        trigger_type TEXT NOT NULL,
+        target_value REAL NOT NULL,
+        cooldown_seconds INTEGER DEFAULT 300,
+        last_triggered_at BIGINT,
+        created_at BIGINT NOT NULL DEFAULT (CAST(EXTRACT(EPOCH FROM NOW()) AS BIGINT)),
+        enabled BOOLEAN NOT NULL DEFAULT TRUE,
+        FOREIGN KEY (agent_id) REFERENCES trading_agents(id) ON DELETE CASCADE
+      )
+    `);
+
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS agent_execution_logs (
+        id SERIAL PRIMARY KEY,
+        agent_id INTEGER NOT NULL,
+        trigger_reason TEXT NOT NULL,
+        execution_summary TEXT NOT NULL,
+        actions_taken JSONB NOT NULL DEFAULT '[]'::jsonb,
+        created_at BIGINT NOT NULL DEFAULT (CAST(EXTRACT(EPOCH FROM NOW()) AS BIGINT)),
+        FOREIGN KEY (agent_id) REFERENCES trading_agents(id) ON DELETE CASCADE
+      )
+    `);
+
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS agent_discord_notifications (
+        id SERIAL PRIMARY KEY,
+        discord_id TEXT NOT NULL,
+        agent_name TEXT NOT NULL,
+        message TEXT NOT NULL,
+        created_at BIGINT NOT NULL DEFAULT (CAST(EXTRACT(EPOCH FROM NOW()) AS BIGINT)),
+        processed BOOLEAN NOT NULL DEFAULT FALSE
+      )
+    `);
+
+    // --- TRADING PORTFOLIO & AGENT MESSAGES ---
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS user_portfolio (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL,
+        agent_id INTEGER,
+        item_id INTEGER NOT NULL,
+        item_name TEXT NOT NULL,
+        quantity INTEGER NOT NULL DEFAULT 1,
+        buy_price INTEGER NOT NULL,
+        target_sell_price INTEGER NOT NULL,
+        stop_loss_price INTEGER,
+        status TEXT NOT NULL DEFAULT 'holding',
+        notes TEXT,
+        created_at BIGINT NOT NULL DEFAULT (CAST(EXTRACT(EPOCH FROM NOW()) AS BIGINT)),
+        updated_at BIGINT NOT NULL DEFAULT (CAST(EXTRACT(EPOCH FROM NOW()) AS BIGINT)),
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+        FOREIGN KEY (agent_id) REFERENCES trading_agents(id) ON DELETE SET NULL
+      )
+    `);
+
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS agent_messages (
+        id SERIAL PRIMARY KEY,
+        agent_id INTEGER NOT NULL,
+        sender TEXT NOT NULL,
+        content TEXT NOT NULL,
+        metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+        created_at BIGINT NOT NULL DEFAULT (CAST(EXTRACT(EPOCH FROM NOW()) AS BIGINT)),
+        FOREIGN KEY (agent_id) REFERENCES trading_agents(id) ON DELETE CASCADE
+      )
+    `);
+
     // Recipes
     await createRecipeTables();
 
@@ -1078,3 +1171,376 @@ export async function getBatchPriceHistory(
 
   return map;
 }
+
+// --- TRADING AGENT DATABASE HELPERS ---
+export interface TradingAgent {
+  id: number;
+  user_id: number;
+  name: string;
+  goal: string;
+  cash_stack: number;
+  enabled: boolean;
+  status: string;
+  memory: any;
+  created_at: number;
+  last_run_at: number | null;
+  next_run_at: number | null;
+  runs_today: number;
+  last_run_date: string | null;
+  error_message: string | null;
+}
+
+export interface AgentTrigger {
+  id: number;
+  agent_id: number;
+  item_id: number | null;
+  item_name: string | null;
+  trigger_type: 'buy_price_below' | 'sell_price_above' | 'margin_above' | 'roi_above' | '1h_change' | '24h_change';
+  target_value: number;
+  cooldown_seconds: number;
+  last_triggered_at: number | null;
+  created_at: number;
+  enabled: boolean;
+}
+
+export interface AgentExecutionLog {
+  id: number;
+  agent_id: number;
+  trigger_reason: string;
+  execution_summary: string;
+  actions_taken: any[];
+  created_at: number;
+}
+
+export async function createTradingAgent(
+  userId: number,
+  name: string,
+  goal: string,
+  cashStack: number
+): Promise<TradingAgent> {
+  const query = `
+    INSERT INTO trading_agents (user_id, name, goal, cash_stack, memory)
+    VALUES ($1, $2, $3, $4, $5)
+    RETURNING *
+  `;
+  const initialMemory = {
+    positions: [],
+    watchItems: [],
+    strategyNotes: "Agent initialized and ready to analyze the market.",
+    history: []
+  };
+  const result = await pool.query(query, [userId, name, goal, cashStack, JSON.stringify(initialMemory)]);
+  const row = result.rows[0];
+  return { ...row, cash_stack: parseInt(row.cash_stack), created_at: parseInt(row.created_at) };
+}
+
+export async function getUserTradingAgents(userId: number): Promise<TradingAgent[]> {
+  const query = `SELECT * FROM trading_agents WHERE user_id = $1 ORDER BY created_at DESC`;
+  const result = await pool.query(query, [userId]);
+  return result.rows.map(row => ({
+    ...row,
+    cash_stack: parseInt(row.cash_stack),
+    created_at: parseInt(row.created_at),
+    last_run_at: row.last_run_at ? parseInt(row.last_run_at) : null,
+    next_run_at: row.next_run_at ? parseInt(row.next_run_at) : null
+  }));
+}
+
+export async function getTradingAgentById(agentId: number): Promise<TradingAgent | null> {
+  const query = `SELECT * FROM trading_agents WHERE id = $1`;
+  const result = await pool.query(query, [agentId]);
+  if (result.rows.length === 0) return null;
+  const row = result.rows[0];
+  return {
+    ...row,
+    cash_stack: parseInt(row.cash_stack),
+    created_at: parseInt(row.created_at),
+    last_run_at: row.last_run_at ? parseInt(row.last_run_at) : null,
+    next_run_at: row.next_run_at ? parseInt(row.next_run_at) : null
+  };
+}
+
+export async function updateTradingAgent(
+  agentId: number,
+  userId: number,
+  updates: Partial<TradingAgent>
+): Promise<TradingAgent | null> {
+  const current = await getTradingAgentById(agentId);
+  if (!current || current.user_id !== userId) return null;
+
+  const merged = { ...current, ...updates };
+  const query = `
+    UPDATE trading_agents SET
+      name = $1, goal = $2, cash_stack = $3, enabled = $4, status = $5,
+      memory = $6, last_run_at = $7, next_run_at = $8, runs_today = $9,
+      last_run_date = $10, error_message = $11
+    WHERE id = $12 AND user_id = $13
+    RETURNING *
+  `;
+  const params = [
+    merged.name, merged.goal, merged.cash_stack, merged.enabled, merged.status,
+    typeof merged.memory === 'string' ? merged.memory : JSON.stringify(merged.memory),
+    merged.last_run_at, merged.next_run_at, merged.runs_today,
+    merged.last_run_date, merged.error_message,
+    agentId, userId
+  ];
+  const result = await pool.query(query, params);
+  if (result.rows.length === 0) return null;
+  const row = result.rows[0];
+  return {
+    ...row,
+    cash_stack: parseInt(row.cash_stack),
+    created_at: parseInt(row.created_at),
+    last_run_at: row.last_run_at ? parseInt(row.last_run_at) : null,
+    next_run_at: row.next_run_at ? parseInt(row.next_run_at) : null
+  };
+}
+
+export async function deleteTradingAgent(agentId: number, userId: number): Promise<boolean> {
+  const query = `DELETE FROM trading_agents WHERE id = $1 AND user_id = $2`;
+  const result = await pool.query(query, [agentId, userId]);
+  return (result.rowCount ?? 0) > 0;
+}
+
+export async function getAllActiveTradingAgents(): Promise<TradingAgent[]> {
+  const query = `SELECT * FROM trading_agents WHERE enabled = TRUE`;
+  const result = await pool.query(query);
+  return result.rows.map(row => ({
+    ...row,
+    cash_stack: parseInt(row.cash_stack),
+    created_at: parseInt(row.created_at),
+    last_run_at: row.last_run_at ? parseInt(row.last_run_at) : null,
+    next_run_at: row.next_run_at ? parseInt(row.next_run_at) : null
+  }));
+}
+
+export async function addAgentTrigger(
+  agentId: number,
+  itemId: number | null,
+  itemName: string | null,
+  triggerType: string,
+  targetValue: number,
+  cooldownSeconds: number = 300
+): Promise<AgentTrigger> {
+  const query = `
+    INSERT INTO agent_triggers (agent_id, item_id, item_name, trigger_type, target_value, cooldown_seconds)
+    VALUES ($1, $2, $3, $4, $5, $6)
+    RETURNING *
+  `;
+  const result = await pool.query(query, [agentId, itemId, itemName, triggerType, targetValue, cooldownSeconds]);
+  const row = result.rows[0];
+  return { ...row, created_at: parseInt(row.created_at), last_triggered_at: row.last_triggered_at ? parseInt(row.last_triggered_at) : null };
+}
+
+export async function getAgentTriggers(agentId: number): Promise<AgentTrigger[]> {
+  const query = `SELECT * FROM agent_triggers WHERE agent_id = $1 ORDER BY created_at DESC`;
+  const result = await pool.query(query, [agentId]);
+  return result.rows.map(row => ({
+    ...row,
+    created_at: parseInt(row.created_at),
+    last_triggered_at: row.last_triggered_at ? parseInt(row.last_triggered_at) : null
+  }));
+}
+
+export async function removeAgentTrigger(triggerId: number, agentId: number): Promise<void> {
+  const query = `DELETE FROM agent_triggers WHERE id = $1 AND agent_id = $2`;
+  await pool.query(query, [triggerId, agentId]);
+}
+
+export async function updateAgentTriggerLastTriggered(triggerId: number, timestamp: number): Promise<void> {
+  const query = `UPDATE agent_triggers SET last_triggered_at = $1 WHERE id = $2`;
+  await pool.query(query, [timestamp, triggerId]);
+}
+
+export async function logAgentExecution(
+  agentId: number,
+  triggerReason: string,
+  executionSummary: string,
+  actionsTaken: any[]
+): Promise<AgentExecutionLog> {
+  const query = `
+    INSERT INTO agent_execution_logs (agent_id, trigger_reason, execution_summary, actions_taken)
+    VALUES ($1, $2, $3, $4)
+    RETURNING *
+  `;
+  const result = await pool.query(query, [agentId, triggerReason, executionSummary, JSON.stringify(actionsTaken)]);
+  const row = result.rows[0];
+  return { ...row, created_at: parseInt(row.created_at) };
+}
+
+export async function getAgentExecutionLogs(agentId: number, limit: number = 20): Promise<AgentExecutionLog[]> {
+  const query = `SELECT * FROM agent_execution_logs WHERE agent_id = $1 ORDER BY created_at DESC LIMIT $2`;
+  const result = await pool.query(query, [agentId, limit]);
+  return result.rows.map(row => ({ ...row, created_at: parseInt(row.created_at) }));
+}
+
+export async function queueAgentDiscordNotification(
+  discordId: string,
+  agentName: string,
+  message: string
+): Promise<void> {
+  const query = `
+    INSERT INTO agent_discord_notifications (discord_id, agent_name, message)
+    VALUES ($1, $2, $3)
+  `;
+  await pool.query(query, [discordId, agentName, message]);
+}
+
+export async function getUnprocessedAgentDiscordNotifications(): Promise<any[]> {
+  const query = `SELECT * FROM agent_discord_notifications WHERE processed = FALSE ORDER BY created_at ASC`;
+  const result = await pool.query(query);
+  return result.rows.map(row => ({ ...row, created_at: parseInt(row.created_at) }));
+}
+
+export async function markAgentDiscordNotificationsProcessed(ids: number[]): Promise<void> {
+  if (ids.length === 0) return;
+  const query = `UPDATE agent_discord_notifications SET processed = TRUE WHERE id = ANY($1)`;
+  await pool.query(query, [ids]);
+}
+
+// --- PORTFOLIO & AGENT MESSAGES HELPERS ---
+export interface PortfolioItem {
+  id: number;
+  user_id: number;
+  agent_id: number | null;
+  item_id: number;
+  item_name: string;
+  quantity: number;
+  buy_price: number;
+  target_sell_price: number;
+  stop_loss_price: number | null;
+  status: 'buying' | 'holding' | 'selling' | 'completed' | 'cancelled';
+  notes: string | null;
+  created_at: number;
+  updated_at: number;
+}
+
+export interface AgentMessage {
+  id: number;
+  agent_id: number;
+  sender: 'user' | 'agent' | 'system';
+  content: string;
+  metadata: any;
+  created_at: number;
+}
+
+export async function addPortfolioItem(
+  userId: number,
+  itemId: number,
+  itemName: string,
+  quantity: number,
+  buyPrice: number,
+  targetSellPrice: number,
+  agentId?: number | null,
+  notes?: string | null,
+  stopLossPrice?: number | null
+): Promise<PortfolioItem> {
+  const now = Math.floor(Date.now() / 1000);
+  const query = `
+    INSERT INTO user_portfolio (
+      user_id, agent_id, item_id, item_name, quantity, buy_price, target_sell_price, stop_loss_price, notes, created_at, updated_at
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $10)
+    RETURNING *
+  `;
+  const params = [
+    userId, agentId ?? null, itemId, itemName, quantity, buyPrice, targetSellPrice, stopLossPrice ?? null, notes ?? null, now
+  ];
+  const result = await pool.query(query, params);
+  const row = result.rows[0];
+  return {
+    ...row,
+    created_at: parseInt(row.created_at),
+    updated_at: parseInt(row.updated_at)
+  };
+}
+
+export async function getUserPortfolio(userId: number): Promise<PortfolioItem[]> {
+  const query = `SELECT * FROM user_portfolio WHERE user_id = $1 ORDER BY updated_at DESC`;
+  const result = await pool.query(query, [userId]);
+  return result.rows.map(row => ({
+    ...row,
+    created_at: parseInt(row.created_at),
+    updated_at: parseInt(row.updated_at)
+  }));
+}
+
+export async function getPortfolioItemById(id: number): Promise<PortfolioItem | null> {
+  const query = `SELECT * FROM user_portfolio WHERE id = $1`;
+  const result = await pool.query(query, [id]);
+  if (result.rows.length === 0) return null;
+  const row = result.rows[0];
+  return {
+    ...row,
+    created_at: parseInt(row.created_at),
+    updated_at: parseInt(row.updated_at)
+  };
+}
+
+export async function updatePortfolioItem(
+  id: number,
+  userId: number,
+  updates: Partial<PortfolioItem>
+): Promise<PortfolioItem | null> {
+  const current = await getPortfolioItemById(id);
+  if (!current || current.user_id !== userId) return null;
+
+  const merged = { ...current, ...updates };
+  const now = Math.floor(Date.now() / 1000);
+  const query = `
+    UPDATE user_portfolio SET
+      quantity = $1, buy_price = $2, target_sell_price = $3, stop_loss_price = $4,
+      status = $5, notes = $6, updated_at = $7
+    WHERE id = $8 AND user_id = $9
+    RETURNING *
+  `;
+  const params = [
+    merged.quantity, merged.buy_price, merged.target_sell_price, merged.stop_loss_price,
+    merged.status, merged.notes, now, id, userId
+  ];
+  const result = await pool.query(query, params);
+  if (result.rows.length === 0) return null;
+  const row = result.rows[0];
+  return {
+    ...row,
+    created_at: parseInt(row.created_at),
+    updated_at: parseInt(row.updated_at)
+  };
+}
+
+export async function deletePortfolioItem(id: number, userId: number): Promise<boolean> {
+  const query = `DELETE FROM user_portfolio WHERE id = $1 AND user_id = $2`;
+  const result = await pool.query(query, [id, userId]);
+  return (result.rowCount ?? 0) > 0;
+}
+
+export async function addAgentMessage(
+  agentId: number,
+  sender: 'user' | 'agent' | 'system',
+  content: string,
+  metadata: any = {}
+): Promise<AgentMessage> {
+  const query = `
+    INSERT INTO agent_messages (agent_id, sender, content, metadata)
+    VALUES ($1, $2, $3, $4)
+    RETURNING *
+  `;
+  const result = await pool.query(query, [agentId, sender, content, JSON.stringify(metadata)]);
+  const row = result.rows[0];
+  return {
+    ...row,
+    created_at: parseInt(row.created_at)
+  };
+}
+
+export async function getAgentMessages(agentId: number, limit: number = 50): Promise<AgentMessage[]> {
+  const query = `
+    SELECT * FROM agent_messages WHERE agent_id = $1 ORDER BY created_at ASC LIMIT $2
+  `;
+  const result = await pool.query(query, [agentId, limit]);
+  return result.rows.map(row => ({
+    ...row,
+    created_at: parseInt(row.created_at)
+  }));
+}
+
+

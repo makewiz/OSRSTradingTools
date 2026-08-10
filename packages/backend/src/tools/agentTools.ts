@@ -1,0 +1,315 @@
+import {
+    addAgentTrigger,
+    removeAgentTrigger,
+    getAgentTriggers,
+    queueAgentDiscordNotification,
+    getDiscordUserByUserId,
+    getUserPortfolio,
+    addPortfolioItem,
+    updatePortfolioItem,
+    deletePortfolioItem,
+    TradingAgent
+} from "../database";
+import { getLatestItems } from "../scheduler";
+import { CombinedItem } from "../osrsClient";
+import { logger } from "@osrstradingtools/shared";
+
+export const autonomousAgentTools = [
+    {
+        name: "schedule_next_run",
+        description: "Schedule the agent's next automated check-in execution after a specified time delay (in minutes). Use this if you want to re-evaluate the market at a later time (e.g. 15m, 30m, 60m).",
+        parameters: {
+            type: "OBJECT",
+            properties: {
+                delayMinutes: { type: "NUMBER", description: "Minutes to wait before next automated execution (minimum 5)." },
+                reason: { type: "STRING", description: "Brief reason for scheduling next run (e.g. 'Waiting for 4-dose potion volume during peak hours')." }
+            },
+            required: ["delayMinutes", "reason"]
+        }
+    },
+    {
+        name: "set_price_trigger",
+        description: "Set an automated market price or percentage change trigger that will wake up the agent immediately when matched.",
+        parameters: {
+            type: "OBJECT",
+            properties: {
+                itemId: { type: "NUMBER", description: "Numeric OSRS Item ID." },
+                itemName: { type: "STRING", description: "Name of item if ID is unknown." },
+                triggerType: {
+                    type: "STRING",
+                    description: "Type of trigger: 'buy_price_below', 'sell_price_above', 'margin_above', 'roi_above', '1h_change', '24h_change'."
+                },
+                targetValue: { type: "NUMBER", description: "Target numeric value threshold (e.g. 1500 for price, 5 for 5% ROI/change)." },
+                cooldownMinutes: { type: "NUMBER", description: "Trigger cooldown in minutes before re-triggering (default 15)." }
+            },
+            required: ["triggerType", "targetValue"]
+        }
+    },
+    {
+        name: "remove_price_trigger",
+        description: "Remove an active price trigger previously registered by this agent.",
+        parameters: {
+            type: "OBJECT",
+            properties: {
+                triggerId: { type: "NUMBER", description: "Numeric ID of the trigger to remove." }
+            },
+            required: ["triggerId"]
+        }
+    },
+    {
+        name: "get_price_triggers",
+        description: "Get all active price triggers currently registered by this agent.",
+        parameters: {
+            type: "OBJECT",
+            properties: {}
+        }
+    },
+    {
+        name: "send_discord_notification",
+        description: "Send an actionable trade alert DM or notification directly to the user's Discord account.",
+        parameters: {
+            type: "OBJECT",
+            properties: {
+                message: { type: "STRING", description: "The message text or recommendation to send to the user's Discord." }
+            },
+            required: ["message"]
+        }
+    },
+    {
+        name: "update_agent_memory",
+        description: "Update the agent's persistent memory state (cash stack tracking, active positions, buy/sell targets, strategy notes).",
+        parameters: {
+            type: "OBJECT",
+            properties: {
+                cashStack: { type: "NUMBER", description: "Updated remaining GP cash stack available." },
+                strategyNotes: { type: "STRING", description: "Updated strategy notes and active market observation." },
+                activePositions: {
+                    type: "ARRAY",
+                    description: "List of currently open or planned trade positions (itemId, itemName, buyPrice, targetSellPrice, quantity).",
+                    items: { type: "OBJECT" }
+                }
+            }
+        }
+    },
+    {
+        name: "get_user_portfolio",
+        description: "Fetch the user's active trading portfolio positions (bought items, quantities, buy prices, target sell prices, and current holding statuses). ALWAYS call this first to check user's open holdings.",
+        parameters: {
+            type: "OBJECT",
+            properties: {}
+        }
+    },
+    {
+        name: "add_to_portfolio",
+        description: "Record a confirmed trade into the user's active trading portfolio. IMPORTANT: DO NOT call this for trade recommendations! ONLY call this tool if the user explicitly states in their prompt that they HAVE ALREADY BOUGHT/executed the trade (e.g. 'I bought 500 Prayer pots'). For recommendations, call set_price_trigger instead.",
+        parameters: {
+            type: "OBJECT",
+            properties: {
+                itemId: { type: "NUMBER", description: "Numeric OSRS item ID." },
+                itemName: { type: "STRING", description: "Name of the item." },
+                quantity: { type: "NUMBER", description: "Quantity of items bought (e.g. 1000)." },
+                buyPrice: { type: "NUMBER", description: "Buy price paid per item in GP." },
+                targetSellPrice: { type: "NUMBER", description: "Target sell price per item in GP." },
+                notes: { type: "STRING", description: "Trade notes or strategy." }
+            },
+            required: ["itemId", "itemName", "quantity", "buyPrice", "targetSellPrice"]
+        }
+    },
+    {
+        name: "update_portfolio_position",
+        description: "Update a user's portfolio position status ('buying', 'holding', 'selling', 'completed', 'cancelled') or sell target.",
+        parameters: {
+            type: "OBJECT",
+            properties: {
+                positionId: { type: "NUMBER", description: "ID of the portfolio position." },
+                status: { type: "STRING", description: "New status: 'buying', 'holding', 'selling', 'completed', 'cancelled'." },
+                targetSellPrice: { type: "NUMBER", description: "Updated target sell price per item in GP." },
+                notes: { type: "STRING", description: "Updated notes." }
+            },
+            required: ["positionId"]
+        }
+    },
+    {
+        name: "remove_from_portfolio",
+        description: "Remove a closed or cancelled position from the user's portfolio.",
+        parameters: {
+            type: "OBJECT",
+            properties: {
+                positionId: { type: "NUMBER", description: "ID of the portfolio position to delete." }
+            },
+            required: ["positionId"]
+        }
+    }
+];
+
+export async function executeAgentTool(
+    name: string,
+    args: Record<string, any>,
+    agent: TradingAgent,
+    contextState: {
+        nextRunTime?: number;
+        scheduledReason?: string;
+        discordNotified?: boolean;
+        actionsTaken: any[];
+        updatedMemory?: any;
+    }
+): Promise<any> {
+    logger.info(`Executing Agent Tool '${name}' for agent ${agent.id} (${agent.name}):`, args);
+
+    switch (name) {
+        case "schedule_next_run": {
+            const delayMinutes = Math.max(5, typeof args.delayMinutes === "number" ? args.delayMinutes : 30);
+            const now = Math.floor(Date.now() / 1000);
+            const nextRunAt = now + delayMinutes * 60;
+            const reason = args.reason || `Scheduled check in ${delayMinutes} minutes.`;
+
+            contextState.nextRunTime = nextRunAt;
+            contextState.scheduledReason = reason;
+            contextState.actionsTaken.push({ action: "schedule_next_run", delayMinutes, nextRunAt, reason });
+
+            return {
+                success: true,
+                message: `Scheduled next run at ${new Date(nextRunAt * 1000).toUTCString()} (in ${delayMinutes} minutes).`
+            };
+        }
+
+        case "set_price_trigger": {
+            let itemId: number | null = args.itemId ?? null;
+            let itemName: string | null = args.itemName ?? null;
+
+            if (!itemId && itemName) {
+                const items = await getLatestItems();
+                const found = items.find((i: CombinedItem) => i.name.toLowerCase().includes(itemName!.toLowerCase()));
+                if (found) {
+                    itemId = found.id;
+                    itemName = found.name;
+                }
+            }
+
+            const triggerType = args.triggerType;
+            const targetValue = args.targetValue;
+            const cooldownMinutes = typeof args.cooldownMinutes === "number" ? args.cooldownMinutes : 15;
+            const cooldownSeconds = cooldownMinutes * 60;
+
+            const newTrigger = await addAgentTrigger(
+                agent.id,
+                itemId,
+                itemName,
+                triggerType,
+                targetValue,
+                cooldownSeconds
+            );
+
+            contextState.actionsTaken.push({ action: "set_price_trigger", trigger: newTrigger });
+            return {
+                success: true,
+                trigger: newTrigger,
+                message: `Set ${triggerType} trigger for ${itemName || `Item ${itemId}`} at ${targetValue}.`
+            };
+        }
+
+        case "remove_price_trigger": {
+            await removeAgentTrigger(args.triggerId, agent.id);
+            contextState.actionsTaken.push({ action: "remove_price_trigger", triggerId: args.triggerId });
+            return { success: true, message: `Removed trigger ID ${args.triggerId}.` };
+        }
+
+        case "get_price_triggers": {
+            const triggers = await getAgentTriggers(agent.id);
+            return { triggers };
+        }
+
+        case "send_discord_notification": {
+            const discordUser = await getDiscordUserByUserId(agent.user_id);
+            if (!discordUser) {
+                return {
+                    success: false,
+                    error: "User has not linked their Discord account in settings. Cannot send Discord DM."
+                };
+            }
+
+            await queueAgentDiscordNotification(discordUser.discord_id, agent.name, args.message);
+            contextState.discordNotified = true;
+            contextState.actionsTaken.push({ action: "send_discord_notification", message: args.message });
+            return { success: true, message: "Queued Discord alert notification for user." };
+        }
+
+        case "update_agent_memory": {
+            const currentMemory = typeof agent.memory === "object" && agent.memory ? agent.memory : {};
+            const updated = {
+                ...currentMemory,
+                ...(typeof args.cashStack === "number" ? { cashStack: args.cashStack } : {}),
+                ...(args.strategyNotes ? { strategyNotes: args.strategyNotes } : {}),
+                ...(Array.isArray(args.activePositions) ? { positions: args.activePositions } : {}),
+                lastUpdated: Math.floor(Date.now() / 1000)
+            };
+
+            contextState.updatedMemory = updated;
+            if (typeof args.cashStack === "number") {
+                agent.cash_stack = args.cashStack;
+            }
+            contextState.actionsTaken.push({ action: "update_agent_memory", updatedMemory: updated });
+            return { success: true, message: "Updated agent persistent memory and strategy notes." };
+        }
+
+        case "get_user_portfolio": {
+            const portfolio = await getUserPortfolio(agent.user_id);
+            const items = await getLatestItems();
+            const itemMap = new Map(items.map((i: CombinedItem) => [i.id, i]));
+
+            const enriched = portfolio.map(p => {
+                const ge = itemMap.get(p.item_id);
+                return {
+                    id: p.id,
+                    itemId: p.item_id,
+                    itemName: p.item_name,
+                    quantity: p.quantity,
+                    buyPrice: p.buy_price,
+                    targetSellPrice: p.target_sell_price,
+                    status: p.status,
+                    notes: p.notes,
+                    currentBuyPrice: ge?.buyPrice ?? null,
+                    currentSellPrice: ge?.sellPrice ?? null,
+                    currentMargin: ge?.margin ?? null
+                };
+            });
+            return { portfolio: enriched };
+        }
+
+        case "add_to_portfolio": {
+            const item = await addPortfolioItem(
+                agent.user_id,
+                args.itemId,
+                args.itemName,
+                args.quantity,
+                args.buyPrice,
+                args.targetSellPrice,
+                agent.id,
+                args.notes
+            );
+            // Auto set sell price trigger
+            await addAgentTrigger(agent.id, args.itemId, args.itemName, "sell_price_above", args.targetSellPrice, 600);
+            contextState.actionsTaken.push({ action: "add_to_portfolio", item });
+            return { success: true, item, message: `Added ${args.itemName} (${args.quantity}x @ ${args.buyPrice} GP) to user portfolio with target sell price ${args.targetSellPrice} GP.` };
+        }
+
+        case "update_portfolio_position": {
+            const updated = await updatePortfolioItem(args.positionId, agent.user_id, {
+                status: args.status,
+                target_sell_price: args.targetSellPrice,
+                notes: args.notes
+            });
+            contextState.actionsTaken.push({ action: "update_portfolio_position", positionId: args.positionId, updated });
+            return { success: true, updated, message: `Updated portfolio position ${args.positionId}.` };
+        }
+
+        case "remove_from_portfolio": {
+            await deletePortfolioItem(args.positionId, agent.user_id);
+            contextState.actionsTaken.push({ action: "remove_from_portfolio", positionId: args.positionId });
+            return { success: true, message: `Removed portfolio position ${args.positionId}.` };
+        }
+
+        default:
+            return { error: `Unknown agent tool: ${name}` };
+    }
+}

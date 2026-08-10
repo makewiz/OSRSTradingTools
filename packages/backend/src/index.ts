@@ -62,6 +62,12 @@ app.use("/api/filters", filtersRouter);
 app.use("/api/recipes", recipesRouter);
 // Chat routes
 app.use("/api/chat", chatRouter); // [NEW] Chat route
+// Autonomous Agent routes
+import agentsRouter from "./routes/agents";
+app.use("/api/agents", agentsRouter);
+// Trading Portfolio routes
+import portfolioRouter from "./routes/portfolio";
+app.use("/api/portfolio", portfolioRouter);
 // Hiscore routes
 import hiscoresRouter from "./routes/hiscores";
 app.use("/api/hiscores", hiscoresRouter);

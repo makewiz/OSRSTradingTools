@@ -1,6 +1,6 @@
 import cron from "node-cron";
 import { Client, EmbedBuilder, TextChannel, NewsChannel } from "discord.js";
-import { getAllActiveWatches, updateLastNotified, getSystemSetting, getAllActiveAdvancedWatches, getAdvancedWatchHistory, updateAdvancedWatchHistory } from "./database";
+import { getAllActiveWatches, updateLastNotified, getSystemSetting, getAllActiveAdvancedWatches, getAdvancedWatchHistory, updateAdvancedWatchHistory, getUnprocessedAgentDiscordNotifications, markAgentDiscordNotificationsProcessed } from "./database";
 import { logger } from "@osrstradingtools/shared";
 
 const COOLDOWN_1H_SECONDS = 60 * 60; // 1 hour cooldown for 1h change
@@ -14,6 +14,7 @@ export function startNotificationScheduler(client: Client) {
         try {
             logger.debug("[Scheduler] Checking notifications...");
             await checkNotifications(client);
+            await checkAgentNotifications(client);
         } catch (err) {
             logger.error("[Scheduler] Error checking notifications:", err);
         }
@@ -360,6 +361,52 @@ async function checkNotifications(client: Client) {
         }
     }
 }
+
+async function checkAgentNotifications(client: Client) {
+    try {
+        const notifications = await getUnprocessedAgentDiscordNotifications();
+        if (notifications.length === 0) return;
+
+        const processedIds: number[] = [];
+
+        for (const notif of notifications) {
+            try {
+                const user = await client.users.fetch(notif.discord_id);
+                if (user) {
+                    const agentChatUrl = `${frontendUrl}/watches?tab=agents`;
+                    const portfolioUrl = `${frontendUrl}/watches?tab=portfolio`;
+
+                    const actionLinks = `\n\n---
+🔗 **Quick Links:**
+💬 [Reply & Steer Agent in App](${agentChatUrl})
+📦 [View Trading Portfolio](${portfolioUrl})`;
+
+                    const embed = new EmbedBuilder()
+                        .setTitle(`🤖 Trade Alert: ${notif.agent_name}`)
+                        .setDescription(`${notif.message}${actionLinks}`)
+                        .setColor(0x6366f1)
+                        .setTimestamp(new Date(notif.created_at * 1000))
+                        .setFooter({ text: "OSRS Autonomous AI Trading Agent" });
+
+                    await user.send({ embeds: [embed] });
+                    logger.info(`[AgentNotifier] Sent agent alert to ${notif.discord_id} for agent ${notif.agent_name}`);
+                }
+                processedIds.push(notif.id);
+            } catch (err) {
+                logger.error(`[AgentNotifier] Failed to send agent DM to ${notif.discord_id}:`, err);
+                // Mark processed so it does not loop infinitely on bad user ID
+                processedIds.push(notif.id);
+            }
+        }
+
+        if (processedIds.length > 0) {
+            await markAgentDiscordNotificationsProcessed(processedIds);
+        }
+    } catch (err) {
+        logger.error("[AgentNotifier] Error processing agent notifications:", err);
+    }
+}
+
 
 
 
