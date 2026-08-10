@@ -91,7 +91,7 @@ export const ItemDetail: React.FC = () => {
       return;
     }
     setPortfolioQuantity(1);
-    setPortfolioBuyPrice(item?.buyPrice || item?.sellPrice || 0);
+    setPortfolioBuyPrice(item?.sellPrice || item?.buyPrice || 0);
     setShowPortfolioModal(true);
   };
 
@@ -454,7 +454,7 @@ export const ItemDetail: React.FC = () => {
 
         <div className="item-stats-grid">
           <div className="stat-card">
-            <div className="stat-label">Buy Price</div>
+            <div className="stat-label" title="Instant Buy Price on GE (High price). Set your sell offer here when flipping.">Buy Price ⓘ</div>
             <div className="stat-value">
               {item.buyPrice?.toLocaleString() ?? "-"}
             </div>
@@ -463,7 +463,7 @@ export const ItemDetail: React.FC = () => {
             </div>
           </div>
           <div className="stat-card">
-            <div className="stat-label">Sell Price</div>
+            <div className="stat-label" title="Instant Sell Price on GE (Low price). Set your buy offer here when flipping.">Sell Price ⓘ</div>
             <div className="stat-value">
               {item.sellPrice?.toLocaleString() ?? "-"}
             </div>
@@ -472,7 +472,7 @@ export const ItemDetail: React.FC = () => {
             </div>
           </div>
           <div className="stat-card">
-            <div className="stat-label">Margin</div>
+            <div className="stat-label" title="Instant Buy Price - Instant Sell Price">Margin ⓘ</div>
             <div className="stat-value">
               {item.margin?.toLocaleString() ?? "-"}
             </div>
@@ -518,7 +518,7 @@ export const ItemDetail: React.FC = () => {
             </div>
           </div>
           <div className="stat-card">
-            <div className="stat-label">Margin × Volume</div>
+            <div className="stat-label" title="Margin × 24h Volume">Margin × Volume ⓘ</div>
             <div className="stat-value">
               {item.marginVolume?.toLocaleString() ?? "-"}
             </div>
@@ -526,35 +526,35 @@ export const ItemDetail: React.FC = () => {
 
 
           <div className="stat-card">
-            <div className="stat-label">Buy Limit</div>
+            <div className="stat-label" title="4-hour GE purchase quantity limit">Buy Limit ⓘ</div>
             <div className="stat-value">
               {item.limit?.toLocaleString() ?? "-"}
             </div>
           </div>
 
           <div className="stat-card">
-            <div className="stat-label" title="2% tax on Sell Price (capped at 5m)">Tax (2%) ⓘ</div>
+            <div className="stat-label" title="2% GE tax applied when selling at Instant Buy Price (capped at 5M GP)">Tax (2%) ⓘ</div>
             <div className="stat-value text-muted">
               {item.tax !== null ? `-${item.tax.toLocaleString()}` : "-"}
             </div>
           </div>
 
           <div className="stat-card highlight-card">
-            <div className="stat-label" title="(Sell Price - Tax) - Buy Price">Net Profit ⓘ</div>
+            <div className="stat-label" title="(Instant Buy Price - Tax) - Instant Sell Price">Net Profit ⓘ</div>
             <div className="stat-value" style={{ color: (item.profit || 0) > 0 ? '#4caf50' : '#f44336' }}>
               {item.profit?.toLocaleString() ?? "-"}
             </div>
           </div>
 
           <div className="stat-card highlight-card">
-            <div className="stat-label" title="Net Profit / Buy Price * 100">ROI ⓘ</div>
+            <div className="stat-label" title="Net Profit / Instant Sell Price * 100">ROI ⓘ</div>
             <div className="stat-value" style={{ color: (item.roi || 0) > 5 ? '#4caf50' : (item.roi || 0) > 0 ? '#ff9800' : '#f44336' }}>
               {item.roi?.toFixed(2)}%
             </div>
           </div>
 
           <div className="stat-card">
-            <div className="stat-label" title="Net Profit * Buy Limit">Potential Profit ⓘ</div>
+            <div className="stat-label" title="Net Profit × Buy Limit">Potential Profit ⓘ</div>
             <div className="stat-value text-gold">
               {item.potentialProfit?.toLocaleString() ?? "-"}
             </div>
@@ -684,7 +684,7 @@ export const ItemDetail: React.FC = () => {
                 <div>
                   <div style={{ fontWeight: 700, color: "#fff" }}>{item.name}</div>
                   <div style={{ fontSize: "0.8rem", color: "#aaa" }}>
-                    Instant Buy Price: <span style={{ color: "var(--primary-color)", fontWeight: 600 }}>{item.buyPrice ? item.buyPrice.toLocaleString() + " GP" : "N/A"}</span>
+                    Instant Buy (Sell Offer): <span style={{ color: "var(--primary-color)", fontWeight: 600 }}>{item.buyPrice ? item.buyPrice.toLocaleString() + " GP" : "N/A"}</span> | Instant Sell (Buy Offer): <span style={{ color: "#34d399", fontWeight: 600 }}>{item.sellPrice ? item.sellPrice.toLocaleString() + " GP" : "N/A"}</span>
                   </div>
                 </div>
               </div>

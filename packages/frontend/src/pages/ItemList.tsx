@@ -482,13 +482,13 @@ export const ItemList: React.FC<ItemListProps> = ({ defaultShowFavorites = false
                                     Name {sortKey === "name" ? (sortDir === "asc" ? "▲" : "▼") : ""}
                                 </th>
                                 <th>Members</th>
-                                <th onClick={() => handleSortChange("buyPrice")}>
+                                <th onClick={() => handleSortChange("buyPrice")} title="Instant Buy Price on GE (High price). Set your sell offer here when flipping.">
                                     Buy {sortKey === "buyPrice" ? (sortDir === "asc" ? "▲" : "▼") : ""}
                                 </th>
-                                <th onClick={() => handleSortChange("sellPrice")}>
+                                <th onClick={() => handleSortChange("sellPrice")} title="Instant Sell Price on GE (Low price). Set your buy offer here when flipping.">
                                     Sell {sortKey === "sellPrice" ? (sortDir === "asc" ? "▲" : "▼") : ""}
                                 </th>
-                                <th onClick={() => handleSortChange("margin")}>
+                                <th onClick={() => handleSortChange("margin")} title="Margin (Instant Buy Price - Instant Sell Price)">
                                     Margin {sortKey === "margin" ? (sortDir === "asc" ? "▲" : "▼") : ""}
                                 </th>
                                 <th onClick={() => handleSortChange("volume")}>
@@ -504,7 +504,7 @@ export const ItemList: React.FC<ItemListProps> = ({ defaultShowFavorites = false
                                 <th onClick={() => handleSortChange("limit")}>
                                     Limit {sortKey === "limit" ? (sortDir === "asc" ? "▲" : "▼") : ""}
                                 </th>
-                                <th onClick={() => handleSortChange("potentialProfit")}>
+                                <th onClick={() => handleSortChange("potentialProfit")} title="Potential Profit: Net Profit after 2% tax × 4-Hour GE Buy Limit">
                                     Potential Profit {sortKey === "potentialProfit" ? (sortDir === "asc" ? "▲" : "▼") : ""}
                                 </th>
                                 <th>Watch</th>

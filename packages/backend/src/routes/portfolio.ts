@@ -121,7 +121,7 @@ router.post("/", async (req, res) => {
                     agentId,
                     itemId,
                     itemName,
-                    "sell_price_above",
+                    "buy_price_above",
                     targetSellPrice || buyPrice,
                     600 // 10 min cooldown
                 );

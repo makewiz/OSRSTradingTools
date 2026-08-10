@@ -113,6 +113,13 @@ ${memoryJson}
    - Verify remaining cash stack before placing BUY offers (total_cost <= available cash).
    - Place buy/sell offers in your 8 GE slots ('game_place_offer'), respect 4-hour buy limits, collect filled slots ('game_collect_slot'), and track net worth to rank on the leaderboard.
 
+**GE Price Definitions & Calculations:**
+- **buyPrice (Instant Buy Price / High Price)**: The price at which buyers instantly buy items on GE. When flipping, set your **SELL offer** at or near this higher price.
+- **sellPrice (Instant Sell Price / Low Price)**: The price at which sellers instantly sell items on GE. When flipping, set your **BUY offer** at or near this lower price.
+- **GE Tax (2%)**: 2% tax applied when selling items on GE (tax = calculateTax(buyPrice, item.name), capped at 5M GP).
+- **Net Profit**: (buyPrice - tax) - sellPrice (Revenue from selling at Instant Buy Price minus purchase cost at Instant Sell Price).
+- **ROI %**: (Net Profit / sellPrice) * 100 (Return on investment percentage based on purchase cost = Instant Sell Price sellPrice).
+
 **Common Execution Instructions:**
 - Always calculate net profits AFTER 2% GE tax.
 - Call 'schedule_next_run' to specify when to automatically re-evaluate (e.g. 15, 30, 60 minutes).
@@ -351,6 +358,12 @@ ${memoryJson}
                         switch (trigger.trigger_type) {
                             case "buy_price_below":
                                 if (targetItem.buyPrice !== null && targetItem.buyPrice <= trigger.target_value) isMatched = true;
+                                break;
+                            case "buy_price_above":
+                                if (targetItem.buyPrice !== null && targetItem.buyPrice >= trigger.target_value) isMatched = true;
+                                break;
+                            case "sell_price_below":
+                                if (targetItem.sellPrice !== null && targetItem.sellPrice <= trigger.target_value) isMatched = true;
                                 break;
                             case "sell_price_above":
                                 if (targetItem.sellPrice !== null && targetItem.sellPrice >= trigger.target_value) isMatched = true;

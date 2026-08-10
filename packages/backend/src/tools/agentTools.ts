@@ -38,7 +38,7 @@ export const autonomousAgentTools = [
                 itemName: { type: "STRING", description: "Name of item if ID is unknown." },
                 triggerType: {
                     type: "STRING",
-                    description: "Type of trigger: 'buy_price_below', 'sell_price_above', 'margin_above', 'roi_above', '1h_change', '24h_change'."
+                    description: "Type of trigger: 'buy_price_above' (Instant Buy/High price reaches target to sell), 'buy_price_below', 'sell_price_below' (Instant Sell/Low price drops to target to buy), 'sell_price_above', 'margin_above', 'roi_above', '1h_change', '24h_change'."
                 },
                 targetValue: { type: "NUMBER", description: "Target numeric value threshold (e.g. 1500 for price, 5 for 5% ROI/change)." },
                 cooldownMinutes: { type: "NUMBER", description: "Trigger cooldown in minutes before re-triggering (default 15)." }
@@ -109,8 +109,8 @@ export const autonomousAgentTools = [
                 itemId: { type: "NUMBER", description: "Numeric OSRS item ID." },
                 itemName: { type: "STRING", description: "Name of the item." },
                 quantity: { type: "NUMBER", description: "Quantity of items bought (e.g. 1000)." },
-                buyPrice: { type: "NUMBER", description: "Average buy price paid per item in GP." },
-                targetSellPrice: { type: "NUMBER", description: "Optional target sell price per item in GP." },
+                buyPrice: { type: "NUMBER", description: "Average purchase price paid per item in GP (cost basis)." },
+                targetSellPrice: { type: "NUMBER", description: "Target sell price per item in GP (Instant Buy / High price target)." },
                 notes: { type: "STRING", description: "Trade notes or strategy." }
             },
             required: ["itemId", "itemName", "quantity", "buyPrice"]
@@ -344,7 +344,7 @@ export async function executeAgentTool(
                 args.notes
             );
             if (args.targetSellPrice) {
-                await addAgentTrigger(agent.id, args.itemId, args.itemName, "sell_price_above", args.targetSellPrice, 600);
+                await addAgentTrigger(agent.id, args.itemId, args.itemName, "buy_price_above", args.targetSellPrice, 600);
             }
             contextState.actionsTaken.push({ action: "add_to_portfolio", item });
             return { success: true, item, message: `Added ${args.itemName} (${args.quantity}x @ ${args.buyPrice} GP) to user portfolio.` };

@@ -50,11 +50,11 @@ export const AgentChatWorkspace: React.FC<AgentChatWorkspaceProps> = ({
     const premadePrompts = [
         {
             title: "🏆 Grand Exchange Master Trader (Trading Game)",
-            prompt: "Play the OSRS Trading Game for maximum net worth growth! First, call 'game_get_account' to inspect your 10M cash stack, 8 GE slots, and inventory. Collect any completed slots ('game_collect_slot') and cancel stale un-filled offers older than 1 hour ('game_cancel_offer'). Scan high-volume consumables (Zulrah scales, Chinchompas, Runes, Food, Potions) and decant/set arbitrage for high-ROI items after 1% GE tax. Place BUY offers across open GE slots ('game_place_offer') at instant-sell prices while respecting 4-hour buy limits. Once bought, place SELL offers at instant-buy prices. Re-evaluate the market and schedule your next run in 15 minutes."
+            prompt: "Play the OSRS Trading Game for maximum net worth growth! First, call 'game_get_account' to inspect your 10M cash stack, 8 GE slots, and inventory. Collect any completed slots ('game_collect_slot') and cancel stale un-filled offers older than 1 hour ('game_cancel_offer'). Scan high-volume consumables (Zulrah scales, Chinchompas, Runes, Food, Potions) and decant/set arbitrage for high-ROI items after 2% GE tax. Place BUY offers across open GE slots ('game_place_offer') at instant-sell prices while respecting 4-hour buy limits. Once bought, place SELL offers at instant-buy prices. Re-evaluate the market and schedule your next run in 15 minutes."
         },
         {
             title: "⚡ High-Volume Consumable Flipper",
-            prompt: "Focus exclusively on flipping high-volume consumables in the Trading Game (Zulrah scales, Chinchompas, Runes, Cannonballs, High-tier Food/Potions). Max out 4-hour buy limits by placing buy offers at current low prices, then relist completed items at high prices minus 1% GE tax for rapid compound growth."
+            prompt: "Focus exclusively on flipping high-volume consumables in the Trading Game (Zulrah scales, Chinchompas, Runes, Cannonballs, High-tier Food/Potions). Max out 4-hour buy limits by placing buy offers at current low prices, then relist completed items at high prices minus 2% GE tax for rapid compound growth."
         },
         {
             title: "⚗️ Decanting & Set Arbitrage Specialist",

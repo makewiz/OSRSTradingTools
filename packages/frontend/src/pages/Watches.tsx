@@ -595,11 +595,11 @@ export const Watches: React.FC = () => {
                                     <h3 style={{ fontSize: '1em', color: '#4caf50', marginBottom: '10px', borderBottom: '1px solid #333', paddingBottom: '5px' }}>Price & Volume</h3>
                                     <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '10px' }}>
                                         <div className="form-group">
-                                            <label>Min Buy Price</label>
+                                            <label title="Minimum Instant Buy Price (High price)">Min Buy Price (Instant Buy / High)</label>
                                             <input type="number" className="dark-input" value={advForm.min_buy_price || ""} onChange={e => updateAdvForm('min_buy_price', e.target.value)} />
                                         </div>
                                         <div className="form-group">
-                                            <label>Max Buy Price</label>
+                                            <label title="Maximum Instant Buy Price (High price)">Max Buy Price (Instant Buy / High)</label>
                                             <input type="number" className="dark-input" value={advForm.max_buy_price || ""} onChange={e => updateAdvForm('max_buy_price', e.target.value)} />
                                         </div>
                                         <div className="form-group">

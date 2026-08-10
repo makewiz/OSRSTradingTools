@@ -310,10 +310,10 @@ export const Portfolio: React.FC = () => {
                                 <tr>
                                     <th>Item</th>
                                     <th>Count Bought</th>
-                                    <th>Average Buy Price</th>
-                                    <th>Latest Instant Buy</th>
-                                    <th>Total Net Worth</th>
-                                    <th>Profit (After 2% Tax)</th>
+                                    <th title="Average price paid per item when purchased">Average Buy Price</th>
+                                    <th title="Current GE Instant Buy Price (high price) at which your item can be sold">Latest Instant Buy</th>
+                                    <th title="Current market value based on Instant Buy Price × Count">Total Net Worth</th>
+                                    <th title="Estimated profit after 2% GE tax deduction on sale">Profit (After 2% Tax)</th>
                                     <th style={{ textAlign: "right" }}>Actions</th>
                                 </tr>
                             </thead>

@@ -470,14 +470,18 @@ export const MERCHANTING_GUIDE = `
 - **Investing (Speculation)**: Long-term prediction of price trends based on game updates (e.g., new boss release = demand for specific gear). Safer when changes are predictable.
 - **Bulk Flipping**: High volume, low margin (1-3gp profit). Requires large capital (20m+) but scales well. (e.g., Runes, Arrows, Food).
 
-**2. Grand Exchange Mechanics**
-- **Instant Trades**: If you buy above market price, it instantly fills at the lowest available sell offer.
+**2. Grand Exchange Mechanics & Price Definitions**
+- **Instant Buy Price (buyPrice / High Price)**: The price at which buyers instantly buy on GE. When flipping, set your **SELL offer** at or near this price to sell to instant buyers.
+- **Instant Sell Price (sellPrice / Low Price)**: The price at which sellers instantly sell on GE. When flipping, set your **BUY offer** at or near this price to buy from instant sellers.
+- **GE Tax (2%)**: 2% tax applied when selling at the Instant Buy Price (capped at 5,000,000 GP per item).
+- **Net Profit**: (buyPrice - Tax) - sellPrice.
+- **ROI %**: (Net Profit / sellPrice) * 100.
 - **Limits**: Most items have a buy limit every 4 hours (e.g., 11k darts, 70 barrows equipment).
 - **Guide Price vs. Real Price**: "Guide Price" is a lagging average. Real "Street Price" or "Active Price" is determined by live buyers/sellers.
 
 **3. Determining Prices (The Buy/Sell Test)**
 - **To find Margins**: Buy 1 item high (Instant Buy Price), Sell 1 item low (Instant Sell Price).
-- **The Spread**: The difference between these two numbers is your potential profit margin per item.
+- **The Spread**: The difference between these two numbers is your potential profit margin per item before tax.
 - *Warning*: Do not test expensive low-volume items (3rd Age, expensive armor) as the spread might be huge, causing a loss.
 
 **4. Strategy & Psychology**

@@ -62,8 +62,8 @@ export const geminiTools = [
                 minMargin: { type: "NUMBER", description: "Minimum margin in GP." },
                 minRoi: { type: "NUMBER", description: "Minimum ROI percentage." },
                 minVolume: { type: "NUMBER", description: "Minimum 24h trading volume." },
-                maxBuyPrice: { type: "NUMBER", description: "Maximum buy price threshold in GP." },
-                maxSellPrice: { type: "NUMBER", description: "Maximum sell price threshold in GP." },
+                maxBuyPrice: { type: "NUMBER", description: "Maximum Instant Buy Price (high price) threshold in GP." },
+                maxSellPrice: { type: "NUMBER", description: "Maximum Instant Sell Price (low price) threshold in GP." },
                 sortBy: { type: "STRING", description: "Property to sort results by: 'margin', 'roi', 'volume', 'profit'." },
                 sortOrder: { type: "STRING", description: "Sort direction: 'desc' or 'asc' (default 'desc')." },
                 limit: { type: "NUMBER", description: "Max results to return (default 10)." }
@@ -72,7 +72,7 @@ export const geminiTools = [
     },
     {
         name: "get_item_detail",
-        description: "Get detailed current market snapshot (buy/sell prices, margin, tax, volume, buy limit) and Wiki summary for a specific item.",
+        description: "Get detailed current market snapshot (Instant Buy Price [high], Instant Sell Price [low], margin, tax, volume, buy limit) and Wiki summary for a specific item.",
         parameters: {
             type: "OBJECT",
             properties: {

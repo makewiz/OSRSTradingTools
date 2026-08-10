@@ -1201,7 +1201,7 @@ export interface AgentTrigger {
   agent_id: number;
   item_id: number | null;
   item_name: string | null;
-  trigger_type: 'buy_price_below' | 'sell_price_above' | 'margin_above' | 'roi_above' | '1h_change' | '24h_change';
+  trigger_type: 'buy_price_below' | 'buy_price_above' | 'sell_price_below' | 'sell_price_above' | 'margin_above' | 'roi_above' | '1h_change' | '24h_change';
   target_value: number;
   cooldown_seconds: number;
   last_triggered_at: number | null;

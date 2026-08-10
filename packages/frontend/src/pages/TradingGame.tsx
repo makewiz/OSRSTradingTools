@@ -733,11 +733,11 @@ export const TradingGame: React.FC = () => {
               {selectedItem && (
                 <div style={{ background: "#0f131d", padding: "12px", borderRadius: "8px", border: "1px solid #1e293b", marginBottom: "16px", fontSize: "0.8rem" }}>
                   <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px" }}>
-                    <span style={{ color: "#64748b" }}>Market Buy Price:</span>
+                    <span style={{ color: "#64748b" }} title="Instant Buy Price (High price). Set your sell offer here when flipping.">Market Buy Price (Instant Buy / High):</span>
                     <span style={{ fontFamily: "monospace", color: "#f59e0b" }}>{selectedItem.buyPrice?.toLocaleString() || "?"} GP</span>
                   </div>
                   <div style={{ display: "flex", justifyContent: "space-between" }}>
-                    <span style={{ color: "#64748b" }}>Market Sell Price:</span>
+                    <span style={{ color: "#64748b" }} title="Instant Sell Price (Low price). Set your buy offer here when flipping.">Market Sell Price (Instant Sell / Low):</span>
                     <span style={{ fontFamily: "monospace", color: "#10b981" }}>{selectedItem.sellPrice?.toLocaleString() || "?"} GP</span>
                   </div>
                   {itemLimitInfo && (
