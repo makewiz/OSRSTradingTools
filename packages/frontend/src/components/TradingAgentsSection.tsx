@@ -54,14 +54,14 @@ export const TradingAgentsSection: React.FC = () => {
         setError(null);
 
         try {
-            const newName = `Trading Agent ${agents.length + 1}`;
+            const newName = `GE Master Agent ${agents.length + 1}`;
             const res = await fetchWithAuth(`${API_BASE_URL}/api/agents`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     name: newName,
-                    goal: "Find lucrative 1-day flips and medium-term dip investments.",
-                    cashStack: 50000000
+                    goal: "Play the OSRS Trading Game for maximum net worth growth! Manage 8 GE slots, flip high-volume consumables & arbitrage, respect 4-hour buy limits, and re-evaluate every 15m to dominate the leaderboard.",
+                    cashStack: 10000000
                 })
             });
 

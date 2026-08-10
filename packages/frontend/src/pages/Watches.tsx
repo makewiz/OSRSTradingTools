@@ -629,7 +629,7 @@ export const Watches: React.FC = () => {
                                         </div>
                                         <div className="form-group">
                                             <label>Members Only</label>
-                                            <select className="dark-input" value={advForm.is_members === null ? "" : advForm.is_members.toString()} onChange={e => updateAdvForm('is_members', e.target.value === 'true' ? true : e.target.value === 'false' ? false : null)}>
+                                            <select className="dark-input" value={advForm.is_members == null ? "" : String(advForm.is_members)} onChange={e => updateAdvForm('is_members', e.target.value === 'true' ? true : e.target.value === 'false' ? false : null)}>
                                                 <option value="">Any</option>
                                                 <option value="true">Yes</option>
                                                 <option value="false">No</option>

@@ -77,6 +77,10 @@ import { createArbitrageRouter } from "./routes/arbitrage";
 import { itemService } from "./services/itemService"; // Fixed path
 app.use("/api/arbitrage", createArbitrageRouter(itemService));
 
+// Trading Game routes
+import tradingGameRouter from "./routes/tradingGame";
+app.use("/api/game", tradingGameRouter);
+
 
 
 

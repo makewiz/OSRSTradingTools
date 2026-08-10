@@ -37,6 +37,7 @@ export const Header: React.FC = () => {
 
                 <nav className={`main-nav ${isMenuOpen ? 'open' : ''}`}>
                     <Link to="/" className="nav-link" onClick={closeMenu}>Highlights</Link>
+                    <Link to="/game" className="nav-link font-bold text-amber-400" onClick={closeMenu}>Trading Game 🏆</Link>
                     <Link to="/recipes" className="nav-link" onClick={closeMenu}>Recipes</Link>
                     <Link to="/arbitrage" className="nav-link" onClick={closeMenu}>Arbitrage</Link>
                     <Link to="/items" className="nav-link" onClick={closeMenu}>Items</Link>

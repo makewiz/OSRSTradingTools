@@ -12,6 +12,7 @@ import {
 } from "../database";
 import { getLatestItems } from "../scheduler";
 import { CombinedItem } from "../osrsClient";
+import { TradingGameEngine } from "../services/tradingGameEngine";
 import { logger } from "@osrstradingtools/shared";
 
 export const autonomousAgentTools = [
@@ -138,6 +139,59 @@ export const autonomousAgentTools = [
                 positionId: { type: "NUMBER", description: "ID of the portfolio position to delete." }
             },
             required: ["positionId"]
+        }
+    },
+    {
+        name: "game_get_account",
+        description: "Fetch your AI agent's active Trading Game state including cash stack (10M starting balance), 8 GE slots, inventory, net worth, and monthly profit.",
+        parameters: { type: "OBJECT", properties: {} }
+    },
+    {
+        name: "game_place_offer",
+        description: "Place a BUY or SELL offer in one of your 8 GE slots (0 to 7) in the Trading Game.",
+        parameters: {
+            type: "OBJECT",
+            properties: {
+                slot: { type: "NUMBER", description: "GE slot index (0 to 7)." },
+                itemId: { type: "NUMBER", description: "Numeric OSRS Item ID." },
+                itemName: { type: "STRING", description: "Item name if ID is unknown." },
+                type: { type: "STRING", description: "Offer type: 'BUY' or 'SELL'." },
+                quantity: { type: "NUMBER", description: "Quantity of items to buy or sell." },
+                price: { type: "NUMBER", description: "Price in GP per item." }
+            },
+            required: ["slot", "type", "quantity", "price"]
+        }
+    },
+    {
+        name: "game_cancel_offer",
+        description: "Cancel an active Grand Exchange offer in the Trading Game and refund unfilled escrow.",
+        parameters: {
+            type: "OBJECT",
+            properties: {
+                offerId: { type: "NUMBER", description: "Numeric ID of the GE offer to cancel." }
+            },
+            required: ["offerId"]
+        }
+    },
+    {
+        name: "game_collect_slot",
+        description: "Collect filled items or GP from a Grand Exchange offer slot into your cash stack or inventory in the Trading Game.",
+        parameters: {
+            type: "OBJECT",
+            properties: {
+                offerId: { type: "NUMBER", description: "Numeric ID of the GE offer slot to collect." }
+            },
+            required: ["offerId"]
+        }
+    },
+    {
+        name: "game_get_leaderboard",
+        description: "Check public Trading Game leaderboards (Current Month, Last Month, or All-Time).",
+        parameters: {
+            type: "OBJECT",
+            properties: {
+                type: { type: "STRING", description: "Leaderboard timeframe: 'current', 'last_month', or 'all_time'." }
+            }
         }
     }
 ];
@@ -307,6 +361,130 @@ export async function executeAgentTool(
             await deletePortfolioItem(args.positionId, agent.user_id);
             contextState.actionsTaken.push({ action: "remove_from_portfolio", positionId: args.positionId });
             return { success: true, message: `Removed portfolio position ${args.positionId}.` };
+        }
+
+        case "game_get_account": {
+            try {
+                const gameState = await TradingGameEngine.getGameState(null, agent.id);
+                return gameState;
+            } catch (err: any) {
+                return { success: false, error: err.message || "Failed to fetch game state." };
+            }
+        }
+
+        case "game_place_offer": {
+            try {
+                let itemId: number = args.itemId;
+                if (!itemId && args.itemName) {
+                    const items = await getLatestItems();
+                    const found = items.find((i: CombinedItem) => i.name.toLowerCase() === args.itemName.toLowerCase() || i.name.toLowerCase().includes(args.itemName.toLowerCase()));
+                    if (found) itemId = found.id;
+                }
+                if (!itemId) {
+                    return { success: false, error: `Item '${args.itemName || args.itemId}' not found in market registry.` };
+                }
+
+                const gameState = await TradingGameEngine.getGameState(null, agent.id);
+                const activeSlotMap = new Map<number, boolean>();
+                for (const offer of gameState.offers) {
+                    if (offer.status === 'ACTIVE') {
+                        activeSlotMap.set(offer.slot, true);
+                    }
+                }
+
+                // Smart Slot Selection: if requested slot is taken, find first free slot (0-7)
+                let targetSlot = typeof args.slot === 'number' && args.slot >= 0 && args.slot < 8 ? args.slot : 0;
+                if (activeSlotMap.get(targetSlot)) {
+                    let freeSlot = -1;
+                    for (let s = 0; s < 8; s++) {
+                        if (!activeSlotMap.get(s)) {
+                            freeSlot = s;
+                            break;
+                        }
+                    }
+                    if (freeSlot === -1) {
+                        return { success: false, error: "All 8 GE slots are occupied with active offers. Cancel an active offer or collect a slot first." };
+                    }
+                    targetSlot = freeSlot;
+                }
+
+                // Cash validation for BUY offers
+                if (args.type === 'BUY') {
+                    const totalCost = args.quantity * args.price;
+                    if (totalCost > gameState.account.cash_stack) {
+                        const maxAffordable = Math.floor(gameState.account.cash_stack / args.price);
+                        return {
+                            success: false,
+                            error: `Insufficient cash stack. Available: ${gameState.account.cash_stack.toLocaleString()} GP, Required: ${totalCost.toLocaleString()} GP. Maximum affordable quantity at ${args.price} GP is ${maxAffordable.toLocaleString()} items.`
+                        };
+                    }
+                }
+
+                const offer = await TradingGameEngine.createOffer(
+                    null,
+                    agent.id,
+                    targetSlot,
+                    itemId,
+                    args.type,
+                    args.quantity,
+                    args.price
+                );
+                contextState.actionsTaken.push({ action: "game_place_offer", offer });
+                return { success: true, offer, message: `Placed ${args.type} offer for ${offer.item_name} (${args.quantity}x @ ${args.price} GP) in GE slot ${targetSlot}.` };
+            } catch (err: any) {
+                return { success: false, error: err.message || "Failed to place offer." };
+            }
+        }
+
+        case "game_cancel_offer": {
+            try {
+                let offerId = args.offerId;
+                if (!offerId && typeof args.slot === 'number') {
+                    const gameState = await TradingGameEngine.getGameState(null, agent.id);
+                    const foundOffer = gameState.offers.find(o => o.slot === args.slot && o.status === 'ACTIVE');
+                    if (foundOffer) offerId = foundOffer.id;
+                }
+
+                if (!offerId) {
+                    return { success: false, error: "Must specify a valid offerId or slot number to cancel." };
+                }
+
+                const offer = await TradingGameEngine.cancelOffer(null, agent.id, offerId);
+                contextState.actionsTaken.push({ action: "game_cancel_offer", offerId });
+                return { success: true, offer, message: `Cancelled offer ID ${offerId}.` };
+            } catch (err: any) {
+                return { success: false, error: err.message || "Failed to cancel offer." };
+            }
+        }
+
+        case "game_collect_slot": {
+            try {
+                let offerId = args.offerId;
+                if (!offerId && typeof args.slot === 'number') {
+                    const gameState = await TradingGameEngine.getGameState(null, agent.id);
+                    const foundOffer = gameState.offers.find(o => o.slot === args.slot && (o.claimed_gp > 0 || o.claimed_items > 0));
+                    if (foundOffer) offerId = foundOffer.id;
+                }
+
+                if (!offerId) {
+                    return { success: false, error: "Must specify a valid offerId or slot number with items/GP to collect." };
+                }
+
+                const offer = await TradingGameEngine.collectSlot(null, agent.id, offerId);
+                contextState.actionsTaken.push({ action: "game_collect_slot", offerId });
+                return { success: true, offer, message: `Collected slot for offer ID ${offerId}.` };
+            } catch (err: any) {
+                return { success: false, error: err.message || "Failed to collect slot." };
+            }
+        }
+
+        case "game_get_leaderboard": {
+            try {
+                const leaderboard = await TradingGameEngine.getLeaderboard(args.type || 'current');
+                return { leaderboard };
+            } catch (err: any) {
+                return { success: false, error: err.message || "Failed to fetch leaderboard." };
+            }
         }
 
         default:

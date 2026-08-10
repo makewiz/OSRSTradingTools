@@ -5,6 +5,7 @@ import { maintainPartitions } from "./database/partitions";
 import { logger } from "@osrstradingtools/shared";
 
 import { AgentRunnerService } from "./services/agentRunnerService";
+import { TradingGameEngine } from "./services/tradingGameEngine";
 
 let isRunningLatest = false;
 let isRunningHistory = false;
@@ -130,7 +131,10 @@ async function fetchLatestJob(): Promise<void> {
     const items = await getCombinedItems();
     latestItemsCache = items;
     lastFetchTimestamp = Date.now();
-    // logger.debug(`[Scheduler] Updated latest items cache (${items.length} items)`);
+    
+    // Process Trading Game GE offer fills & check monthly reset
+    TradingGameEngine.processMarketFills(items).catch(err => logger.error("[Scheduler] Trading game match error:", err));
+    TradingGameEngine.checkAndPerformMonthlyReset().catch(err => logger.error("[Scheduler] Monthly reset error:", err));
   } catch (error) {
     logger.error("[Scheduler] Error in latest fetch job:", error);
   } finally {

@@ -11,7 +11,10 @@ import { fetchWikiTimeSeries } from "../osrsClient";
 import { logger } from "@osrstradingtools/shared";
 import { ensurePartitionedHistoryTable } from "./partitions";
 import { createRecipeTables } from "./recipes";
+import { createTradingGameTables } from "./tradingGame";
 import { seedAdminUser } from "./seedAdmin";
+
+export * from "./tradingGame";
 
 dotenv.config();
 
@@ -374,6 +377,9 @@ export async function initializeDatabase(): Promise<void> {
 
     // Recipes
     await createRecipeTables();
+
+    // Trading Game
+    await createTradingGameTables(client);
 
     // Seed default admin user if environment variables are set
     await seedAdminUser();

@@ -49,20 +49,20 @@ export const AgentChatWorkspace: React.FC<AgentChatWorkspaceProps> = ({
     // Quick-start prompt templates
     const premadePrompts = [
         {
+            title: "🏆 Grand Exchange Master Trader (Trading Game)",
+            prompt: "Play the OSRS Trading Game for maximum net worth growth! First, call 'game_get_account' to inspect your 10M cash stack, 8 GE slots, and inventory. Collect any completed slots ('game_collect_slot') and cancel stale un-filled offers older than 1 hour ('game_cancel_offer'). Scan high-volume consumables (Zulrah scales, Chinchompas, Runes, Food, Potions) and decant/set arbitrage for high-ROI items after 1% GE tax. Place BUY offers across open GE slots ('game_place_offer') at instant-sell prices while respecting 4-hour buy limits. Once bought, place SELL offers at instant-buy prices. Re-evaluate the market and schedule your next run in 15 minutes."
+        },
+        {
+            title: "⚡ High-Volume Consumable Flipper",
+            prompt: "Focus exclusively on flipping high-volume consumables in the Trading Game (Zulrah scales, Chinchompas, Runes, Cannonballs, High-tier Food/Potions). Max out 4-hour buy limits by placing buy offers at current low prices, then relist completed items at high prices minus 1% GE tax for rapid compound growth."
+        },
+        {
+            title: "⚗️ Decanting & Set Arbitrage Specialist",
+            prompt: "Check 1-dose, 2-dose, and 3-dose potion decanting margins against 4-dose potions, as well as Barrows and Dragon armor sets in the Trading Game. Execute component buy orders, collect filled items, perform conversions, and sell completed sets/potions to lock in risk-free profit."
+        },
+        {
             title: "📈 Medium-Term Dip Investments",
             prompt: "Find me medium term investments. Filter items by max sell price 10,000,000 and min volume 100, then sort by highest margin. Check if the current price is a dip compared to recent averages. Tell me what to buy and sell and when for maximum profit on a 1-day investment time. Set sell watches for the best items."
-        },
-        {
-            title: "💰 High-Volume Flips",
-            prompt: "Find me fast high-volume rune, potion, or Slayer consumable flips. Min volume 50,000, min ROI 3%. Give me 3 top items to flip today and calculate profit after tax."
-        },
-        {
-            title: "⚗️ Decanting Arbitrage",
-            prompt: "Check 1-dose, 2-dose, and 3-dose potion decanting margins against 4-dose potions. Recommend potions with highest profit per 4-dose."
-        },
-        {
-            title: "📦 Set Packing Arbitrage",
-            prompt: "Check OSRS armor set component prices vs completed set boxes (e.g. Barrows sets, Rune sets, Dragon sets). Alert me to profitable set packing arbitrage."
         }
     ];
 

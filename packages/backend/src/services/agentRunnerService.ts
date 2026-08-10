@@ -100,18 +100,25 @@ Your goal is to actively manage investments, monitor open portfolio positions, a
 ${memoryJson}
 
 **Autonomous Instructions:**
-1. FIRST: Always call 'get_user_portfolio' to inspect the user's active holdings and trade statuses.
-   - If the user holds items: check their current GE sell prices against their target sell prices.
-   - If an item hits or exceeds its target sell price (after 2% GE tax), immediately call 'send_discord_notification' advising the user to SELL, and call 'update_portfolio_position' or 'update_agent_memory'.
-2. Use market tools ('search_items', 'get_item_detail', 'get_recipes', 'get_set_arbitrage', 'get_decant_arbitrage', 'get_latest_news', 'get_wiki_summary') to find high-ROI flips matching your goal.
-3. Calculate all profits AFTER 2% GE tax.
-4. When recommending a buy trade:
+1. FIRST: Always call 'get_user_portfolio' and 'game_get_account' to inspect portfolio holdings and your Trading Game state (cash stack, 8 GE slots, inventory, net worth).
+2. You participate in the **OSRS Trading Game**:
+   - You start with a 10M cash stack (10,000,000 GP), resetting monthly.
+   - You have 8 Grand Exchange slots (0 to 7) to place buy/sell offers via 'game_place_offer'.
+   - ALWAYS verify your remaining cash stack from 'game_get_account' before placing BUY offers! Ensure total_cost (quantity * price) <= available cash stack. If funds are low, reduce quantity.
+   - Inspect open slots before placing offers. If a slot is occupied, pick an unused slot or cancel/collect existing slots first.
+   - Respect 4-hour item buy limits!
+   - Collect completed offer fills using 'game_collect_slot' or cancel active offers with 'game_cancel_offer'.
+   - Compete on the public leaderboard ('game_get_leaderboard')!
+3. Use market tools ('search_items', 'get_item_detail', 'get_recipes', 'get_set_arbitrage', 'get_decant_arbitrage', 'get_latest_news', 'get_wiki_summary') to find high-ROI flips matching your goal.
+4. Calculate all profits AFTER 2% GE tax.
+5. When recommending a buy trade:
    - Provide exact numbers: Item Name, Item ID, Recommended Buy Price, Target Sell Price, Quantity, Net Profit after Tax, ROI %.
    - Call 'set_price_trigger' on the item so you are woken up when prices shift.
+   - Place a game offer with 'game_place_offer' if appropriate.
    - Call 'send_discord_notification' to send a clear alert to Discord.
    - DO NOT call 'add_to_portfolio' yourself when recommending trades! Let the user click the 'Add to Portfolio' button in the chat UI. ONLY call 'add_to_portfolio' if the user explicitly states in their prompt that they have executed/bought the trade in-game.
-5. Call 'schedule_next_run' to specify when you should automatically re-evaluate the market (e.g. 15, 30, or 60 minutes).
-6. Summarize your findings clearly and concisely in natural language.
+6. Call 'schedule_next_run' to specify when you should automatically re-evaluate the market (e.g. 15, 30, or 60 minutes).
+7. Summarize your findings clearly and concisely in natural language.
 `;
 
         // Fetch prior chat history for this agent
@@ -191,14 +198,22 @@ ${memoryJson}
                         const toolName = fc.name || "";
                         let rawResult: any;
 
-                        // Check if autonomous agent tool
-                        if (autonomousAgentTools.some(t => t.name === toolName)) {
-                            rawResult = await executeAgentTool(toolName, fc.args || {}, agent, contextState);
-                        } else {
-                            // Standard market harness tool
-                            const contextUser = { id: agent.user_id, username: `Agent_${agent.id}` };
-                            rawResult = await executeGeminiTool(toolName, fc.args || {}, contextUser);
-                            contextState.actionsTaken.push({ action: toolName, args: fc.args });
+                        try {
+                            // Check if autonomous agent tool
+                            if (autonomousAgentTools.some(t => t.name === toolName)) {
+                                rawResult = await executeAgentTool(toolName, fc.args || {}, agent, contextState);
+                            } else {
+                                // Standard market harness tool
+                                const contextUser = { id: agent.user_id, username: `Agent_${agent.id}` };
+                                rawResult = await executeGeminiTool(toolName, fc.args || {}, contextUser);
+                                contextState.actionsTaken.push({ action: toolName, args: fc.args });
+                            }
+                        } catch (err: any) {
+                            logger.warn(`[AgentRunner] Tool '${toolName}' execution returned error: ${err.message}`);
+                            rawResult = {
+                                success: false,
+                                error: err.message || "Tool execution failed."
+                            };
                         }
 
                         let responsePayload: Record<string, any>;
