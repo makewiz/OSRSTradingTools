@@ -30,29 +30,56 @@ export const AgentChatModal: React.FC<AgentChatModalProps> = ({
     const [loading, setLoading] = useState(true);
     const [sending, setSending] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    const messagesEndRef = useRef<HTMLDivElement>(null);
+    const chatFeedRef = useRef<HTMLDivElement>(null);
+    const userHasScrolledUpRef = useRef<boolean>(false);
 
-    useEffect(() => {
-        fetchMessages();
-    }, [agentId]);
+    const handleFeedScroll = () => {
+        const el = chatFeedRef.current;
+        if (!el) return;
+        const isAtBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 100;
+        userHasScrolledUpRef.current = !isAtBottom;
+    };
 
-    useEffect(() => {
-        messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-    }, [messages, sending]);
-
-    const fetchMessages = async () => {
+    const fetchMessages = async (silent = false) => {
         try {
-            setLoading(true);
+            if (!silent) setLoading(true);
             const res = await fetchWithAuth(`${API_BASE_URL}/api/agents/${agentId}/messages`);
             if (!res.ok) throw new Error("Failed to load agent chat messages");
             const data = await res.json();
-            setMessages(data.messages || []);
+            const newMsgs: AgentMessage[] = data.messages || [];
+
+            setMessages(prev => {
+                if (prev.length === newMsgs.length) {
+                    const isIdentical = prev.every((m, i) => m.id === newMsgs[i]?.id);
+                    if (isIdentical) return prev;
+                }
+                return newMsgs;
+            });
         } catch (err: any) {
-            setError(err.message || "Failed to load chat messages");
+            if (!silent) setError(err.message || "Failed to load chat messages");
         } finally {
-            setLoading(false);
+            if (!silent) setLoading(false);
         }
     };
+
+    useEffect(() => {
+        userHasScrolledUpRef.current = false;
+        fetchMessages(false);
+
+        const interval = setInterval(() => {
+            if (!sending) {
+                fetchMessages(true);
+            }
+        }, 5000);
+
+        return () => clearInterval(interval);
+    }, [agentId, sending]);
+
+    useEffect(() => {
+        if (!userHasScrolledUpRef.current && chatFeedRef.current) {
+            chatFeedRef.current.scrollTop = chatFeedRef.current.scrollHeight;
+        }
+    }, [messages, sending]);
 
     const handleSendPrompt = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -175,7 +202,7 @@ export const AgentChatModal: React.FC<AgentChatModalProps> = ({
                 </div>
 
                 {/* Message Feed */}
-                <div className="flex-1 overflow-y-auto p-6 space-y-4 bg-slate-950/40">
+                <div className="flex-1 overflow-y-auto p-6 space-y-4 bg-slate-950/40" ref={chatFeedRef} onScroll={handleFeedScroll}>
                     {loading ? (
                         <div className="text-center py-12 text-gray-400 text-sm">Loading chat history...</div>
                     ) : messages.length === 0 ? (

@@ -66,27 +66,56 @@ export const AgentChatWorkspace: React.FC<AgentChatWorkspaceProps> = ({
         }
     ];
 
-    useEffect(() => {
-        fetchMessages();
-    }, [agent.id]);
+    const chatFeedRef = useRef<HTMLDivElement>(null);
+    const userHasScrolledUpRef = useRef<boolean>(false);
 
-    useEffect(() => {
-        messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-    }, [messages, sending]);
+    const handleFeedScroll = () => {
+        const el = chatFeedRef.current;
+        if (!el) return;
+        const isAtBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 100;
+        userHasScrolledUpRef.current = !isAtBottom;
+    };
 
-    const fetchMessages = async () => {
+    const fetchMessages = async (silent = false) => {
         try {
-            setLoading(true);
+            if (!silent) setLoading(true);
             const res = await fetchWithAuth(`${API_BASE_URL}/api/agents/${agent.id}/messages`);
             if (!res.ok) throw new Error("Failed to load agent chat history");
             const data = await res.json();
-            setMessages(data.messages || []);
+            const newMsgs: AgentMessage[] = data.messages || [];
+
+            setMessages(prev => {
+                if (prev.length === newMsgs.length) {
+                    const isIdentical = prev.every((m, i) => m.id === newMsgs[i]?.id);
+                    if (isIdentical) return prev;
+                }
+                return newMsgs;
+            });
         } catch (err: any) {
-            setError(err.message || "Failed to load chat history");
+            if (!silent) setError(err.message || "Failed to load chat history");
         } finally {
-            setLoading(false);
+            if (!silent) setLoading(false);
         }
     };
+
+    useEffect(() => {
+        userHasScrolledUpRef.current = false;
+        fetchMessages(false);
+
+        const interval = setInterval(() => {
+            if (!sending) {
+                fetchMessages(true);
+            }
+        }, 5000);
+
+        return () => clearInterval(interval);
+    }, [agent.id, sending]);
+
+    useEffect(() => {
+        if (!userHasScrolledUpRef.current && chatFeedRef.current) {
+            chatFeedRef.current.scrollTop = chatFeedRef.current.scrollHeight;
+        }
+    }, [messages, sending]);
 
     const handleSendPrompt = async (textToSend?: string) => {
         const text = textToSend || promptText;
@@ -289,7 +318,7 @@ export const AgentChatWorkspace: React.FC<AgentChatWorkspaceProps> = ({
             </div>
 
             {/* Scrollable Messages Feed */}
-            <div className="agent-chat-messages">
+            <div className="agent-chat-messages" ref={chatFeedRef} onScroll={handleFeedScroll}>
                 {loading ? (
                     <div style={{ textAlign: 'center', padding: '40px', color: '#a1a1aa' }}>Loading agent conversation history...</div>
                 ) : messages.length === 0 ? (
