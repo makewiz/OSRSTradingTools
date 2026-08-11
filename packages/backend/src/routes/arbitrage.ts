@@ -1,10 +1,16 @@
 import { Router } from 'express';
 import { ArbitrageService } from '../services/arbitrageService';
 import { ItemService } from '../services/itemService';
+import { authenticateToken } from '../auth';
 
 export const createArbitrageRouter = (itemService: ItemService) => {
 
     const router = Router();
+
+    if (process.env.REQUIRE_AUTH === "true") {
+        router.use(authenticateToken);
+    }
+
     const arbitrageService = new ArbitrageService(itemService);
 
     // Simple in-memory cache to avoid re-calculating on every request
