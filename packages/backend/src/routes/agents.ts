@@ -8,6 +8,7 @@ import {
     updateTradingAgent,
     deleteTradingAgent,
     getAgentTriggers,
+    addAgentTrigger,
     getAgentExecutionLogs,
     removeAgentTrigger,
     addAgentMessage,
@@ -211,6 +212,42 @@ router.get("/:id/logs", async (req, res) => {
     } catch (err: any) {
         logger.error(`Error fetching logs for agent ${req.params.id}:`, err);
         res.status(500).json({ error: "Failed to fetch agent logs" });
+    }
+});
+
+/**
+ * POST /api/agents/:id/triggers
+ * Add a price trigger to the agent
+ */
+router.post("/:id/triggers", async (req, res) => {
+    try {
+        const userId = req.user!.id;
+        const agentId = parseInt(req.params.id, 10);
+        if (isNaN(agentId)) return res.status(400).json({ error: "Invalid agent ID" });
+
+        const agent = await getTradingAgentById(agentId);
+        if (!agent || agent.user_id !== userId) {
+            return res.status(404).json({ error: "Agent not found or unauthorized" });
+        }
+
+        const { itemId, itemName, triggerType, targetValue, cooldownSeconds } = req.body;
+        if (!triggerType || typeof targetValue !== "number") {
+            return res.status(400).json({ error: "triggerType and targetValue are required" });
+        }
+
+        const trigger = await addAgentTrigger(
+            agentId,
+            itemId || null,
+            itemName || null,
+            triggerType,
+            targetValue,
+            cooldownSeconds || 300
+        );
+
+        res.status(201).json({ success: true, trigger });
+    } catch (err: any) {
+        logger.error(`Error adding trigger:`, err);
+        res.status(500).json({ error: "Failed to add trigger" });
     }
 });
 

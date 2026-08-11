@@ -212,6 +212,7 @@ export const AgentChatWorkspace: React.FC<AgentChatWorkspaceProps> = ({
     };
 
     const [addedItemIds, setAddedItemIds] = useState<Set<number>>(new Set());
+    const [addedWatchItemIds, setAddedWatchItemIds] = useState<Set<number>>(new Set());
 
     const handleAddRecommendationToPortfolio = async (rec: {
         itemId: number;
@@ -243,30 +244,148 @@ export const AgentChatWorkspace: React.FC<AgentChatWorkspaceProps> = ({
         }
     };
 
+    const handleSetWatchAlert = async (rec: {
+        itemId: number;
+        itemName: string;
+        buyPrice: number;
+        targetSellPrice: number;
+    }) => {
+        try {
+            const res = await fetchWithAuth(`${API_BASE_URL}/api/agents/${agent.id}/triggers`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    itemId: rec.itemId,
+                    itemName: rec.itemName,
+                    triggerType: "buy_price_above",
+                    targetValue: rec.targetSellPrice,
+                    cooldownSeconds: 600
+                })
+            });
+
+            if (!res.ok) {
+                const data = await res.json();
+                throw new Error(data.error || "Failed to set watch alert");
+            }
+
+            try {
+                await fetchWithAuth(`${API_BASE_URL}/api/discord/watch`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        itemId: rec.itemId,
+                        threshold: 5.0,
+                        period: "1h"
+                    })
+                });
+            } catch (dErr) {
+                // Ignore if Discord is not linked
+            }
+
+            setAddedWatchItemIds(prev => new Set(prev).add(rec.itemId));
+            alert(`Set watch alert for ${rec.itemName} at target price ${rec.targetSellPrice.toLocaleString()} GP!`);
+        } catch (err: any) {
+            alert(err.message || "Error setting watch alert");
+        }
+    };
+
     const extractRecommendations = (msg: AgentMessage) => {
-        const recs: Array<{
+        if (!msg || !msg.content || msg.sender === "user") return [];
+
+        const recsMap = new Map<number, {
             itemId: number;
             itemName: string;
             buyPrice: number;
             targetSellPrice: number;
             quantity: number;
-        }> = [];
+        }>();
 
+        const text = msg.content;
+
+        // 1. Text Parsing: Match "Item Name (ID: 1234)" or "Item Name - ID: 1234"
+        const idRegex = /(?:[•\-\*#\d\.]*\s*)?(?:\*\*)?([A-Za-z0-9'\s\-]{3,40}?)(?:\*\*)?\s*(?:\(ID:\s*(\d+)\)|ID:\s*(\d+)|id:\s*(\d+))/gi;
+        let m: RegExpExecArray | null;
+
+        while ((m = idRegex.exec(text)) !== null) {
+            const rawName = m[1].trim().replace(/^\*+|\*+$/g, '');
+            const idStr = m[2] || m[3] || m[4];
+            if (!idStr) continue;
+            const itemId = parseInt(idStr, 10);
+            if (isNaN(itemId) || itemId <= 0) continue;
+
+            const lowerName = rawName.toLowerCase();
+            if (["agent", "user", "id", "item", "goal", "recommendation", "note"].includes(lowerName)) continue;
+
+            const snippet = text.slice(m.index, m.index + 250);
+
+            let buyPrice = 0;
+            const buyMatch = snippet.match(/(?:buy|purchase|cost|entry|low|sell_price)\s*(?:price|at|@)?\s*:?\s*GP?\s*([\d,]+)/i) ||
+                             snippet.match(/(?:buy|purchase)\s*:\s*([\d,]+)/i);
+            if (buyMatch) {
+                buyPrice = parseInt(buyMatch[1].replace(/,/g, ''), 10);
+            }
+
+            let targetSellPrice = 0;
+            const sellMatch = snippet.match(/(?:target\s*)?(?:sell|exit|high|target|buy_price)\s*(?:price|at|@)?\s*:?\s*GP?\s*([\d,]+)/i) ||
+                              snippet.match(/(?:sell|target)\s*:\s*([\d,]+)/i);
+            if (sellMatch) {
+                targetSellPrice = parseInt(sellMatch[1].replace(/,/g, ''), 10);
+            }
+
+            let quantity = 1000;
+            const qtyMatch = snippet.match(/(?:quantity|qty|amount)\s*:?\s*([\d,]+)/i) ||
+                             snippet.match(/([\d,]+)x/i);
+            if (qtyMatch) {
+                const parsedQty = parseInt(qtyMatch[1].replace(/,/g, ''), 10);
+                if (!isNaN(parsedQty) && parsedQty > 0) quantity = parsedQty;
+            }
+
+            if (buyPrice > 0 || targetSellPrice > 0) {
+                if (buyPrice > 0 && targetSellPrice === 0) targetSellPrice = Math.round(buyPrice * 1.05);
+                if (targetSellPrice > 0 && buyPrice === 0) buyPrice = Math.round(targetSellPrice * 0.95);
+
+                recsMap.set(itemId, {
+                    itemId,
+                    itemName: rawName,
+                    buyPrice,
+                    targetSellPrice,
+                    quantity
+                });
+            }
+        }
+
+        // 2. Metadata Fallback: Extract items from actionsTaken if present
         if (msg.metadata && Array.isArray(msg.metadata.actionsTaken)) {
             for (const a of msg.metadata.actionsTaken) {
                 if (a.action === "set_price_trigger" && a.trigger) {
                     const t = a.trigger;
-                    recs.push({
-                        itemId: t.item_id || 563,
-                        itemName: t.item_name || `Item ${t.item_id}`,
-                        buyPrice: Math.round(t.target_value * 0.95),
-                        targetSellPrice: t.target_value,
-                        quantity: 1000
-                    });
+                    const id = t.item_id || 563;
+                    if (!recsMap.has(id)) {
+                        recsMap.set(id, {
+                            itemId: id,
+                            itemName: t.item_name || `Item ${id}`,
+                            buyPrice: Math.round(t.target_value * 0.95),
+                            targetSellPrice: t.target_value,
+                            quantity: 1000
+                        });
+                    }
+                } else if (a.action === "get_item_detail" && a.args?.itemId) {
+                    const id = a.args.itemId;
+                    const name = a.args.itemName || `Item ${id}`;
+                    if (!recsMap.has(id)) {
+                        recsMap.set(id, {
+                            itemId: id,
+                            itemName: name,
+                            buyPrice: 10000,
+                            targetSellPrice: 11000,
+                            quantity: 1000
+                        });
+                    }
                 }
             }
         }
-        return recs;
+
+        return Array.from(recsMap.values());
     };
 
     return (
@@ -377,24 +496,44 @@ export const AgentChatWorkspace: React.FC<AgentChatWorkspaceProps> = ({
                                     {recs.length > 0 && (
                                         <div className="agent-trade-recs">
                                             <div className="agent-actions-title">💡 Recommended Trade Actions:</div>
-                                            {recs.map((rec, idx) => (
-                                                <div key={idx} className="agent-trade-card">
-                                                    <div>
-                                                        <div className="agent-trade-info-title">{rec.itemName}</div>
-                                                        <div className="agent-trade-info-details">
-                                                            Buy @ <strong style={{ color: '#fbbf24' }}>{rec.buyPrice.toLocaleString()} GP</strong> | Target Sell @ <strong style={{ color: '#34d399' }}>{rec.targetSellPrice.toLocaleString()} GP</strong>
+                                            {recs.map((rec, idx) => {
+                                                const isAddedPortfolio = addedItemIds.has(rec.itemId);
+                                                const isAddedWatch = addedWatchItemIds.has(rec.itemId);
+
+                                                return (
+                                                    <div key={idx} className="agent-trade-card">
+                                                        <div style={{ flex: 1 }}>
+                                                            <div className="agent-trade-info-title">
+                                                                {rec.itemName} <span style={{ fontSize: '0.75rem', color: '#9ca3af', fontWeight: 'normal' }}>(ID: {rec.itemId})</span>
+                                                            </div>
+                                                            <div className="agent-trade-info-details">
+                                                                Buy @ <strong style={{ color: '#fbbf24' }}>{rec.buyPrice.toLocaleString()} GP</strong> | Target Sell @ <strong style={{ color: '#34d399' }}>{rec.targetSellPrice.toLocaleString()} GP</strong> | Qty: {rec.quantity.toLocaleString()}
+                                                            </div>
+                                                        </div>
+                                                        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                                                            <button
+                                                                onClick={() => handleAddRecommendationToPortfolio(rec)}
+                                                                disabled={isAddedPortfolio}
+                                                                className="agent-trade-btn"
+                                                                style={isAddedPortfolio ? { background: '#065f46', cursor: 'default', opacity: 0.8 } : undefined}
+                                                            >
+                                                                {isAddedPortfolio ? "✓ In Portfolio" : "✅ Add to Portfolio"}
+                                                            </button>
+                                                            <button
+                                                                onClick={() => handleSetWatchAlert(rec)}
+                                                                disabled={isAddedWatch}
+                                                                className="agent-trade-btn"
+                                                                style={{
+                                                                    background: isAddedWatch ? '#1e3a8a' : '#3b82f6',
+                                                                    ...(isAddedWatch ? { cursor: 'default', opacity: 0.8 } : {})
+                                                                }}
+                                                            >
+                                                                {isAddedWatch ? "✓ Watch Active" : "🔔 Set Watch Alert"}
+                                                            </button>
                                                         </div>
                                                     </div>
-                                                    <button
-                                                        onClick={() => handleAddRecommendationToPortfolio(rec)}
-                                                        disabled={addedItemIds.has(rec.itemId)}
-                                                        className="agent-trade-btn"
-                                                        style={addedItemIds.has(rec.itemId) ? { background: '#065f46', cursor: 'default', opacity: 0.8 } : undefined}
-                                                    >
-                                                        {addedItemIds.has(rec.itemId) ? "✓ Added to Portfolio" : "✅ Add to Portfolio & Set Sell Watch"}
-                                                    </button>
-                                                </div>
-                                            ))}
+                                                );
+                                            })}
                                         </div>
                                     )}
                                 </div>
