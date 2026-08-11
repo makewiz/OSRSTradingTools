@@ -79,6 +79,9 @@ OPENAI_API_KEY=your-openai-api-key-optional
 DISABLE_REGISTRATION=false # Set true to close public registration
 REQUIRE_AUTH=false         # Set true to force login for viewing items
 DATA_RETENTION_DAYS=7      # Limit for historical data retention (affects backfill)
+ADMIN_USERNAME=admin       # Optional: Auto-create/promote admin on startup
+ADMIN_PASSWORD=adminpassword # Required if ADMIN_USERNAME is set
+ADMIN_EMAIL=admin@example.com # Optional admin email
 ```
 
 See [`.env.example`](packages/backend/.env.example) for a complete template.
@@ -104,6 +107,22 @@ The backend starts on `http://localhost:4000` and exposes:
 - **History**: Price history is fetched every 5 minutes (persisted regardless of activity).
 - **Data Retention**: Configurable via `DATA_RETENTION_DAYS`.
 - Aggregation runs automatically every hour.
+
+### Admin Setup & Default Admin Logic
+
+Admin privileges (`is_admin: true`) can be granted through three default mechanisms:
+
+1. **First Registered User Auto-Admin**: On a fresh database with 0 users, the very first user who registers through the application interface (`POST /api/auth/register`) is automatically granted admin privileges.
+2. **Auto-Seeding via Environment Variables**: When `ADMIN_USERNAME` and `ADMIN_PASSWORD` are configured in `packages/backend/.env`, the backend automatically seeds the admin user on database startup (or promotes an existing user with that username if not already an admin).
+3. **CLI Script**: You can manually create or promote an admin account at any time using the command line:
+   ```bash
+   # Uses ADMIN_USERNAME / ADMIN_PASSWORD from .env (or defaults to username "admin"):
+   npm run create-admin
+
+   # Or pass explicit parameters:
+   npm run create-admin -- --username customadmin --password mysecretpassword --email admin@example.com
+   ```
+4. **Admin Dashboard / API**: Existing admin users can also create or promote other user accounts via `POST /api/admin/users` or the Admin Dashboard UI.
 
 ### Running the frontend
 
