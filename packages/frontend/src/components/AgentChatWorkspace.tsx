@@ -62,7 +62,7 @@ export const AgentChatWorkspace: React.FC<AgentChatWorkspaceProps> = ({
         },
         {
             title: "📈 Medium-Term Dip Investments",
-            prompt: "Find me medium term investments. Filter items by max sell price 10,000,000 and min volume 100, then sort by highest margin. Check if the current price is a dip compared to recent averages. Tell me what to buy and sell and when for maximum profit on a 1-day investment time. Set sell watches for the best items."
+            prompt: "Find me medium term investments. Filter items by max sell price 10,000,000 and min volume 100, then sort by highest margin. Check if the current price is a dip compared to recent averages. Tell me what to buy and sell and when for maximum profit on a 1-day investment time, and recommend target sell watch prices."
         }
     ];
 
@@ -316,25 +316,27 @@ export const AgentChatWorkspace: React.FC<AgentChatWorkspaceProps> = ({
             const lowerName = rawName.toLowerCase();
             if (["agent", "user", "id", "item", "goal", "recommendation", "note"].includes(lowerName)) continue;
 
-            const snippet = text.slice(m.index, m.index + 250);
+            // Extract context window up to 400 chars following item name match
+            const snippet = text.slice(m.index, m.index + 400);
 
+            // Extract Buy price: matches e.g. "Buy Price: 3,451,000 GP" or "Buy Price (Instant Sell / Low): 3,451,000 GP"
             let buyPrice = 0;
-            const buyMatch = snippet.match(/(?:buy|purchase|cost|entry|low|sell_price)\s*(?:price|at|@)?\s*:?\s*GP?\s*([\d,]+)/i) ||
-                             snippet.match(/(?:buy|purchase)\s*:\s*([\d,]+)/i);
+            const buyMatch = snippet.match(/(?:buy|purchase|cost|entry|low)[^\n\r]*?:?\s*([\d,]+(?:\.\d+)?)/i);
             if (buyMatch) {
                 buyPrice = parseInt(buyMatch[1].replace(/,/g, ''), 10);
             }
 
+            // Extract Target Sell price: matches e.g. "Target Sell Price: 3,844,000 GP" or "Target Sell Price (Instant Buy / High): 3,844,000 GP"
             let targetSellPrice = 0;
-            const sellMatch = snippet.match(/(?:target\s*)?(?:sell|exit|high|target|buy_price)\s*(?:price|at|@)?\s*:?\s*GP?\s*([\d,]+)/i) ||
-                              snippet.match(/(?:sell|target)\s*:\s*([\d,]+)/i);
+            const sellMatch = snippet.match(/(?:target\s*)?(?:sell|exit|high|target)[^\n\r]*?:?\s*([\d,]+(?:\.\d+)?)/i);
             if (sellMatch) {
                 targetSellPrice = parseInt(sellMatch[1].replace(/,/g, ''), 10);
             }
 
+            // Extract Quantity: matches e.g. "Quantity: 15 units" or "Qty: 1000"
             let quantity = 1000;
-            const qtyMatch = snippet.match(/(?:quantity|qty|amount)\s*:?\s*([\d,]+)/i) ||
-                             snippet.match(/([\d,]+)x/i);
+            const qtyMatch = snippet.match(/(?:quantity|qty|amount|units)[^\n\r]*?:?\s*([\d,]+)/i) ||
+                             snippet.match(/([\d,]+)\s*(?:units|items|x)/i);
             if (qtyMatch) {
                 const parsedQty = parseInt(qtyMatch[1].replace(/,/g, ''), 10);
                 if (!isNaN(parsedQty) && parsedQty > 0) quantity = parsedQty;
@@ -354,7 +356,7 @@ export const AgentChatWorkspace: React.FC<AgentChatWorkspaceProps> = ({
             }
         }
 
-        // 2. Metadata Fallback: Extract items from actionsTaken if present
+        // 2. Metadata Fallback: Extract items from actionsTaken if NOT already found in text
         if (msg.metadata && Array.isArray(msg.metadata.actionsTaken)) {
             for (const a of msg.metadata.actionsTaken) {
                 if (a.action === "set_price_trigger" && a.trigger) {
@@ -366,18 +368,6 @@ export const AgentChatWorkspace: React.FC<AgentChatWorkspaceProps> = ({
                             itemName: t.item_name || `Item ${id}`,
                             buyPrice: Math.round(t.target_value * 0.95),
                             targetSellPrice: t.target_value,
-                            quantity: 1000
-                        });
-                    }
-                } else if (a.action === "get_item_detail" && a.args?.itemId) {
-                    const id = a.args.itemId;
-                    const name = a.args.itemName || `Item ${id}`;
-                    if (!recsMap.has(id)) {
-                        recsMap.set(id, {
-                            itemId: id,
-                            itemName: name,
-                            buyPrice: 10000,
-                            targetSellPrice: 11000,
                             quantity: 1000
                         });
                     }
