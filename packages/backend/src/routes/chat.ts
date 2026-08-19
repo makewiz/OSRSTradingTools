@@ -97,6 +97,14 @@ CRITICAL ROUTE INSTRUCTION: The user is right now on ${pageName}. Ignore any pre
    - 'remove_watch': Remove a price watch alert.
    - 'get_advanced_watches': View advanced market watch filters.
    - 'add_advanced_watch': Add a new custom advanced market watch.
+8. **User Portfolio**:
+   - 'get_user_portfolio': List user's active portfolio items, quantities, buy prices, current GE prices, PnL, and ROI.
+   - 'add_to_portfolio': Add an item to user's portfolio.
+   - 'remove_from_portfolio': Remove an item from user's portfolio.
+9. **Interactive Suggestions & Questions**:
+   - 'suggest_trade_actions': Provide structured buy/sell item recommendations.
+   - 'suggest_followup_options': Provide clickable quick-reply prompt options.
+   - 'ask_user_question': Ask the user a structured question with interactive choice buttons.
 
 ${APP_GUIDE}
 
@@ -105,12 +113,18 @@ ${APP_GUIDE}
 - ${MERCHANTING_GUIDE}
 
 **Instructions:**
-1. ALWAYS use the appropriate tool whenever specific, real-time market data or user state (favorites/watches) is needed to answer a user prompt.
-2. If a user asks to add/remove an item from favorites or set price watches, execute the action using the tools and confirm the outcome in natural language.
-3. If user is NOT logged in and requests a user-bound action (favorites/watches), state clearly that they need to log in first.
-4. Cite exact numbers (prices, ROI, volume, profit) when offering advice.
-5. If the user asks about the current date/time, use the Current Server Time provided above.
-6. Be concise, clear, and structure your responses with GitHub Flavored Markdown (bolding, lists, tables).
+1. ALWAYS use the appropriate tool whenever specific, real-time market data or user state (favorites/watches/portfolio) is needed to answer a user prompt.
+2. Call 'get_user_portfolio' to check what items the user currently holds before offering trade recommendations. DO NOT repeatedly suggest buying items that the user already has in their portfolio.
+3. If an item in the user's portfolio experiences a price spike or hits target sell price/stop loss, inform the user and recommend selling or taking profits.
+4. If a user asks to add/remove an item from favorites/portfolio or set price watches, execute the action using the tools and confirm the outcome in natural language.
+5. If user is NOT logged in and requests a user-bound action (favorites/watches/portfolio), state clearly that they need to log in first.
+6. Cite exact numbers (prices, ROI, volume, profit) when offering advice.
+7. If the user asks about the current date/time, use the Current Server Time provided above.
+8. Whenever recommending specific OSRS items to buy, sell, or flip, ALWAYS call the 'suggest_trade_actions' tool with structured item data ({ itemId, itemName, buyPrice, targetSellPrice, quantity, rationale }).
+9. Whenever offering follow-up prompt choices or next steps, call the 'suggest_followup_options' tool with quick-reply strings.
+10. Whenever asking the user a clarifying question or offering choices (e.g. risk level, budget, skill), call the 'ask_user_question' tool with the question and selectable options.
+11. Be concise, clear, and structure your responses with GitHub Flavored Markdown (bolding, lists, tables).
+12. Whenever you mention specific OSRS items in your response text, format them as markdown links to their item page if you know their item ID, e.g. \[Abyssal whip\](/item/4151). If the item ID was returned by a tool, always use \[Item Name\](/item/itemId).
 `;
 
         // Build Gemini contents history array from prior conversation turns
@@ -136,6 +150,9 @@ ${APP_GUIDE}
         let finalReply = "";
         let turns = 0;
         const maxTurns = 10;
+        const tradeSuggestions: any[] = [];
+        const followupOptions: string[] = [];
+        const questions: any[] = [];
 
         while (turns < maxTurns) {
             turns++;
@@ -172,6 +189,19 @@ ${APP_GUIDE}
                     const toolName = fc.name || "";
                     const rawResult = await executeGeminiTool(toolName, fc.args || {}, contextUser);
                     
+                    if (toolName === "suggest_trade_actions" && Array.isArray(rawResult?.suggestions)) {
+                        tradeSuggestions.push(...rawResult.suggestions);
+                    } else if (toolName === "suggest_followup_options" && Array.isArray(rawResult?.options)) {
+                        followupOptions.push(...rawResult.options);
+                    } else if (toolName === "ask_user_question" && rawResult?.question) {
+                        questions.push({
+                            question: rawResult.question,
+                            options: rawResult.options || [],
+                            allowCustomInput: rawResult.allowCustomInput,
+                            multiSelect: rawResult.multiSelect
+                        });
+                    }
+
                     let responsePayload: Record<string, any>;
                     if (Array.isArray(rawResult)) {
                         responsePayload = { items: rawResult };
@@ -216,7 +246,12 @@ ${APP_GUIDE}
                 : "Based on the market data gathered, I have found the item recommendations for you.";
         }
 
-        res.json({ response: finalReply });
+        res.json({
+            response: finalReply,
+            tradeSuggestions,
+            followupOptions,
+            questions
+        });
 
     } catch (err: any) {
         logger.error("Error in chat route:", err);

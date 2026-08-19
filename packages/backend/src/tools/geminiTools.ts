@@ -13,7 +13,10 @@ import {
     removeBackendWatch,
     getDiscordUserByUserId,
     getAdvancedWatches,
-    addAdvancedWatch
+    addAdvancedWatch,
+    getUserPortfolio,
+    addPortfolioItem,
+    deletePortfolioItem
 } from "../database";
 import { logger } from "@osrstradingtools/shared";
 
@@ -102,6 +105,42 @@ export const geminiTools = [
         }
     },
     {
+        name: "get_user_portfolio",
+        description: "Fetch the user's active trading portfolio items (bought items, quantities, average buy prices, current instant buy prices, net worth, and tax-adjusted profit). ALWAYS call this first when checking user holdings or before recommending repeat purchases.",
+        parameters: {
+            type: "OBJECT",
+            properties: {}
+        }
+    },
+    {
+        name: "add_to_portfolio",
+        description: "Add an item entry into the user's trading portfolio. Requires itemId or itemName, quantity, and buyPrice paid per item.",
+        parameters: {
+            type: "OBJECT",
+            properties: {
+                itemId: { type: "NUMBER", description: "Numeric OSRS item ID." },
+                itemName: { type: "STRING", description: "Name of the item." },
+                quantity: { type: "NUMBER", description: "Quantity of items bought (e.g. 1000)." },
+                buyPrice: { type: "NUMBER", description: "Average purchase price paid per item in GP (cost basis)." },
+                targetSellPrice: { type: "NUMBER", description: "Target sell price per item in GP (Instant Buy / High price target)." },
+                notes: { type: "STRING", description: "Trade notes or strategy." }
+            },
+            required: ["quantity", "buyPrice"]
+        }
+    },
+    {
+        name: "remove_from_portfolio",
+        description: "Remove an item from the user's trading portfolio by position ID or item ID/name.",
+        parameters: {
+            type: "OBJECT",
+            properties: {
+                positionId: { type: "NUMBER", description: "Numeric ID of the portfolio position to delete." },
+                itemId: { type: "NUMBER", description: "Numeric item ID to remove if positionId is unknown." },
+                itemName: { type: "STRING", description: "Name of item to remove if positionId is unknown." }
+            }
+        }
+    },
+    {
         name: "get_favorites",
         description: "List all favorited items for the logged-in user.",
         parameters: {
@@ -141,14 +180,16 @@ export const geminiTools = [
     },
     {
         name: "add_watch",
-        description: "Set a price change watch alert for an item for the logged-in user.",
+        description: "Set a price change or specific price point watch alert for an item for the logged-in user.",
         parameters: {
             type: "OBJECT",
             properties: {
                 itemId: { type: "NUMBER", description: "Numeric item ID." },
                 itemName: { type: "STRING", description: "Name of item if ID is unknown." },
-                threshold: { type: "NUMBER", description: "Percentage change threshold (e.g. 5 for 5%). Default 5." },
+                threshold: { type: "NUMBER", description: "Percentage change threshold (e.g. 5 for 5%)." },
                 period: { type: "STRING", description: "Time period window e.g. '24h', '1h'." },
+                targetPriceAbove: { type: "NUMBER", description: "Target high price in GP (alert when price >= target)." },
+                targetPriceBelow: { type: "NUMBER", description: "Target low price in GP (alert when price <= target)." },
                 cooldown: { type: "NUMBER", description: "Notification cooldown in minutes. Default 60." }
             }
         }
@@ -183,6 +224,65 @@ export const geminiTools = [
                 minRoi: { type: "NUMBER", description: "Minimum ROI filter." },
                 minVolume: { type: "NUMBER", description: "Minimum 24h volume filter." }
             }
+        }
+    },
+    {
+        name: "suggest_trade_actions",
+        description: "Provide structured trade recommendations and actionable buy/sell signals to the user. Call this tool whenever recommending specific OSRS items to buy, sell, or flip.",
+        parameters: {
+            type: "OBJECT",
+            properties: {
+                suggestions: {
+                    type: "ARRAY",
+                    description: "List of recommended trade actions.",
+                    items: {
+                        type: "OBJECT",
+                        properties: {
+                            itemId: { type: "NUMBER", description: "Numeric OSRS item ID." },
+                            itemName: { type: "STRING", description: "Name of the item." },
+                            buyPrice: { type: "NUMBER", description: "Recommended buy price (Instant Sell / Low price) in GP." },
+                            targetSellPrice: { type: "NUMBER", description: "Target sell price (Instant Buy / High price) in GP." },
+                            quantity: { type: "NUMBER", description: "Recommended quantity to buy/sell." },
+                            rationale: { type: "STRING", description: "Brief rationale or trade logic." }
+                        },
+                        required: ["itemName", "buyPrice", "targetSellPrice", "quantity"]
+                    }
+                }
+            },
+            required: ["suggestions"]
+        }
+    },
+    {
+        name: "suggest_followup_options",
+        description: "Provide a list of suggested quick-reply prompt options or next steps for the user to click in chat (e.g. 'Show recipes for Herblore', 'Set watch alert for Armadyl Godsword').",
+        parameters: {
+            type: "OBJECT",
+            properties: {
+                options: {
+                    type: "ARRAY",
+                    description: "List of clickable follow-up option prompts for the user.",
+                    items: { type: "STRING" }
+                }
+            },
+            required: ["options"]
+        }
+    },
+    {
+        name: "ask_user_question",
+        description: "Ask the user a structured question with interactive choice options or for clarifying input (e.g. risk level, target ROI, specific skill). The user can click an option button to reply.",
+        parameters: {
+            type: "OBJECT",
+            properties: {
+                question: { type: "STRING", description: "The question text to display to the user." },
+                options: {
+                    type: "ARRAY",
+                    description: "Selectable answer option buttons for the user to click.",
+                    items: { type: "STRING" }
+                },
+                allowCustomInput: { type: "BOOLEAN", description: "Whether the user can also type a custom answer (default true)." },
+                multiSelect: { type: "BOOLEAN", description: "Whether the user can select multiple options (default false)." }
+            },
+            required: ["question"]
         }
     }
 ];
@@ -338,6 +438,76 @@ export async function executeGeminiTool(
                 };
             }
 
+            case "get_user_portfolio": {
+                if (!user) {
+                    return { error: "User is not logged in. Cannot fetch portfolio." };
+                }
+                const portfolio = await getUserPortfolio(user.id);
+                const items = await getLatestItems();
+                const itemMap = new Map(items.map((i: CombinedItem) => [i.id, i]));
+
+                const enriched = portfolio.map(p => {
+                    const ge = itemMap.get(p.item_id);
+                    return {
+                        id: p.id,
+                        itemId: p.item_id,
+                        itemName: p.item_name,
+                        quantity: p.quantity,
+                        buyPrice: p.buy_price,
+                        targetSellPrice: p.target_sell_price,
+                        status: p.status,
+                        notes: p.notes,
+                        currentBuyPrice: ge?.buyPrice ?? null,
+                        currentSellPrice: ge?.sellPrice ?? null,
+                        currentMargin: ge?.margin ?? null
+                    };
+                });
+                return { portfolio: enriched };
+            }
+
+            case "add_to_portfolio": {
+                if (!user) {
+                    return { error: "User is not logged in. Cannot manage portfolio." };
+                }
+                const target = await resolveItemId(args.itemId, args.itemName);
+                if (!target) {
+                    return { error: `Item not found matching ${args.itemName || args.itemId}` };
+                }
+                const targetSell = args.targetSellPrice ?? args.buyPrice;
+                const item = await addPortfolioItem(
+                    user.id,
+                    target.id,
+                    target.name,
+                    args.quantity,
+                    args.buyPrice,
+                    targetSell,
+                    undefined,
+                    args.notes
+                );
+                return { success: true, item, message: `Added ${target.name} (${args.quantity}x @ ${args.buyPrice} GP) to user portfolio.` };
+            }
+
+            case "remove_from_portfolio": {
+                if (!user) {
+                    return { error: "User is not logged in. Cannot manage portfolio." };
+                }
+                if (args.positionId) {
+                    await deletePortfolioItem(args.positionId, user.id);
+                    return { success: true, message: `Removed portfolio position ID ${args.positionId}.` };
+                }
+                const target = await resolveItemId(args.itemId, args.itemName);
+                if (!target) {
+                    return { error: "Must specify positionId, itemId, or itemName to remove from portfolio." };
+                }
+                const portfolio = await getUserPortfolio(user.id);
+                const match = portfolio.find(p => p.item_id === target.id);
+                if (!match) {
+                    return { error: `No active portfolio position found for ${target.name}.` };
+                }
+                await deletePortfolioItem(match.id, user.id);
+                return { success: true, message: `Removed ${target.name} from portfolio.` };
+            }
+
             case "get_favorites": {
                 if (!user) {
                     return { error: "User is not logged in. Cannot fetch favorites." };
@@ -411,12 +581,27 @@ export async function executeGeminiTool(
                     return { error: `Item not found matching ${args.itemId || args.itemName}` };
                 }
                 const discordId = await getEffectiveDiscordId(user);
-                const threshold = typeof args.threshold === "number" ? args.threshold : 5.0;
-                const period = args.period === "1h" ? "1h" : "24h";
+                const threshold = typeof args.threshold === "number" ? args.threshold : null;
+                const period = args.period === "24h" ? "24h" : "1h";
                 const cooldownMinutes = typeof args.cooldown === "number" ? args.cooldown : 60;
                 const cooldownSeconds = cooldownMinutes * 60;
-                await addBackendWatch(discordId, target.id, threshold, period, cooldownSeconds, true);
-                return { success: true, message: `Set price watch for ${target.name} (Threshold: ${threshold}%, Period: ${period}, Cooldown: ${cooldownMinutes} minutes).` };
+                const targetPriceAbove = typeof args.targetPriceAbove === "number" ? args.targetPriceAbove : null;
+                const targetPriceBelow = typeof args.targetPriceBelow === "number" ? args.targetPriceBelow : null;
+
+                await addBackendWatch(
+                    discordId,
+                    target.id,
+                    threshold,
+                    period,
+                    cooldownSeconds,
+                    true,
+                    targetPriceAbove,
+                    targetPriceBelow
+                );
+                return {
+                    success: true,
+                    message: `Set price watch for ${target.name} (Threshold: ${threshold ? threshold + '%' : 'N/A'}, Target Above: ${targetPriceAbove ? targetPriceAbove.toLocaleString() + ' gp' : 'N/A'}, Target Below: ${targetPriceBelow ? targetPriceBelow.toLocaleString() + ' gp' : 'N/A'}, Cooldown: ${cooldownMinutes} minutes).`
+                };
             }
 
             case "remove_watch": {
@@ -471,6 +656,40 @@ export async function executeGeminiTool(
                     max_count: 5
                 });
                 return { success: true, watch: newWatch, message: `Created advanced watch '${newWatch.name}'.` };
+            }
+
+            case "suggest_trade_actions": {
+                const rawList = Array.isArray(args.suggestions) ? args.suggestions : [];
+                const resolvedList = [];
+                for (const item of rawList) {
+                    const resolved = await resolveItemId(item.itemId, item.itemName);
+                    resolvedList.push({
+                        itemId: resolved ? resolved.id : (item.itemId || 0),
+                        itemName: resolved ? resolved.name : (item.itemName || "Unknown Item"),
+                        buyPrice: typeof item.buyPrice === "number" ? item.buyPrice : 0,
+                        targetSellPrice: typeof item.targetSellPrice === "number" ? item.targetSellPrice : 0,
+                        quantity: typeof item.quantity === "number" ? item.quantity : 1,
+                        rationale: item.rationale || ""
+                    });
+                }
+                return { success: true, suggestions: resolvedList, message: `Provided ${resolvedList.length} trade action suggestions.` };
+            }
+
+            case "suggest_followup_options": {
+                const options = Array.isArray(args.options) ? args.options.map((o: any) => String(o)) : [];
+                return { success: true, options, message: `Provided ${options.length} follow-up options.` };
+            }
+
+            case "ask_user_question": {
+                const options = Array.isArray(args.options) ? args.options.map((o: any) => String(o)) : [];
+                return {
+                    success: true,
+                    question: args.question || "",
+                    options,
+                    allowCustomInput: args.allowCustomInput !== false,
+                    multiSelect: args.multiSelect === true,
+                    message: `Asked question: "${args.question}"`
+                };
             }
 
             default:

@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
+import { useNavigate } from "react-router-dom";
+import ReactMarkdown from "react-markdown";
 import { useAuth } from "../contexts/AuthContext";
 import { API_BASE_URL } from "../config";
 import "./AgentChatWorkspace.css";
@@ -39,6 +41,7 @@ export const AgentChatWorkspace: React.FC<AgentChatWorkspaceProps> = ({
     onAgentDeleted
 }) => {
     const { fetchWithAuth } = useAuth();
+    const navigate = useNavigate();
     const [messages, setMessages] = useState<AgentMessage[]>([]);
     const [promptText, setPromptText] = useState("");
     const [loading, setLoading] = useState(true);
@@ -46,25 +49,74 @@ export const AgentChatWorkspace: React.FC<AgentChatWorkspaceProps> = ({
     const [error, setError] = useState<string | null>(null);
     const messagesEndRef = useRef<HTMLDivElement>(null);
 
-    // Quick-start prompt templates
+    // Purpose-driven merchanting quick-start prompt templates based on the Merchanting Guide
     const premadePrompts = [
         {
-            title: "🏆 Grand Exchange Master Trader (Trading Game)",
-            prompt: "Play the OSRS Trading Game for maximum net worth growth! First, call 'game_get_account' to inspect your 10M cash stack, 8 GE slots, and inventory. Collect any completed slots ('game_collect_slot') and cancel stale un-filled offers older than 1 hour ('game_cancel_offer'). Scan high-volume consumables (Zulrah scales, Chinchompas, Runes, Food, Potions) and decant/set arbitrage for high-ROI items after 2% GE tax. Place BUY offers across open GE slots ('game_place_offer') at instant-sell prices while respecting 4-hour buy limits. Once bought, place SELL offers at instant-buy prices. Re-evaluate the market and schedule your next run in 15 minutes."
-        },
-        {
             title: "⚡ High-Volume Consumable Flipper",
-            prompt: "Focus exclusively on flipping high-volume consumables in the Trading Game (Zulrah scales, Chinchompas, Runes, Cannonballs, High-tier Food/Potions). Max out 4-hour buy limits by placing buy offers at current low prices, then relist completed items at high prices minus 2% GE tax for rapid compound growth."
+            prompt: "Help me flip high-volume consumables (Runes, Food, Potions, Zulrah scales, Chinchompas, Bars). Search for items with high trading volume (>100k daily) and clear net margins after 2% GE tax. Ask me questions about my budget and risk tolerance using question tools, then recommend specific trade actions with buy prices, target sell prices, and 4-hour limit guidance."
         },
         {
-            title: "⚗️ Decanting & Set Arbitrage Specialist",
-            prompt: "Check 1-dose, 2-dose, and 3-dose potion decanting margins against 4-dose potions, as well as Barrows and Dragon armor sets in the Trading Game. Execute component buy orders, collect filled items, perform conversions, and sell completed sets/potions to lock in risk-free profit."
+            title: "💎 High-Wealth / Low-Volume Flipping",
+            prompt: "Scan expensive low-volume PvM gear and high-value items (Bandos, Armadyl, Torva, Scythe of Vitur, Twisted Bow, 3rd Age) for price dips and high profit margins. Do not price check manually; use live API margins. Ask me how much capital I'm allocating, calculate net margins after 2% tax (capped at 5M GP), and recommend patient buy/sell positions."
         },
         {
-            title: "📈 Medium-Term Dip Investments",
-            prompt: "Find me medium term investments. Filter items by max sell price 10,000,000 and min volume 100, then sort by highest margin. Check if the current price is a dip compared to recent averages. Tell me what to buy and sell and when for maximum profit on a 1-day investment time, and recommend target sell watch prices."
+            title: "⚗️ Recipe & Conversion Arbitrage",
+            prompt: "Analyze skill processing and crafting profitability across Herblore (unfinished potions), Smithing, Cooking, Fletching, Crafting, decanting (1/2/3-dose vs 4-dose potions), and set packing/unpacking (Barrows, Dragon sets). Account for ingredient costs vs final product sell price minus 2% tax. Present step-by-step profit per hour and trade recommendations."
+        },
+        {
+            title: "📰 Patch Day & News Speculation",
+            prompt: "Fetch recent OSRS news updates and dev blogs to identify long-term investment opportunities (e.g. items needed for upcoming boss releases, buffed gear, or seasonal weekend pumps). Ask me about my investment horizon and suggest items to accumulate before prices spike."
+        },
+        {
+            title: "🧪 High Alchemy Liquidity Scan",
+            prompt: "Search for high alchemy opportunities where item buy prices are below high alch value minus nature rune cost, with sufficient volume (>50 daily). Provide profit per hour, daily limits, and direct buy recommendations."
+        },
+        {
+            title: "🏆 GE Trading Game Competitor",
+            prompt: "Play the OSRS Trading Game for maximum net worth growth! First, call 'game_get_account' to inspect your 10M cash stack, 8 GE slots, and inventory. Collect any completed slots ('game_collect_slot') and cancel stale un-filled offers older than 1 hour ('game_cancel_offer'). Scan high-volume consumables and decant/set arbitrage for high-ROI items after 2% GE tax. Place BUY offers across open GE slots ('game_place_offer') at instant-sell prices while respecting 4-hour buy limits. Once bought, place SELL offers at instant-buy prices. Re-evaluate the market and schedule your next run in 15 minutes."
         }
     ];
+
+    const formatContentWithItemLinks = (content: string) => {
+        if (!content) return "";
+        let formatted = content.replace(
+            /(?<!\[)(?:[•\-\*#\d\.]*\s*)?(?:\*\*)?([A-Za-z0-9'\s\-]{3,40}?)(?:\*\*)?\s*(?:\(ID:\s*(\d+)\)|ID:\s*(\d+)|id:\s*(\d+))/gi,
+            (match, name, id1, id2, id3) => {
+                const id = id1 || id2 || id3;
+                const rawName = name ? name.trim().replace(/^\*+|\*+$/g, '') : `Item ${id}`;
+                if (match.includes("](") || match.includes("[")) return match;
+                return `[${rawName} (ID: ${id})](/item/${id})`;
+            }
+        );
+        return formatted;
+    };
+
+    const renderMarkdownLink = ({ href, children }: any) => {
+        if (href && (href.startsWith("/item/") || href.startsWith("#/item/"))) {
+            const itemPath = href.replace(/^#/, "");
+            return (
+                <button
+                    type="button"
+                    onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        navigate(itemPath);
+                    }}
+                    className="osrs-item-link-btn"
+                    title="View item detail page"
+                >
+                    <span>🗡️</span>
+                    <span>{children}</span>
+                </button>
+            );
+        }
+        return (
+            <a href={href} target="_blank" rel="noopener noreferrer" style={{ color: '#818cf8', textDecoration: 'underline' }}>
+                {children}
+            </a>
+        );
+    };
+
 
     const chatFeedRef = useRef<HTMLDivElement>(null);
     const userHasScrolledUpRef = useRef<boolean>(false);
@@ -238,7 +290,7 @@ export const AgentChatWorkspace: React.FC<AgentChatWorkspaceProps> = ({
 
             if (!res.ok) throw new Error("Failed to add position to portfolio");
             setAddedItemIds(prev => new Set(prev).add(rec.itemId));
-            alert(`Added ${rec.itemName} to your Trading Portfolio with sell target ${rec.targetSellPrice.toLocaleString()} GP!`);
+            handleSendPrompt(`I added ${rec.itemName} (${rec.quantity.toLocaleString()}x @ ${rec.buyPrice.toLocaleString()} GP, target sell: ${rec.targetSellPrice.toLocaleString()} GP) to my portfolio. Please watch this position and notify me if the price spikes or hits target sell.`);
         } catch (err: any) {
             alert(err.message || "Error adding to portfolio");
         }
@@ -298,7 +350,46 @@ export const AgentChatWorkspace: React.FC<AgentChatWorkspaceProps> = ({
             buyPrice: number;
             targetSellPrice: number;
             quantity: number;
+            rationale?: string;
         }>();
+
+        // 0. Check structured tradeSuggestions in metadata
+        if (msg.metadata && Array.isArray(msg.metadata.tradeSuggestions) && msg.metadata.tradeSuggestions.length > 0) {
+            for (const s of msg.metadata.tradeSuggestions) {
+                if (s.itemId || s.itemName) {
+                    const id = s.itemId || Math.floor(Math.random() * 100000);
+                    recsMap.set(id, {
+                        itemId: id,
+                        itemName: s.itemName || `Item ${id}`,
+                        buyPrice: s.buyPrice || 0,
+                        targetSellPrice: s.targetSellPrice || 0,
+                        quantity: s.quantity || 1,
+                        rationale: s.rationale
+                    });
+                }
+            }
+            if (recsMap.size > 0) return Array.from(recsMap.values());
+        }
+
+        // Check actionsTaken for suggest_trade_actions
+        if (msg.metadata && Array.isArray(msg.metadata.actionsTaken)) {
+            for (const a of msg.metadata.actionsTaken) {
+                if (a.action === "suggest_trade_actions" && Array.isArray(a.suggestions)) {
+                    for (const s of a.suggestions) {
+                        const id = s.itemId || Math.floor(Math.random() * 100000);
+                        recsMap.set(id, {
+                            itemId: id,
+                            itemName: s.itemName || `Item ${id}`,
+                            buyPrice: s.buyPrice || 0,
+                            targetSellPrice: s.targetSellPrice || 0,
+                            quantity: s.quantity || 1,
+                            rationale: s.rationale
+                        });
+                    }
+                }
+            }
+            if (recsMap.size > 0) return Array.from(recsMap.values());
+        }
 
         const text = msg.content;
 
@@ -316,24 +407,20 @@ export const AgentChatWorkspace: React.FC<AgentChatWorkspaceProps> = ({
             const lowerName = rawName.toLowerCase();
             if (["agent", "user", "id", "item", "goal", "recommendation", "note"].includes(lowerName)) continue;
 
-            // Extract context window up to 400 chars following item name match
             const snippet = text.slice(m.index, m.index + 400);
 
-            // Extract Buy price: matches e.g. "Buy Price: 3,451,000 GP" or "Buy Price (Instant Sell / Low): 3,451,000 GP"
             let buyPrice = 0;
             const buyMatch = snippet.match(/(?:buy|purchase|cost|entry|low)[^\n\r]*?:?\s*([\d,]+(?:\.\d+)?)/i);
             if (buyMatch) {
                 buyPrice = parseInt(buyMatch[1].replace(/,/g, ''), 10);
             }
 
-            // Extract Target Sell price: matches e.g. "Target Sell Price: 3,844,000 GP" or "Target Sell Price (Instant Buy / High): 3,844,000 GP"
             let targetSellPrice = 0;
             const sellMatch = snippet.match(/(?:target\s*)?(?:sell|exit|high|target)[^\n\r]*?:?\s*([\d,]+(?:\.\d+)?)/i);
             if (sellMatch) {
                 targetSellPrice = parseInt(sellMatch[1].replace(/,/g, ''), 10);
             }
 
-            // Extract Quantity: matches e.g. "Quantity: 15 units" or "Qty: 1000"
             let quantity = 1000;
             const qtyMatch = snippet.match(/(?:quantity|qty|amount|units)[^\n\r]*?:?\s*([\d,]+)/i) ||
                              snippet.match(/([\d,]+)\s*(?:units|items|x)/i);
@@ -376,6 +463,45 @@ export const AgentChatWorkspace: React.FC<AgentChatWorkspaceProps> = ({
         }
 
         return Array.from(recsMap.values());
+    };
+
+    const extractQuestions = (msg: AgentMessage) => {
+        if (!msg || msg.sender === "user" || !msg.metadata) return [];
+        if (Array.isArray(msg.metadata.questions) && msg.metadata.questions.length > 0) {
+            return msg.metadata.questions;
+        }
+        if (Array.isArray(msg.metadata.actionsTaken)) {
+            const qs: any[] = [];
+            for (const a of msg.metadata.actionsTaken) {
+                if (a.action === "ask_user_question" && a.question) {
+                    qs.push({
+                        question: a.question,
+                        options: a.options || [],
+                        allowCustomInput: a.allowCustomInput,
+                        multiSelect: a.multiSelect
+                    });
+                }
+            }
+            return qs;
+        }
+        return [];
+    };
+
+    const extractFollowupOptions = (msg: AgentMessage) => {
+        if (!msg || msg.sender === "user" || !msg.metadata) return [];
+        if (Array.isArray(msg.metadata.followupOptions) && msg.metadata.followupOptions.length > 0) {
+            return msg.metadata.followupOptions;
+        }
+        if (Array.isArray(msg.metadata.actionsTaken)) {
+            const opts: string[] = [];
+            for (const a of msg.metadata.actionsTaken) {
+                if (a.action === "suggest_followup_options" && Array.isArray(a.options)) {
+                    opts.push(...a.options);
+                }
+            }
+            return opts;
+        }
+        return [];
     };
 
     return (
@@ -450,6 +576,8 @@ export const AgentChatWorkspace: React.FC<AgentChatWorkspaceProps> = ({
                     messages.map((msg) => {
                         const isUser = msg.sender === "user";
                         const recs = !isUser ? extractRecommendations(msg) : [];
+                        const questions = !isUser ? extractQuestions(msg) : [];
+                        const followups = !isUser ? extractFollowupOptions(msg) : [];
                         const actions = msg.metadata?.actionsTaken || [];
 
                         return (
@@ -460,7 +588,11 @@ export const AgentChatWorkspace: React.FC<AgentChatWorkspaceProps> = ({
                                         <span>{new Date(msg.created_at * 1000).toLocaleTimeString()}</span>
                                     </div>
 
-                                    <div className="agent-message-text">{msg.content}</div>
+                                    <div className="agent-message-text">
+                                        <ReactMarkdown components={{ a: renderMarkdownLink }}>
+                                            {formatContentWithItemLinks(msg.content)}
+                                        </ReactMarkdown>
+                                    </div>
 
                                     {/* Inline Executed Actions */}
                                     {actions.length > 0 && (
@@ -499,6 +631,11 @@ export const AgentChatWorkspace: React.FC<AgentChatWorkspaceProps> = ({
                                                             <div className="agent-trade-info-details">
                                                                 Buy @ <strong style={{ color: '#fbbf24' }}>{rec.buyPrice.toLocaleString()} GP</strong> | Target Sell @ <strong style={{ color: '#34d399' }}>{rec.targetSellPrice.toLocaleString()} GP</strong> | Qty: {rec.quantity.toLocaleString()}
                                                             </div>
+                                                            {rec.rationale && (
+                                                                <div style={{ fontSize: '0.75rem', color: '#a1a1aa', marginTop: '4px' }}>
+                                                                    {rec.rationale}
+                                                                </div>
+                                                            )}
                                                         </div>
                                                         <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                                                             <button
@@ -526,6 +663,51 @@ export const AgentChatWorkspace: React.FC<AgentChatWorkspaceProps> = ({
                                             })}
                                         </div>
                                     )}
+
+                                    {/* Interactive Questions */}
+                                    {questions.length > 0 && (
+                                        <div className="agent-questions-block" style={{ marginTop: '12px', padding: '12px', background: 'rgba(99, 102, 241, 0.12)', border: '1px solid rgba(99, 102, 241, 0.3)', borderRadius: '8px' }}>
+                                            {questions.map((q: any, qIdx: number) => (
+                                                <div key={qIdx} style={{ marginBottom: qIdx < questions.length - 1 ? '12px' : 0 }}>
+                                                    <div style={{ fontWeight: 600, color: '#c7d2fe', fontSize: '0.875rem', marginBottom: '8px' }}>
+                                                        ❓ {q.question}
+                                                    </div>
+                                                    {Array.isArray(q.options) && q.options.length > 0 && (
+                                                        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                                                            {q.options.map((opt: string, optIdx: number) => (
+                                                                <button
+                                                                    key={optIdx}
+                                                                    onClick={() => handleSendPrompt(opt)}
+                                                                    disabled={sending}
+                                                                    className="agent-quick-chip"
+                                                                    style={{ background: '#3730a3', borderColor: '#6366f1', color: '#ffffff', fontWeight: 600 }}
+                                                                >
+                                                                    {opt}
+                                                                </button>
+                                                            ))}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+
+                                    {/* Suggested Follow-up Quick Reply Chips */}
+                                    {followups.length > 0 && (
+                                        <div className="agent-followup-chips" style={{ marginTop: '12px', display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                                            <div style={{ fontSize: '0.75rem', color: '#9ca3af', width: '100%', marginBottom: '2px' }}>Suggested Follow-ups:</div>
+                                            {followups.map((opt: string, optIdx: number) => (
+                                                <button
+                                                    key={optIdx}
+                                                    onClick={() => handleSendPrompt(opt)}
+                                                    disabled={sending}
+                                                    className="agent-quick-chip"
+                                                >
+                                                    💡 {opt}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         );
@@ -550,15 +732,6 @@ export const AgentChatWorkspace: React.FC<AgentChatWorkspaceProps> = ({
 
             {/* Bottom Input Area */}
             <div className="agent-chat-input-area">
-                {messages.length > 0 && (
-                    <div className="agent-chat-quick-chips">
-                        {premadePrompts.map((p, idx) => (
-                            <button key={idx} onClick={() => setPromptText(p.prompt)} className="agent-quick-chip">
-                                {p.title}
-                            </button>
-                        ))}
-                    </div>
-                )}
 
                 <form onSubmit={(e) => { e.preventDefault(); handleSendPrompt(); }} className="agent-chat-form">
                     <textarea

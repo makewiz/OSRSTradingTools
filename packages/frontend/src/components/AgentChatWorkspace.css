@@ -251,6 +251,32 @@
   word-break: break-word;
 }
 
+.osrs-item-link-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  margin: 0 2px;
+  background: rgba(99, 102, 241, 0.2);
+  border: 1px solid rgba(129, 140, 248, 0.4);
+  border-radius: 6px;
+  color: #c7d2fe;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: none;
+  transition: all 0.2s ease;
+  vertical-align: middle;
+}
+
+.osrs-item-link-btn:hover {
+  background: rgba(99, 102, 241, 0.45);
+  border-color: #818cf8;
+  color: #ffffff;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.4);
+}
+
 /* Executed Actions List */
 .agent-actions-executed {
   margin-top: 12px;

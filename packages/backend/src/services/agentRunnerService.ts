@@ -79,8 +79,15 @@ export class AgentRunnerService {
             error_message: null
         });
 
-        // Combined tools available to agent
-        const allTools = [...geminiTools, ...autonomousAgentTools];
+        // Combined tools available to agent (deduplicated by tool name)
+        const toolMap = new Map<string, any>();
+        for (const tool of geminiTools) {
+            toolMap.set(tool.name, tool);
+        }
+        for (const tool of autonomousAgentTools) {
+            toolMap.set(tool.name, tool);
+        }
+        const allTools = Array.from(toolMap.values());
 
         // System Instruction with Agent Persona, Cash Stack, Memory, and Instructions
         const memoryJson = typeof agent.memory === "object" ? JSON.stringify(agent.memory, null, 2) : "{}";
@@ -103,14 +110,16 @@ ${memoryJson}
 
 1. **REAL MARKET ADVISOR MODE** (Default for investment advice, market scans, dip analysis, and portfolio alerts):
    - Use market analysis tools ('search_items', 'get_item_detail', 'get_recipes', 'get_set_arbitrage', 'get_decant_arbitrage', 'get_latest_news', 'get_wiki_summary') to research trade opportunities matching the goal.
-   - Call 'get_user_portfolio' to inspect the user's active holdings.
-   - **Recommendation Formatting**: Present trade recommendations clearly to the user in text. For EACH item recommended, include:
-     - **Item Name** (ID: <itemId>)
-     - **Recommended Buy Price**: <buyPrice> GP
-     - **Target Sell Price**: <targetSellPrice> GP
-     - **Quantity**: <quantity>
-     - **Net Profit after 2% GE Tax**: <netProfit> GP
-     - **ROI %**: <roi>%
+   - **PORTFOLIO MONITORING & AWARENESS (CRITICAL)**:
+     - ALWAYS call 'get_user_portfolio' at the start of your turn to inspect the user's active holdings, buy prices, and sell targets.
+     - DO NOT continuously suggest buying items that the user ALREADY has in their portfolio unless specifically asked to accumulate more.
+     - Actively monitor the user's open portfolio items against live prices. If an owned item's price spikes, reaches its target sell price, or hits a stop loss, immediately recommend selling or taking profits!
+     - When the user adds or removes items from their portfolio, acknowledge the change, update your strategy memory ('update_agent_memory'), and adapt your trade recommendations accordingly.
+   - **Recommendation Formatting**: ALWAYS call the 'suggest_trade_actions' tool with structured trade item details (itemId, itemName, buyPrice, targetSellPrice, quantity, rationale) whenever recommending specific OSRS items to buy, sell, or flip. Also present trade recommendations clearly to the user in text.
+   - **Interactive Follow-up & Questions**:
+     - Call 'suggest_followup_options' to provide clickable next-step prompt chips for the user.
+     - Call 'ask_user_question' to ask the user clarifying questions with interactive selectable option buttons (e.g. asking for risk tolerance, cash stack budget, preferred item categories, or hold durations).
+   - **Item Link Formatting**: Whenever mentioning specific OSRS items in your response text, format them as markdown links e.g. \[Abyssal whip\](/item/4151) using the item's ID so the user can click directly to its item page.
    - **DO NOT automatically call 'add_to_portfolio' or user watch tools ('add_watch')** unless the user explicitly requested it in their prompt. Ask the user for confirmation and let them use the interactive UI buttons ("Add to Portfolio", "Set Watch Alert") or confirm in chat.
    - You may call 'set_price_trigger' ONLY if you need silent automated check-ins/wakeups for your own agent monitoring loop.
    - **DO NOT call Trading Game tools ('game_place_offer', 'game_cancel_offer') when in Real Market Advisor mode**, unless the user explicitly asks you to play the Trading Game!
@@ -123,12 +132,20 @@ ${memoryJson}
 **GE Price Definitions & Calculations:**
 - **buyPrice (Instant Buy Price / High Price)**: The price at which buyers instantly buy items on GE. When flipping, set your **SELL offer** at or near this higher price.
 - **sellPrice (Instant Sell Price / Low Price)**: The price at which sellers instantly sell items on GE. When flipping, set your **BUY offer** at or near this lower price.
-- **GE Tax (2%)**: 2% tax applied when selling items on GE (tax = calculateTax(buyPrice, item.name), capped at 5M GP).
+- **GE Tax (2%)**: 2% tax applied when selling items on GE (tax = calculateTax(buyPrice, item.name), capped at 5M GP, exempt under 50 GP).
 - **Net Profit**: (buyPrice - tax) - sellPrice (Revenue from selling at Instant Buy Price minus purchase cost at Instant Sell Price).
 - **ROI %**: (Net Profit / sellPrice) * 100 (Return on investment percentage based on purchase cost = Instant Sell Price sellPrice).
 
+**Golden Rules from Merchanting Guide:**
+1. Always account for 2% GE tax (capped at 5M GP, exempt under 50 GP).
+2. Never advise investing 100% of cash stack into a single low-volume item.
+3. Beware of price bubbles (items hitting historical highs with no game update).
+4. Avoid dead items with negligible daily trading volume.
+5. Patience is key—don't panic sell too quickly.
+
 **Common Execution Instructions:**
 - Always calculate net profits AFTER 2% GE tax.
+- Use 'ask_user_question' whenever you want to offer selectable options or ask clarifying questions to the user.
 - Call 'schedule_next_run' to specify when to automatically re-evaluate (e.g. 15, 30, 60 minutes).
 - Summarize your findings clearly and concisely in natural language.
 `;
@@ -280,10 +297,32 @@ ${memoryJson}
                 }
             }
 
+            const tradeSuggestions: any[] = [];
+            const followupOptions: string[] = [];
+            const questions: any[] = [];
+
+            for (const act of contextState.actionsTaken) {
+                if (act.action === "suggest_trade_actions" && Array.isArray(act.suggestions)) {
+                    tradeSuggestions.push(...act.suggestions);
+                } else if (act.action === "suggest_followup_options" && Array.isArray(act.options)) {
+                    followupOptions.push(...act.options);
+                } else if (act.action === "ask_user_question" && act.question) {
+                    questions.push({
+                        question: act.question,
+                        options: act.options || [],
+                        allowCustomInput: act.allowCustomInput,
+                        multiSelect: act.multiSelect
+                    });
+                }
+            }
+
             // Save agent response into message history
             await addAgentMessage(agentId, "agent", finalSummary, {
                 triggerReason,
-                actionsTaken: contextState.actionsTaken
+                actionsTaken: contextState.actionsTaken,
+                tradeSuggestions,
+                followupOptions,
+                questions
             });
 
             // Update Agent State after successful run

@@ -63,9 +63,20 @@ export interface NotificationSetting {
   discord_id: string;
   item_id: number;
   day_change_threshold: number | null;
+  one_hour_change_threshold: number | null;
+  target_price_above: number | null;
+  target_price_below: number | null;
+  is_1h_triggered: boolean | number;
+  is_24h_triggered: boolean | number;
+  is_above_triggered: boolean | number;
+  is_below_triggered: boolean | number;
   enabled: boolean;
   created_at: number;
   last_notified_at: number | null;
+  last_notified_1h_at: number | null;
+  last_notified_above_at: number | null;
+  last_notified_below_at: number | null;
+  cooldown_seconds: number | null;
 }
 
 export interface SystemSetting {
@@ -196,12 +207,20 @@ export async function initializeDatabase(): Promise<void> {
       ON notification_settings(item_id)
     `);
 
-    // Migration: Add 1h change columns if not exist
+    // Migration: Add 1h change, price target & trigger state columns if not exist
     await client.query(`
       ALTER TABLE notification_settings 
       ADD COLUMN IF NOT EXISTS one_hour_change_threshold REAL,
       ADD COLUMN IF NOT EXISTS last_notified_1h_at BIGINT,
-      ADD COLUMN IF NOT EXISTS cooldown_seconds INTEGER DEFAULT 3600
+      ADD COLUMN IF NOT EXISTS cooldown_seconds INTEGER DEFAULT 3600,
+      ADD COLUMN IF NOT EXISTS target_price_above BIGINT,
+      ADD COLUMN IF NOT EXISTS target_price_below BIGINT,
+      ADD COLUMN IF NOT EXISTS is_1h_triggered INTEGER DEFAULT 0,
+      ADD COLUMN IF NOT EXISTS is_24h_triggered INTEGER DEFAULT 0,
+      ADD COLUMN IF NOT EXISTS is_above_triggered INTEGER DEFAULT 0,
+      ADD COLUMN IF NOT EXISTS is_below_triggered INTEGER DEFAULT 0,
+      ADD COLUMN IF NOT EXISTS last_notified_above_at BIGINT,
+      ADD COLUMN IF NOT EXISTS last_notified_below_at BIGINT
     `);
 
     // --- NEW HISTORY TABLES (PARTITIONED) ---
@@ -962,41 +981,47 @@ export async function updateDiscordSettings(discordId: string, enabled: boolean)
 export async function addBackendWatch(
   discordId: string,
   itemId: number,
-  threshold: number,
-  period: '24h' | '1h' = '1h',
+  threshold?: number | null,
+  period: '24h' | '1h' | 'none' = '1h',
   cooldownSeconds: number = 3600,
-  enabled: boolean = true
+  enabled: boolean = true,
+  targetPriceAbove?: number | null,
+  targetPriceBelow?: number | null,
+  oneHourChangeThreshold?: number | null,
+  dayChangeThreshold?: number | null
 ): Promise<void> {
-  const is24h = period === '24h';
+  let final1h: number | null = oneHourChangeThreshold !== undefined ? oneHourChangeThreshold : null;
+  let final24h: number | null = dayChangeThreshold !== undefined ? dayChangeThreshold : null;
 
-  // We need to handle the upsert carefully to preserve other fields if they exist,
-  // or we can just set them. 
-  // If user sets 24h watch, we update day_change_threshold.
-  // We also update cooldown_seconds (global for the item watch).
+  if (threshold !== undefined && threshold !== null) {
+    if (period === '1h' && oneHourChangeThreshold === undefined) final1h = threshold;
+    if (period === '24h' && dayChangeThreshold === undefined) final24h = threshold;
+  }
 
+  const finalAbove = targetPriceAbove !== undefined ? targetPriceAbove : null;
+  const finalBelow = targetPriceBelow !== undefined ? targetPriceBelow : null;
   const enabledVal = enabled ? 1 : 0;
 
-  if (is24h) {
-    const query = `
-        INSERT INTO notification_settings (discord_id, item_id, day_change_threshold, cooldown_seconds, enabled)
-        VALUES ($1, $2, $3, $4, $5)
-        ON CONFLICT(discord_id, item_id) DO UPDATE SET
-          day_change_threshold = EXCLUDED.day_change_threshold,
-          cooldown_seconds = EXCLUDED.cooldown_seconds,
-          enabled = EXCLUDED.enabled
-      `;
-    await pool.query(query, [discordId, itemId, threshold, cooldownSeconds, enabledVal]);
-  } else {
-    const query = `
-        INSERT INTO notification_settings (discord_id, item_id, one_hour_change_threshold, cooldown_seconds, enabled)
-        VALUES ($1, $2, $3, $4, $5)
-        ON CONFLICT(discord_id, item_id) DO UPDATE SET
-          one_hour_change_threshold = EXCLUDED.one_hour_change_threshold,
-          cooldown_seconds = EXCLUDED.cooldown_seconds,
-          enabled = EXCLUDED.enabled
-      `;
-    await pool.query(query, [discordId, itemId, threshold, cooldownSeconds, enabledVal]);
-  }
+  const query = `
+    INSERT INTO notification_settings (
+      discord_id, item_id, day_change_threshold, one_hour_change_threshold,
+      target_price_above, target_price_below, cooldown_seconds, enabled,
+      is_1h_triggered, is_24h_triggered, is_above_triggered, is_below_triggered
+    )
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 0, 0, 0, 0)
+    ON CONFLICT(discord_id, item_id) DO UPDATE SET
+      day_change_threshold = EXCLUDED.day_change_threshold,
+      one_hour_change_threshold = EXCLUDED.one_hour_change_threshold,
+      target_price_above = EXCLUDED.target_price_above,
+      target_price_below = EXCLUDED.target_price_below,
+      cooldown_seconds = EXCLUDED.cooldown_seconds,
+      enabled = EXCLUDED.enabled,
+      is_1h_triggered = 0,
+      is_24h_triggered = 0,
+      is_above_triggered = 0,
+      is_below_triggered = 0
+  `;
+  await pool.query(query, [discordId, itemId, final24h, final1h, finalAbove, finalBelow, cooldownSeconds, enabledVal]);
 }
 
 // Remove Watch

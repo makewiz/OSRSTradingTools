@@ -28,18 +28,34 @@ const client = new Client({
 const commands = [
   new SlashCommandBuilder()
     .setName("watch")
-    .setDescription("Watch an item for price changes")
+    .setDescription("Watch an item for price targets or percentage changes")
     .addIntegerOption(option =>
       option.setName("item_id")
         .setDescription("The OSRS Item ID")
         .setRequired(true))
     .addNumberOption(option =>
+      option.setName("target_above")
+        .setDescription("Target high price in GP (alert when price >= target)")
+        .setRequired(false))
+    .addNumberOption(option =>
+      option.setName("target_below")
+        .setDescription("Target low price in GP (alert when price <= target)")
+        .setRequired(false))
+    .addNumberOption(option =>
+      option.setName("threshold_1h")
+        .setDescription("1-hour change percentage threshold (e.g. 5 for 5%)")
+        .setRequired(false))
+    .addNumberOption(option =>
+      option.setName("threshold_24h")
+        .setDescription("24-hour change percentage threshold (e.g. 5 for 5%)")
+        .setRequired(false))
+    .addNumberOption(option =>
       option.setName("threshold")
-        .setDescription("Day change percentage threshold (e.g. 5 for 5%)")
+        .setDescription("Default percentage threshold (legacy option)")
         .setRequired(false))
     .addStringOption(option =>
       option.setName("period")
-        .setDescription("Time period to watch (1h or 24h)")
+        .setDescription("Time period window for legacy threshold (1h or 24h)")
         .setRequired(false)
         .addChoices(
           { name: '1 Hour', value: '1h' },
@@ -120,12 +136,34 @@ client.on("interactionCreate", async (interaction) => {
   try {
     if (commandName === "watch") {
       const itemId = interaction.options.getInteger("item_id", true);
-      const threshold = interaction.options.getNumber("threshold") ?? 5.0;
-      const period = (interaction.options.getString("period") as '1h' | '24h') ?? '1h';
+      const targetAbove = interaction.options.getNumber("target_above");
+      const targetBelow = interaction.options.getNumber("target_below");
+      const threshold1h = interaction.options.getNumber("threshold_1h");
+      const threshold24h = interaction.options.getNumber("threshold_24h");
+      const legacyThreshold = interaction.options.getNumber("threshold");
+      const legacyPeriod = (interaction.options.getString("period") as '1h' | '24h') ?? '1h';
 
-      // NOTE: Using current threshold without name check.
-      await addWatch(discordId, itemId, threshold, period);
-      await interaction.reply({ content: `✅ Watching item ${itemId} with threshold ${threshold}% (${period} change)`, ephemeral: true });
+      await addWatch(
+        discordId,
+        itemId,
+        legacyThreshold,
+        legacyPeriod,
+        3600,
+        targetAbove,
+        targetBelow,
+        threshold1h,
+        threshold24h
+      );
+
+      const rules: string[] = [];
+      if (threshold1h) rules.push(`1H: ${threshold1h}%`);
+      if (threshold24h) rules.push(`24H: ${threshold24h}%`);
+      if (targetAbove) rules.push(`Above ≥ ${targetAbove.toLocaleString()} gp`);
+      if (targetBelow) rules.push(`Below ≤ ${targetBelow.toLocaleString()} gp`);
+      if (rules.length === 0 && legacyThreshold) rules.push(`${legacyPeriod.toUpperCase()}: ${legacyThreshold}%`);
+      if (rules.length === 0) rules.push("1H: 5%");
+
+      await interaction.reply({ content: `✅ Watching item ${itemId} (${rules.join(", ")})`, ephemeral: true });
 
     } else if (commandName === "unwatch") {
       const itemId = interaction.options.getInteger("item_id", true);
@@ -137,8 +175,15 @@ client.on("interactionCreate", async (interaction) => {
       if (watches.length === 0) {
         await interaction.reply({ content: "You have no active watches.", ephemeral: true });
       } else {
-        const list = watches.map(w => `- Item ${w.item_id} (Threshold: ${w.day_change_threshold}%)`).join("\n");
-        await interaction.reply({ content: `👀 **Your Watches**:\n${list}`, ephemeral: true });
+        const list = watches.map(w => {
+          const rules: string[] = [];
+          if (w.one_hour_change_threshold) rules.push(`1H: ${w.one_hour_change_threshold}%${w.is_1h_triggered ? ' (ACTIVE ⚡)' : ''}`);
+          if (w.day_change_threshold) rules.push(`24H: ${w.day_change_threshold}%${w.is_24h_triggered ? ' (ACTIVE ⚡)' : ''}`);
+          if (w.target_price_above) rules.push(`Above ≥ ${w.target_price_above.toLocaleString()} gp${w.is_above_triggered ? ' (ACTIVE ⚡)' : ''}`);
+          if (w.target_price_below) rules.push(`Below ≤ ${w.target_price_below.toLocaleString()} gp${w.is_below_triggered ? ' (ACTIVE ⚡)' : ''}`);
+          return `- **Item ${w.item_id}**: ${rules.length > 0 ? rules.join(" | ") : "No active limits"}`;
+        }).join("\n");
+        await interaction.reply({ content: `👀 **Your Active Item Watches**:\n${list}`, ephemeral: true });
       }
 
     } else if (commandName === "notifications") {

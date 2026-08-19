@@ -182,7 +182,7 @@ router.post("/settings", async (req, res) => {
  */
 router.post("/watch", async (req, res) => {
     const userId = req.user!.id;
-    const { itemId, threshold } = req.body;
+    const { itemId } = req.body;
 
     if (!itemId || typeof itemId !== "number") {
         return res.status(400).json({ error: "Invalid item ID" });
@@ -194,10 +194,26 @@ router.post("/watch", async (req, res) => {
             return res.status(404).json({ error: "No Discord account linked" });
         }
 
-        const period = req.body.period || '1h'; // Default to 1h
+        const period = req.body.period || '1h';
         const cooldown = req.body.cooldown || 3600;
+        const threshold = req.body.threshold !== undefined ? req.body.threshold : null;
+        const targetPriceAbove = req.body.targetPriceAbove ?? req.body.target_price_above ?? null;
+        const targetPriceBelow = req.body.targetPriceBelow ?? req.body.target_price_below ?? null;
+        const oneHourChangeThreshold = req.body.oneHourChangeThreshold ?? req.body.one_hour_change_threshold ?? (period === '1h' ? threshold : null);
+        const dayChangeThreshold = req.body.dayChangeThreshold ?? req.body.day_change_threshold ?? (period === '24h' ? threshold : null);
 
-        await addBackendWatch(discordUser.discord_id, itemId, threshold || 5.0, period, cooldown);
+        await addBackendWatch(
+            discordUser.discord_id,
+            itemId,
+            threshold,
+            period,
+            cooldown,
+            true,
+            targetPriceAbove,
+            targetPriceBelow,
+            oneHourChangeThreshold,
+            dayChangeThreshold
+        );
         res.status(201).json({ success: true, itemId });
     } catch (err) {
         // eslint-disable-next-line no-console
@@ -207,19 +223,15 @@ router.post("/watch", async (req, res) => {
 });
 
 /**
- * Update Watch Threshold
+ * Update Watch Threshold / Target Prices
  * PUT /api/discord/watch/:itemId
  */
 router.put("/watch/:itemId", async (req, res) => {
     const userId = req.user!.id;
     const itemId = parseInt(req.params.itemId, 10);
-    const { threshold } = req.body;
 
     if (isNaN(itemId)) {
         return res.status(400).json({ error: "Invalid item ID" });
-    }
-    if (typeof threshold !== "number") {
-        return res.status(400).json({ error: "Invalid threshold" });
     }
 
     try {
@@ -231,9 +243,25 @@ router.put("/watch/:itemId", async (req, res) => {
         const period = req.body.period || '1h';
         const cooldown = req.body.cooldown || 3600;
         const enabled = req.body.enabled !== undefined ? req.body.enabled : true;
+        const threshold = req.body.threshold !== undefined ? req.body.threshold : null;
+        const targetPriceAbove = req.body.targetPriceAbove ?? req.body.target_price_above ?? null;
+        const targetPriceBelow = req.body.targetPriceBelow ?? req.body.target_price_below ?? null;
+        const oneHourChangeThreshold = req.body.oneHourChangeThreshold ?? req.body.one_hour_change_threshold ?? (period === '1h' ? threshold : null);
+        const dayChangeThreshold = req.body.dayChangeThreshold ?? req.body.day_change_threshold ?? (period === '24h' ? threshold : null);
 
-        await addBackendWatch(discordUser.discord_id, itemId, threshold, period, cooldown, enabled);
-        res.json({ success: true, itemId, threshold, period, cooldown, enabled });
+        await addBackendWatch(
+            discordUser.discord_id,
+            itemId,
+            threshold,
+            period,
+            cooldown,
+            enabled,
+            targetPriceAbove,
+            targetPriceBelow,
+            oneHourChangeThreshold,
+            dayChangeThreshold
+        );
+        res.json({ success: true, itemId, period, cooldown, enabled });
     } catch (err) {
         // eslint-disable-next-line no-console
         logger.error("Failed to update watch:", err);

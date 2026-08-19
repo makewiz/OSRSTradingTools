@@ -1,6 +1,6 @@
 import cron from "node-cron";
 import { Client, EmbedBuilder, TextChannel, NewsChannel } from "discord.js";
-import { getAllActiveWatches, updateLastNotified, getSystemSetting, getAllActiveAdvancedWatches, getAdvancedWatchHistory, updateAdvancedWatchHistory, getUnprocessedAgentDiscordNotifications, markAgentDiscordNotificationsProcessed } from "./database";
+import { getAllActiveWatches, updateLastNotified, updateWatchState, getSystemSetting, getAllActiveAdvancedWatches, getAdvancedWatchHistory, updateAdvancedWatchHistory, getUnprocessedAgentDiscordNotifications, markAgentDiscordNotificationsProcessed } from "./database";
 import { logger } from "@osrstradingtools/shared";
 
 const COOLDOWN_1H_SECONDS = 60 * 60; // 1 hour cooldown for 1h change
@@ -179,47 +179,89 @@ async function checkNotifications(client: Client) {
         // Determine cooldown
         const cooldown = watch.cooldown_seconds || COOLDOWN_1H_SECONDS;
 
-        // Check 1h Change
+        // 1. Check 1h Change (Stateful)
         if (watch.one_hour_change_threshold !== null && watch.one_hour_change_threshold !== undefined) {
-            const canNotify1h = !watch.last_notified_1h_at || (now - watch.last_notified_1h_at) >= cooldown;
-            if (canNotify1h) {
-                const hourChange = item.oneHourChange;
-                if (hourChange !== null && Math.abs(hourChange) >= watch.one_hour_change_threshold) {
-                    const direction = hourChange > 0 ? "📈 UP" : "📉 DOWN";
-                    const link = `${frontendUrl}/item/${item.id}`;
-                    const msg = `**${item.name}** (1H): ${direction} ${hourChange.toFixed(2)}% (Buy: ${item.buyPrice}, Sell: ${item.sellPrice})\n[View Item](${link})`;
+            const hourChange = item.oneHourChange;
+            if (hourChange !== null && hourChange !== undefined) {
+                const isExceeded = Math.abs(hourChange) >= watch.one_hour_change_threshold;
+                if (isExceeded) {
+                    const canNotify1h = !watch.last_notified_1h_at || (now - watch.last_notified_1h_at) >= cooldown;
+                    if (!watch.is_1h_triggered && canNotify1h) {
+                        const direction = hourChange > 0 ? "📈 UP" : "📉 DOWN";
+                        const link = `${frontendUrl}/item/${item.id}`;
+                        const msg = `**${item.name}** (1H Change): ${direction} ${hourChange.toFixed(2)}% (Buy: ${item.buyPrice?.toLocaleString() ?? 'N/A'}, Sell: ${item.sellPrice?.toLocaleString() ?? 'N/A'})\n[View Item](${link})`;
 
-                    await updateLastNotified(watch.id, '1h');
-                    addToBatch(watch.discord_id, "🚨 **OSRS Price Alerts**", [msg]);
+                        await updateWatchState(watch.id, '1h', true);
+                        addToBatch(watch.discord_id, "🚨 **OSRS Price Alerts**", [msg]);
+                    }
+                } else if (watch.is_1h_triggered) {
+                    // Reset active state when price change falls below threshold
+                    await updateWatchState(watch.id, '1h', false);
                 }
             }
         }
 
-        // Check 24h Change
-        // For 24h change, we typically want 24h cooldown, but if user set a custom cooldown, 
-        // we might want to respect it? 
-        // Logic: if user sets custom cooldown, it applies to the watch rule they edited.
-        // Currently DB has single cooldown_seconds column.
-        // If they edit 1h watch, it sets cooldown_seconds.
-        // If they edit 24h watch, it sets cooldown_seconds.
-        // It's shared. So we use it for both.
-
+        // 2. Check 24h Change (Stateful)
         const cooldown24h = watch.cooldown_seconds || COOLDOWN_24H_SECONDS;
-
         if (watch.day_change_threshold !== null && watch.day_change_threshold !== undefined) {
-            const canNotify24h = !watch.last_notified_at || (now - watch.last_notified_at) >= cooldown24h;
-            if (canNotify24h) {
-                const dayChange = item.dayChange;
-                // Legacy fallback to 5.0
-                const threshold = watch.day_change_threshold;
+            const dayChange = item.dayChange;
+            if (dayChange !== null && dayChange !== undefined) {
+                const isExceeded = Math.abs(dayChange) >= watch.day_change_threshold;
+                if (isExceeded) {
+                    const canNotify24h = !watch.last_notified_at || (now - watch.last_notified_at) >= cooldown24h;
+                    if (!watch.is_24h_triggered && canNotify24h) {
+                        const direction = dayChange > 0 ? "📈 UP" : "📉 DOWN";
+                        const link = `${frontendUrl}/item/${item.id}`;
+                        const msg = `**${item.name}** (24H Change): ${direction} ${dayChange.toFixed(2)}% (Buy: ${item.buyPrice?.toLocaleString() ?? 'N/A'}, Sell: ${item.sellPrice?.toLocaleString() ?? 'N/A'})\n[View Item](${link})`;
 
-                if (dayChange !== null && Math.abs(dayChange) >= threshold) {
-                    const direction = dayChange > 0 ? "📈 UP" : "📉 DOWN";
-                    const link = `${frontendUrl}/item/${item.id}`;
-                    const msg = `**${item.name}** (24H): ${direction} ${dayChange.toFixed(2)}% (Buy: ${item.buyPrice}, Sell: ${item.sellPrice})\n[View Item](${link})`;
+                        await updateWatchState(watch.id, '24h', true);
+                        addToBatch(watch.discord_id, "🚨 **OSRS Price Alerts**", [msg]);
+                    }
+                } else if (watch.is_24h_triggered) {
+                    // Reset active state when price change falls below threshold
+                    await updateWatchState(watch.id, '24h', false);
+                }
+            }
+        }
 
-                    await updateLastNotified(watch.id, '24h');
-                    addToBatch(watch.discord_id, "🚨 **OSRS Price Alerts**", [msg]);
+        // 3. Check Target Price Above (Stateful)
+        if (watch.target_price_above !== null && watch.target_price_above !== undefined) {
+            const currentPrice = item.buyPrice ?? item.sellPrice;
+            if (currentPrice !== null && currentPrice !== undefined) {
+                const isExceeded = currentPrice >= watch.target_price_above;
+                if (isExceeded) {
+                    const canNotifyAbove = !watch.last_notified_above_at || (now - watch.last_notified_above_at) >= cooldown;
+                    if (!watch.is_above_triggered && canNotifyAbove) {
+                        const link = `${frontendUrl}/item/${item.id}`;
+                        const msg = `**${item.name}** crossed **ABOVE** target price: ${currentPrice.toLocaleString()} gp (Target: ≥ ${watch.target_price_above.toLocaleString()} gp)\n[View Item](${link})`;
+
+                        await updateWatchState(watch.id, 'above', true);
+                        addToBatch(watch.discord_id, "🚨 **OSRS Price Alerts**", [msg]);
+                    }
+                } else if (watch.is_above_triggered) {
+                    // Reset state when price falls back under target price
+                    await updateWatchState(watch.id, 'above', false);
+                }
+            }
+        }
+
+        // 4. Check Target Price Below (Stateful)
+        if (watch.target_price_below !== null && watch.target_price_below !== undefined) {
+            const currentPrice = item.sellPrice ?? item.buyPrice;
+            if (currentPrice !== null && currentPrice !== undefined) {
+                const isExceeded = currentPrice <= watch.target_price_below;
+                if (isExceeded) {
+                    const canNotifyBelow = !watch.last_notified_below_at || (now - watch.last_notified_below_at) >= cooldown;
+                    if (!watch.is_below_triggered && canNotifyBelow) {
+                        const link = `${frontendUrl}/item/${item.id}`;
+                        const msg = `**${item.name}** dropped **BELOW** target price: ${currentPrice.toLocaleString()} gp (Target: ≤ ${watch.target_price_below.toLocaleString()} gp)\n[View Item](${link})`;
+
+                        await updateWatchState(watch.id, 'below', true);
+                        addToBatch(watch.discord_id, "🚨 **OSRS Price Alerts**", [msg]);
+                    }
+                } else if (watch.is_below_triggered) {
+                    // Reset state when price rises back above target price
+                    await updateWatchState(watch.id, 'below', false);
                 }
             }
         }

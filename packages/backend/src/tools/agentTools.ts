@@ -194,6 +194,65 @@ export const autonomousAgentTools = [
                 type: { type: "STRING", description: "Leaderboard timeframe: 'current', 'last_month', or 'all_time'." }
             }
         }
+    },
+    {
+        name: "suggest_trade_actions",
+        description: "Provide structured trade recommendations and actionable buy/sell signals to the user. Call this tool whenever recommending specific OSRS items to buy, sell, or flip.",
+        parameters: {
+            type: "OBJECT",
+            properties: {
+                suggestions: {
+                    type: "ARRAY",
+                    description: "List of recommended trade actions.",
+                    items: {
+                        type: "OBJECT",
+                        properties: {
+                            itemId: { type: "NUMBER", description: "Numeric OSRS item ID." },
+                            itemName: { type: "STRING", description: "Name of the item." },
+                            buyPrice: { type: "NUMBER", description: "Recommended buy price (Instant Sell / Low price) in GP." },
+                            targetSellPrice: { type: "NUMBER", description: "Target sell price (Instant Buy / High price) in GP." },
+                            quantity: { type: "NUMBER", description: "Recommended quantity to buy/sell." },
+                            rationale: { type: "STRING", description: "Brief rationale or trade logic." }
+                        },
+                        required: ["itemName", "buyPrice", "targetSellPrice", "quantity"]
+                    }
+                }
+            },
+            required: ["suggestions"]
+        }
+    },
+    {
+        name: "suggest_followup_options",
+        description: "Provide a list of suggested quick-reply prompt options or next steps for the user to click in chat (e.g. 'Show recipes for Herblore', 'Set watch alert for Armadyl Godsword').",
+        parameters: {
+            type: "OBJECT",
+            properties: {
+                options: {
+                    type: "ARRAY",
+                    description: "List of clickable follow-up option prompts for the user.",
+                    items: { type: "STRING" }
+                }
+            },
+            required: ["options"]
+        }
+    },
+    {
+        name: "ask_user_question",
+        description: "Ask the user a structured question with interactive choice options or for clarifying input (e.g. risk level, target ROI, specific skill). The user can click an option button to reply.",
+        parameters: {
+            type: "OBJECT",
+            properties: {
+                question: { type: "STRING", description: "The question text to display to the user." },
+                options: {
+                    type: "ARRAY",
+                    description: "Selectable answer option buttons for the user to click.",
+                    items: { type: "STRING" }
+                },
+                allowCustomInput: { type: "BOOLEAN", description: "Whether the user can also type a custom answer (default true)." },
+                multiSelect: { type: "BOOLEAN", description: "Whether the user can select multiple options (default false)." }
+            },
+            required: ["question"]
+        }
     }
 ];
 
@@ -490,6 +549,51 @@ export async function executeAgentTool(
             } catch (err: any) {
                 return { success: false, error: err.message || "Failed to fetch leaderboard." };
             }
+        }
+
+        case "suggest_trade_actions": {
+            const rawList = Array.isArray(args.suggestions) ? args.suggestions : [];
+            const resolvedList = [];
+            const items = await getLatestItems();
+            for (const item of rawList) {
+                let itemId = item.itemId;
+                let itemName = item.itemName;
+                if (!itemId && itemName) {
+                    const found = items.find((i: CombinedItem) => i.name.toLowerCase().includes(itemName.toLowerCase()));
+                    if (found) {
+                        itemId = found.id;
+                        itemName = found.name;
+                    }
+                }
+                resolvedList.push({
+                    itemId: itemId || 0,
+                    itemName: itemName || "Unknown Item",
+                    buyPrice: typeof item.buyPrice === "number" ? item.buyPrice : 0,
+                    targetSellPrice: typeof item.targetSellPrice === "number" ? item.targetSellPrice : 0,
+                    quantity: typeof item.quantity === "number" ? item.quantity : 1,
+                    rationale: item.rationale || ""
+                });
+            }
+            contextState.actionsTaken.push({ action: "suggest_trade_actions", suggestions: resolvedList });
+            return { success: true, suggestions: resolvedList, message: `Registered ${resolvedList.length} trade recommendations.` };
+        }
+
+        case "suggest_followup_options": {
+            const options = Array.isArray(args.options) ? args.options.map((o: any) => String(o)) : [];
+            contextState.actionsTaken.push({ action: "suggest_followup_options", options });
+            return { success: true, options, message: `Registered ${options.length} follow-up options.` };
+        }
+
+        case "ask_user_question": {
+            const options = Array.isArray(args.options) ? args.options.map((o: any) => String(o)) : [];
+            const qObj = {
+                question: args.question || "",
+                options,
+                allowCustomInput: args.allowCustomInput !== false,
+                multiSelect: args.multiSelect === true
+            };
+            contextState.actionsTaken.push({ action: "ask_user_question", ...qObj });
+            return { success: true, ...qObj, message: `Asked user question: "${args.question}"` };
         }
 
         default:

@@ -13,11 +13,19 @@ interface Watch {
     itemName?: string;
     day_change_threshold: number | null;
     one_hour_change_threshold: number | null;
+    target_price_above: number | null;
+    target_price_below: number | null;
+    is_1h_triggered?: boolean | number | null;
+    is_24h_triggered?: boolean | number | null;
+    is_above_triggered?: boolean | number | null;
+    is_below_triggered?: boolean | number | null;
     cooldown_seconds: number | null;
     enabled: boolean;
     created_at: number;
     last_notified_at: number | null;
     last_notified_1h_at: number | null;
+    last_notified_above_at?: number | null;
+    last_notified_below_at?: number | null;
 }
 
 interface AdvancedWatch {
@@ -58,8 +66,10 @@ export const Watches: React.FC = () => {
 
     // Edit state for Simple Watches
     const [editingWatchId, setEditingWatchId] = useState<number | null>(null);
-    const [editThreshold, setEditThreshold] = useState<string>("");
-    const [editPeriod, setEditPeriod] = useState<'1h' | '24h'>('1h');
+    const [edit1hThreshold, setEdit1hThreshold] = useState<string>("");
+    const [edit24hThreshold, setEdit24hThreshold] = useState<string>("");
+    const [editTargetAbove, setEditTargetAbove] = useState<string>("");
+    const [editTargetBelow, setEditTargetBelow] = useState<string>("");
     const [editCooldown, setEditCooldown] = useState<string>("");
 
     // Create/Edit State for Advanced Watches
@@ -130,23 +140,21 @@ export const Watches: React.FC = () => {
 
     const startEditing = (watch: Watch) => {
         setEditingWatchId(watch.item_id);
-        if (watch.one_hour_change_threshold !== null) {
-            setEditPeriod('1h');
-            setEditThreshold(watch.one_hour_change_threshold.toString());
-        } else {
-            setEditPeriod('24h');
-            setEditThreshold(watch.day_change_threshold?.toString() || "");
-        }
-        // Convert seconds (DB) to minutes (Display)
+        setEdit1hThreshold(watch.one_hour_change_threshold !== null && watch.one_hour_change_threshold !== undefined ? watch.one_hour_change_threshold.toString() : "");
+        setEdit24hThreshold(watch.day_change_threshold !== null && watch.day_change_threshold !== undefined ? watch.day_change_threshold.toString() : "");
+        setEditTargetAbove(watch.target_price_above !== null && watch.target_price_above !== undefined ? watch.target_price_above.toString() : "");
+        setEditTargetBelow(watch.target_price_below !== null && watch.target_price_below !== undefined ? watch.target_price_below.toString() : "");
         const mins = Math.floor((watch.cooldown_seconds || 3600) / 60);
         setEditCooldown(mins.toString());
     };
 
     const saveEdit = async (itemId: number) => {
-        const threshold = parseFloat(editThreshold);
+        const threshold1h = edit1hThreshold.trim() !== "" ? parseFloat(edit1hThreshold) : null;
+        const threshold24h = edit24hThreshold.trim() !== "" ? parseFloat(edit24hThreshold) : null;
+        const targetAbove = editTargetAbove.trim() !== "" ? parseInt(editTargetAbove, 10) : null;
+        const targetBelow = editTargetBelow.trim() !== "" ? parseInt(editTargetBelow, 10) : null;
         const cooldownMins = parseInt(editCooldown, 10);
 
-        if (isNaN(threshold) || threshold < 0) return alert("Invalid threshold");
         if (isNaN(cooldownMins) || cooldownMins < 0) return alert("Invalid cooldown");
 
         const cooldownSeconds = cooldownMins * 60;
@@ -157,8 +165,14 @@ export const Watches: React.FC = () => {
                     return {
                         ...w,
                         cooldown_seconds: cooldownSeconds,
-                        one_hour_change_threshold: editPeriod === '1h' ? threshold : null,
-                        day_change_threshold: editPeriod === '24h' ? threshold : null
+                        one_hour_change_threshold: threshold1h,
+                        day_change_threshold: threshold24h,
+                        target_price_above: targetAbove,
+                        target_price_below: targetBelow,
+                        is_1h_triggered: false,
+                        is_24h_triggered: false,
+                        is_above_triggered: false,
+                        is_below_triggered: false
                     };
                 }
                 return w;
@@ -168,7 +182,13 @@ export const Watches: React.FC = () => {
             await fetchWithAuth(`${API_BASE_URL}/api/discord/watch/${itemId}`, {
                 method: "PUT",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ threshold, period: editPeriod, cooldown: cooldownSeconds })
+                body: JSON.stringify({
+                    oneHourChangeThreshold: threshold1h,
+                    dayChangeThreshold: threshold24h,
+                    targetPriceAbove: targetAbove,
+                    targetPriceBelow: targetBelow,
+                    cooldown: cooldownSeconds
+                })
             });
         } catch (err) {
             setError("Failed to update watch");
@@ -182,15 +202,14 @@ export const Watches: React.FC = () => {
         setWatches(prev => prev.map(w => w.item_id === watch.item_id ? { ...w, enabled: newEnabled } : w));
 
         try {
-            const activeThreshold = watch.one_hour_change_threshold !== null ? watch.one_hour_change_threshold : watch.day_change_threshold;
-            const period = watch.one_hour_change_threshold !== null ? '1h' : '24h';
-
             const res = await fetchWithAuth(`${API_BASE_URL}/api/discord/watch/${watch.item_id}`, {
                 method: "PUT",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
-                    threshold: activeThreshold,
-                    period,
+                    oneHourChangeThreshold: watch.one_hour_change_threshold,
+                    dayChangeThreshold: watch.day_change_threshold,
+                    targetPriceAbove: watch.target_price_above,
+                    targetPriceBelow: watch.target_price_below,
                     cooldown: watch.cooldown_seconds,
                     enabled: newEnabled
                 })
@@ -488,8 +507,8 @@ export const Watches: React.FC = () => {
                                         <thead>
                                             <tr>
                                                 <th>Item</th>
-                                                <th>Type</th>
-                                                <th>Threshold</th>
+                                                <th>Alert Triggers & Price Limits</th>
+                                                <th>Active State</th>
                                                 <th>Cooldown (m)</th>
                                                 <th>Status</th>
                                                 <th style={{ textAlign: 'right' }}>Action</th>
@@ -498,8 +517,12 @@ export const Watches: React.FC = () => {
                                         <tbody>
                                             {watches.map(w => {
                                                 const isEditing = editingWatchId === w.item_id;
-                                                const activePeriod = w.one_hour_change_threshold !== null ? '1H' : '24H';
-                                                const activeThreshold = w.one_hour_change_threshold !== null ? w.one_hour_change_threshold : w.day_change_threshold;
+                                                const is1hActive = Boolean(w.is_1h_triggered);
+                                                const is24hActive = Boolean(w.is_24h_triggered);
+                                                const isAboveActive = Boolean(w.is_above_triggered);
+                                                const isBelowActive = Boolean(w.is_below_triggered);
+                                                const hasActiveTrigger = is1hActive || is24hActive || isAboveActive || isBelowActive;
+
                                                 return (
                                                     <tr key={w.id}>
                                                         <td>
@@ -509,20 +532,47 @@ export const Watches: React.FC = () => {
                                                         </td>
                                                         <td>
                                                             {isEditing ? (
-                                                                <select value={editPeriod} onChange={(e) => setEditPeriod(e.target.value as any)} className="dark-input">
-                                                                    <option value="1h">1H Change</option>
-                                                                    <option value="24h">24H Change</option>
-                                                                </select>
-                                                            ) : <span className="tag" style={{ background: activePeriod === '1H' ? '#4caf50' : '#2196f3' }}>{activePeriod} Change</span>}
+                                                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                                                                    <input type="number" placeholder="1H %" value={edit1hThreshold} onChange={e => setEdit1hThreshold(e.target.value)} className="dark-input" style={{ width: '70px' }} step="0.1" title="1-Hour Change % Threshold" />
+                                                                    <input type="number" placeholder="24H %" value={edit24hThreshold} onChange={e => setEdit24hThreshold(e.target.value)} className="dark-input" style={{ width: '70px' }} step="0.1" title="24-Hour Change % Threshold" />
+                                                                    <input type="number" placeholder="Target Above GP" value={editTargetAbove} onChange={e => setEditTargetAbove(e.target.value)} className="dark-input" style={{ width: '110px' }} title="Target High Price (Above GP)" />
+                                                                    <input type="number" placeholder="Target Below GP" value={editTargetBelow} onChange={e => setEditTargetBelow(e.target.value)} className="dark-input" style={{ width: '110px' }} title="Target Low Price (Below GP)" />
+                                                                </div>
+                                                            ) : (
+                                                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                                                                    {w.one_hour_change_threshold !== null && w.one_hour_change_threshold !== undefined && (
+                                                                        <span className="tag" style={{ background: '#4caf50' }}>1H &ge; {w.one_hour_change_threshold}%</span>
+                                                                    )}
+                                                                    {w.day_change_threshold !== null && w.day_change_threshold !== undefined && (
+                                                                        <span className="tag" style={{ background: '#2196f3' }}>24H &ge; {w.day_change_threshold}%</span>
+                                                                    )}
+                                                                    {w.target_price_above !== null && w.target_price_above !== undefined && (
+                                                                        <span className="tag" style={{ background: '#f59e0b', color: '#000', fontWeight: 'bold' }}>Above &ge; {w.target_price_above.toLocaleString()} gp</span>
+                                                                    )}
+                                                                    {w.target_price_below !== null && w.target_price_below !== undefined && (
+                                                                        <span className="tag" style={{ background: '#ec4899', fontWeight: 'bold' }}>Below &le; {w.target_price_below.toLocaleString()} gp</span>
+                                                                    )}
+                                                                    {w.one_hour_change_threshold === null && w.day_change_threshold === null && w.target_price_above === null && w.target_price_below === null && (
+                                                                        <span style={{ color: '#aaa', fontStyle: 'italic', fontSize: '0.85em' }}>No active triggers</span>
+                                                                    )}
+                                                                </div>
+                                                            )}
+                                                        </td>
+                                                        <td>
+                                                            {hasActiveTrigger ? (
+                                                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
+                                                                    {is1hActive && <span className="tag" style={{ background: '#ef4444', color: '#fff', fontSize: '0.75em' }}>⚡ 1H Active</span>}
+                                                                    {is24hActive && <span className="tag" style={{ background: '#ef4444', color: '#fff', fontSize: '0.75em' }}>⚡ 24H Active</span>}
+                                                                    {isAboveActive && <span className="tag" style={{ background: '#ef4444', color: '#fff', fontSize: '0.75em' }}>⚡ High Limit Crossed</span>}
+                                                                    {isBelowActive && <span className="tag" style={{ background: '#ef4444', color: '#fff', fontSize: '0.75em' }}>⚡ Low Limit Crossed</span>}
+                                                                </div>
+                                                            ) : (
+                                                                <span style={{ color: '#4caf50', fontSize: '0.85em', fontWeight: 'bold' }}>🟢 Monitoring</span>
+                                                            )}
                                                         </td>
                                                         <td>
                                                             {isEditing ? (
-                                                                <input type="number" value={editThreshold} onChange={e => setEditThreshold(e.target.value)} className="dark-input" style={{ width: '60px' }} step="0.1" />
-                                                            ) : `${activeThreshold?.toFixed(1)}%`}
-                                                        </td>
-                                                        <td>
-                                                            {isEditing ? (
-                                                                <input type="number" value={editCooldown} onChange={e => setEditCooldown(e.target.value)} className="dark-input" style={{ width: '80px' }} />
+                                                                <input type="number" value={editCooldown} onChange={e => setEditCooldown(e.target.value)} className="dark-input" style={{ width: '70px' }} title="Cooldown (minutes)" />
                                                             ) : `${Math.floor((w.cooldown_seconds || 3600) / 60)}m`}
                                                         </td>
                                                         <td>

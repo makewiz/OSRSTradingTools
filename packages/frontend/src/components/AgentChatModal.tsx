@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
+import { useNavigate } from "react-router-dom";
+import ReactMarkdown from "react-markdown";
 import { useAuth } from "../contexts/AuthContext";
 import { API_BASE_URL } from "../config";
 
@@ -25,13 +27,56 @@ export const AgentChatModal: React.FC<AgentChatModalProps> = ({
     onPortfolioUpdated
 }) => {
     const { fetchWithAuth } = useAuth();
+    const navigate = useNavigate();
     const [messages, setMessages] = useState<AgentMessage[]>([]);
     const [promptText, setPromptText] = useState("");
     const [loading, setLoading] = useState(true);
     const [sending, setSending] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const chatFeedRef = useRef<HTMLDivElement>(null);
+    const messagesEndRef = useRef<HTMLDivElement>(null);
     const userHasScrolledUpRef = useRef<boolean>(false);
+
+    const formatContentWithItemLinks = (content: string) => {
+        if (!content) return "";
+        let formatted = content.replace(
+            /(?<!\[)(?:[•\-\*#\d\.]*\s*)?(?:\*\*)?([A-Za-z0-9'\s\-]{3,40}?)(?:\*\*)?\s*(?:\(ID:\s*(\d+)\)|ID:\s*(\d+)|id:\s*(\d+))/gi,
+            (match, name, id1, id2, id3) => {
+                const id = id1 || id2 || id3;
+                const rawName = name ? name.trim().replace(/^\*+|\*+$/g, '') : `Item ${id}`;
+                if (match.includes("](") || match.includes("[")) return match;
+                return `[${rawName} (ID: ${id})](/item/${id})`;
+            }
+        );
+        return formatted;
+    };
+
+    const renderMarkdownLink = ({ href, children }: any) => {
+        if (href && (href.startsWith("/item/") || href.startsWith("#/item/"))) {
+            const itemPath = href.replace(/^#/, "");
+            return (
+                <button
+                    type="button"
+                    onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        onClose();
+                        navigate(itemPath);
+                    }}
+                    className="osrs-item-link-btn"
+                    title="View item detail page"
+                >
+                    <span>🗡️</span>
+                    <span>{children}</span>
+                </button>
+            );
+        }
+        return (
+            <a href={href} target="_blank" rel="noopener noreferrer" className="underline text-indigo-400 hover:text-indigo-300">
+                {children}
+            </a>
+        );
+    };
 
     const handleFeedScroll = () => {
         const el = chatFeedRef.current;
@@ -124,18 +169,48 @@ export const AgentChatModal: React.FC<AgentChatModalProps> = ({
 
     // Extract trade recommendations from message content / actions metadata
     const extractRecommendations = (msg: AgentMessage) => {
+        if (!msg || !msg.content || msg.sender === "user") return [];
         const recs: Array<{
             itemId: number;
             itemName: string;
             buyPrice: number;
             targetSellPrice: number;
             quantity: number;
+            rationale?: string;
         }> = [];
 
-        // Check actions_taken metadata
+        // Check structured tradeSuggestions in metadata
+        if (msg.metadata && Array.isArray(msg.metadata.tradeSuggestions) && msg.metadata.tradeSuggestions.length > 0) {
+            for (const s of msg.metadata.tradeSuggestions) {
+                if (s.itemId || s.itemName) {
+                    recs.push({
+                        itemId: s.itemId || 0,
+                        itemName: s.itemName || `Item ${s.itemId}`,
+                        buyPrice: s.buyPrice || 0,
+                        targetSellPrice: s.targetSellPrice || 0,
+                        quantity: s.quantity || 1,
+                        rationale: s.rationale
+                    });
+                }
+            }
+            if (recs.length > 0) return recs;
+        }
+
+        // Check actionsTaken metadata
         if (msg.metadata && Array.isArray(msg.metadata.actionsTaken)) {
             for (const a of msg.metadata.actionsTaken) {
-                if (a.action === "set_price_trigger" && a.trigger) {
+                if (a.action === "suggest_trade_actions" && Array.isArray(a.suggestions)) {
+                    for (const s of a.suggestions) {
+                        recs.push({
+                            itemId: s.itemId || 0,
+                            itemName: s.itemName || `Item ${s.itemId}`,
+                            buyPrice: s.buyPrice || 0,
+                            targetSellPrice: s.targetSellPrice || 0,
+                            quantity: s.quantity || 1,
+                            rationale: s.rationale
+                        });
+                    }
+                } else if (a.action === "set_price_trigger" && a.trigger) {
                     const t = a.trigger;
                     recs.push({
                         itemId: t.item_id || 563,
@@ -149,6 +224,82 @@ export const AgentChatModal: React.FC<AgentChatModalProps> = ({
         }
 
         return recs;
+    };
+
+    const extractQuestions = (msg: AgentMessage) => {
+        if (!msg || msg.sender === "user" || !msg.metadata) return [];
+        if (Array.isArray(msg.metadata.questions) && msg.metadata.questions.length > 0) {
+            return msg.metadata.questions;
+        }
+        if (Array.isArray(msg.metadata.actionsTaken)) {
+            const qs: any[] = [];
+            for (const a of msg.metadata.actionsTaken) {
+                if (a.action === "ask_user_question" && a.question) {
+                    qs.push({
+                        question: a.question,
+                        options: a.options || [],
+                        allowCustomInput: a.allowCustomInput,
+                        multiSelect: a.multiSelect
+                    });
+                }
+            }
+            return qs;
+        }
+        return [];
+    };
+
+    const extractFollowupOptions = (msg: AgentMessage) => {
+        if (!msg || msg.sender === "user" || !msg.metadata) return [];
+        if (Array.isArray(msg.metadata.followupOptions) && msg.metadata.followupOptions.length > 0) {
+            return msg.metadata.followupOptions;
+        }
+        if (Array.isArray(msg.metadata.actionsTaken)) {
+            const opts: string[] = [];
+            for (const a of msg.metadata.actionsTaken) {
+                if (a.action === "suggest_followup_options" && Array.isArray(a.options)) {
+                    opts.push(...a.options);
+                }
+            }
+            return opts;
+        }
+        return [];
+    };
+
+    const handleSendPromptText = async (text: string) => {
+        if (!text.trim() || sending) return;
+        setPromptText(text);
+        setSending(true);
+        setError(null);
+
+        const optimisticMsg: AgentMessage = {
+            id: Date.now(),
+            agent_id: agentId,
+            sender: "user",
+            content: text.trim(),
+            metadata: {},
+            created_at: Math.floor(Date.now() / 1000)
+        };
+        setMessages(prev => [...prev, optimisticMsg]);
+
+        try {
+            const res = await fetchWithAuth(`${API_BASE_URL}/api/agents/${agentId}/messages`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ message: text.trim() })
+            });
+
+            if (!res.ok) {
+                const data = await res.json();
+                throw new Error(data.error || "Failed to send message to agent");
+            }
+
+            const data = await res.json();
+            setMessages(data.messages || []);
+        } catch (err: any) {
+            setError(err.message || "Error sending message");
+        } finally {
+            setSending(false);
+        }
     };
 
     const handleAddRecommendationToPortfolio = async (rec: {
@@ -174,8 +325,8 @@ export const AgentChatModal: React.FC<AgentChatModalProps> = ({
             });
 
             if (!res.ok) throw new Error("Failed to add position to portfolio");
-            alert(`Added ${rec.itemName} to your Trading Portfolio with sell target ${rec.targetSellPrice.toLocaleString()} GP!`);
             if (onPortfolioUpdated) onPortfolioUpdated();
+            handleSendPromptText(`I added ${rec.itemName} (${rec.quantity.toLocaleString()}x @ ${rec.buyPrice.toLocaleString()} GP, target sell: ${rec.targetSellPrice.toLocaleString()} GP) to my portfolio. Please watch this position and notify me if the price spikes or hits target sell.`);
         } catch (err: any) {
             alert(err.message || "Error adding to portfolio");
         }
@@ -213,6 +364,8 @@ export const AgentChatModal: React.FC<AgentChatModalProps> = ({
                         messages.map((msg) => {
                             const isUser = msg.sender === "user";
                             const recs = !isUser ? extractRecommendations(msg) : [];
+                            const questions = !isUser ? extractQuestions(msg) : [];
+                            const followups = !isUser ? extractFollowupOptions(msg) : [];
 
                             return (
                                 <div
@@ -231,7 +384,11 @@ export const AgentChatModal: React.FC<AgentChatModalProps> = ({
                                             <span>{new Date(msg.created_at * 1000).toLocaleTimeString()}</span>
                                         </div>
 
-                                        <p className="whitespace-pre-wrap leading-relaxed">{msg.content}</p>
+                                        <div className="whitespace-pre-wrap leading-relaxed text-sm">
+                                            <ReactMarkdown components={{ a: renderMarkdownLink }}>
+                                                {formatContentWithItemLinks(msg.content)}
+                                            </ReactMarkdown>
+                                        </div>
 
                                         {/* Actionable 1-Click Recommendation Cards */}
                                         {recs.length > 0 && (
@@ -249,6 +406,9 @@ export const AgentChatModal: React.FC<AgentChatModalProps> = ({
                                                             <div className="text-xs text-gray-300">
                                                                 Buy @ <span className="text-amber-300">{rec.buyPrice.toLocaleString()} GP</span> | Sell @ <span className="text-emerald-300">{rec.targetSellPrice.toLocaleString()} GP</span>
                                                             </div>
+                                                            {rec.rationale && (
+                                                                <div className="text-[11px] text-gray-400 mt-1">{rec.rationale}</div>
+                                                            )}
                                                         </div>
                                                         <button
                                                             onClick={() => handleAddRecommendationToPortfolio(rec)}
@@ -258,6 +418,52 @@ export const AgentChatModal: React.FC<AgentChatModalProps> = ({
                                                         </button>
                                                     </div>
                                                 ))}
+                                            </div>
+                                        )}
+
+                                        {/* Interactive Questions */}
+                                        {questions.length > 0 && (
+                                            <div className="pt-2 border-t border-slate-700/80 space-y-2">
+                                                {questions.map((q: any, qIdx: number) => (
+                                                    <div key={qIdx} className="bg-indigo-950/40 p-3 rounded-lg border border-indigo-500/30 space-y-2">
+                                                        <div className="text-xs font-bold text-indigo-300">
+                                                            ❓ {q.question}
+                                                        </div>
+                                                        {Array.isArray(q.options) && q.options.length > 0 && (
+                                                            <div className="flex flex-wrap gap-1.5">
+                                                                {q.options.map((opt: string, optIdx: number) => (
+                                                                    <button
+                                                                        key={optIdx}
+                                                                        onClick={() => handleSendPromptText(opt)}
+                                                                        disabled={sending}
+                                                                        className="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold rounded-md transition-colors shadow"
+                                                                    >
+                                                                        {opt}
+                                                                    </button>
+                                                                ))}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+
+                                        {/* Suggested Follow-up Quick Reply Chips */}
+                                        {followups.length > 0 && (
+                                            <div className="pt-2 border-t border-slate-700/80 space-y-1.5">
+                                                <div className="text-[11px] text-gray-400">Suggested Follow-ups:</div>
+                                                <div className="flex flex-wrap gap-1.5">
+                                                    {followups.map((opt: string, optIdx: number) => (
+                                                        <button
+                                                            key={optIdx}
+                                                            onClick={() => handleSendPromptText(opt)}
+                                                            disabled={sending}
+                                                            className="px-2.5 py-1 bg-slate-700 hover:bg-slate-600 text-indigo-200 text-xs font-medium rounded-md transition-colors border border-slate-600"
+                                                        >
+                                                            💡 {opt}
+                                                        </button>
+                                                    ))}
+                                                </div>
                                             </div>
                                         )}
                                     </div>

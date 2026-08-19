@@ -401,7 +401,7 @@ export const ItemDetail: React.FC = () => {
                     padding: '5px 10px'
                   }}
                   onClick={toggleWatch}
-                  title={isWatched ? "Unwatch" : "Watch (5% threshold)"}
+                  title={isWatched ? "Watching (Configure price targets & thresholds in My Alerts)" : "Watch (Default 5% 1H threshold)"}
                 >
                   {isWatched ? "🔔 Watching" : "🔕 Watch"}
                 </button>
