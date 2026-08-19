@@ -18,18 +18,6 @@ import analysisRouter from "./routes/analysis";
 import recipesRouter from "./routes/recipes";
 import chatRouter from "./routes/chat"; // [NEW] Chat route
 
-// Initialize database
-// Initialize database
-(async () => {
-  try {
-    await initializeDatabase();
-    logger.info("[Database] Initialized");
-  } catch (err) {
-    logger.error("[Database] Failed to initialize:", err);
-    process.exit(1);
-  }
-})();
-
 const app = express();
 const port = process.env.PORT || 4000;
 
@@ -133,29 +121,56 @@ app.get("/api/items", async (req, res, next) => {
 // Item detail routes
 app.use("/api/items", itemsRouter);
 
-// Start schedulers
-startPriceScheduler();
+async function startServer() {
+  try {
+    // 1. Initialize database and ensure partition tables exist before anything else
+    await initializeDatabase();
+    logger.info("[Database] Initialized");
 
+    // 2. Start background schedulers (price fetching, retention downsampling, agent triggers)
+    startPriceScheduler();
 
-const server = app.listen(port, () => {
-  logger.info(`Backend listening on http://localhost:${port}`);
-});
+    // 3. Start Express HTTP server
+    const server = app.listen(port, () => {
+      logger.info(`Backend listening on http://localhost:${port}`);
+    });
 
-// Graceful shutdown
-process.on("SIGINT", () => {
-  logger.info("\n[SIGINT] Shutting down gracefully...");
-  server.close(async () => {
-    await closeDatabase();
-    logger.info("[Shutdown] Database closed");
-    process.exit(0);
-  });
-});
+    // Graceful shutdown handlers
+    const shutdown = (signal: string) => {
+      logger.info(`\n[${signal}] Shutting down gracefully...`);
+      server.close(async () => {
+        await closeDatabase();
+        logger.info("[Shutdown] Database closed");
+        process.exit(0);
+      });
+    };
 
-process.on("SIGTERM", () => {
-  logger.info("\n[SIGTERM] Shutting down gracefully...");
-  server.close(async () => {
-    await closeDatabase();
-    logger.info("[Shutdown] Database closed");
-    process.exit(0);
-  });
-});
+    process.on("SIGINT", () => shutdown("SIGINT"));
+    process.on("SIGTERM", () => shutdown("SIGTERM"));
+  } catch (err: any) {
+    const isConnRefused =
+      err?.code === "ECONNREFUSED" ||
+      (err?.message && err.message.includes("ECONNREFUSED")) ||
+      (Array.isArray(err?.errors) && err.errors.some((e: any) => e?.code === "ECONNREFUSED" || e?.message?.includes("ECONNREFUSED")));
+
+    if (isConnRefused) {
+      const dbUrl = process.env.DATABASE_URL || "postgresql://user:password@localhost:5432/osrs_trading";
+      logger.error("\n" + "=".repeat(80));
+      logger.error("❌ [Database Connection Error] Could not connect to PostgreSQL!");
+      logger.error("The database server appears to be offline or unreachable.");
+      logger.error("");
+      logger.error("💡 How to fix:");
+      logger.error("   1. If running locally with Docker, start the database container with:");
+      logger.error("      docker compose up -d");
+      logger.error("");
+      logger.error(`   2. Target Connection String: ${dbUrl}`);
+      logger.error("      (If using a remote or custom database, verify DATABASE_URL in packages/backend/.env)");
+      logger.error("=".repeat(80) + "\n");
+    } else {
+      logger.error("[Database] Failed to initialize:", err);
+    }
+    process.exit(1);
+  }
+}
+
+startServer();

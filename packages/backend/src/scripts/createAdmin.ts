@@ -6,6 +6,9 @@ dotenv.config();
 if (!process.env.DATABASE_URL) {
   dotenv.config({ path: path.resolve(__dirname, "../../.env") });
 }
+if (!process.env.DATABASE_URL) {
+  process.env.DATABASE_URL = "postgresql://user:password@localhost:5432/osrs_trading";
+}
 
 import { initializeDatabase, getUserByUsername, createUser, pool } from "../database";
 import { hashPassword } from "../auth";
@@ -65,8 +68,25 @@ async function main() {
       await createUser(username, passwordHash, email, true);
       logger.info(`Successfully created admin account '${username}'!`);
     }
-  } catch (err) {
-    logger.error("Failed to create/promote admin user:", err);
+  } catch (err: any) {
+    const isConnRefused =
+      err?.code === "ECONNREFUSED" ||
+      (err?.message && err.message.includes("ECONNREFUSED")) ||
+      (Array.isArray(err?.errors) && err.errors.some((e: any) => e?.code === "ECONNREFUSED" || e?.message?.includes("ECONNREFUSED")));
+
+    if (isConnRefused) {
+      const dbUrl = process.env.DATABASE_URL || "postgresql://user:password@localhost:5432/osrs_trading";
+      logger.error("\n" + "=".repeat(80));
+      logger.error("❌ [Database Connection Error] Could not connect to PostgreSQL!");
+      logger.error("The database server appears to be offline or unreachable.");
+      logger.error("");
+      logger.error("💡 How to fix:");
+      logger.error("   1. Start the local database with: docker compose up -d");
+      logger.error(`   2. Target Connection String: ${dbUrl}`);
+      logger.error("=".repeat(80) + "\n");
+    } else {
+      logger.error("Failed to create/promote admin user:", err);
+    }
     process.exit(1);
   } finally {
     await pool.end();

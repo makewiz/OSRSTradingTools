@@ -1,4 +1,4 @@
-import { pool, TradingGameAccount, TradingGameOffer, TradingGameInventoryItem, getOrCreateGameAccount, getAccountOffers, getAccountInventory, get4HourBoughtQuantity } from "../database";
+import { pool, TradingGameAccount, TradingGameOffer, TradingGameInventoryItem, getOrCreateGameAccount, getAccountOffers, getAccountInventory, get4HourBoughtQuantity, getSystemSetting, setSystemSetting } from "../database";
 import { CombinedItem, getCombinedItems } from "../osrsClient";
 import { calculateTax } from "../tax";
 import { logger } from "@osrstradingtools/shared";
@@ -635,45 +635,60 @@ export class TradingGameEngine {
   }
 
   /**
-   * Execute monthly reset (runs on 1st of month)
+   * Execute monthly reset (runs on transition to a new month)
    */
   static async checkAndPerformMonthlyReset(): Promise<void> {
     const now = new Date();
     const currentMonthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 
-    // Check if reset already ran for this month
-    const checkRes = await pool.query(
-      `SELECT id FROM trading_game_monthly_history WHERE month_identifier = $1 LIMIT 1`,
-      [currentMonthStr]
-    );
+    // Get the last month for which reset was completed
+    const lastResetMonth = await getSystemSetting('trading_game_last_reset_month', '');
 
-    if (checkRes.rows.length > 0) {
-      return; // Already reset for this month
+    // On a fresh installation, record current month as the baseline and avoid wiping active state
+    if (!lastResetMonth) {
+      await setSystemSetting('trading_game_last_reset_month', currentMonthStr);
+      logger.info(`[TradingGameEngine] Initialized trading game baseline month to ${currentMonthStr}`);
+      return;
     }
 
-    logger.info(`[TradingGameEngine] Performing monthly reset for month ${currentMonthStr}...`);
+    // If still in the same month, no reset needed
+    if (lastResetMonth === currentMonthStr) {
+      return;
+    }
 
+    logger.info(`[TradingGameEngine] Performing monthly reset: transitioning from ${lastResetMonth} to ${currentMonthStr}...`);
+
+    // Fetch leaderboard for the concluding month
     const leaderboard = await this.getLeaderboard('current');
 
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
 
+      // Archive final rankings for the concluding month
       for (const entry of leaderboard) {
         await client.query(
           `INSERT INTO trading_game_monthly_history (account_id, month_identifier, final_net_worth, net_profit, rank)
            VALUES ($1, $2, $3, $4, $5)`,
-          [entry.accountId, currentMonthStr, entry.netWorth, entry.profit, entry.rank]
+          [entry.accountId, lastResetMonth, entry.netWorth, entry.profit, entry.rank]
         );
       }
 
-      // Reset cash stacks to 10M, clear offers and inventories
+      // Reset cash stacks to 10M, clear active offers and inventories
       await client.query(`UPDATE trading_game_accounts SET cash_stack = 10000000, updated_at = (CAST(EXTRACT(EPOCH FROM NOW()) AS BIGINT))`);
       await client.query(`DELETE FROM trading_game_offers`);
       await client.query(`DELETE FROM trading_game_inventory`);
 
+      // Update the recorded reset month in system_settings inside the transaction
+      await client.query(
+        `INSERT INTO system_settings (key, value)
+         VALUES ('trading_game_last_reset_month', $1)
+         ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
+        [currentMonthStr]
+      );
+
       await client.query('COMMIT');
-      logger.info("[TradingGameEngine] Monthly reset completed successfully!");
+      logger.info(`[TradingGameEngine] Monthly reset completed successfully for new month ${currentMonthStr}!`);
     } catch (err) {
       await client.query('ROLLBACK');
       logger.error("[TradingGameEngine] Monthly reset failed:", err);

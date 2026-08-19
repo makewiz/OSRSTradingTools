@@ -16,15 +16,15 @@ import { seedAdminUser } from "./seedAdmin";
 
 export * from "./tradingGame";
 
-dotenv.config();
+const DEFAULT_DATABASE_URL = "postgresql://user:password@localhost:5432/osrs_trading";
+const databaseUrl = process.env.DATABASE_URL || DEFAULT_DATABASE_URL;
 
-// Ensure DATABASE_URL is provided
 if (!process.env.DATABASE_URL) {
-  logger.warn("DATABASE_URL is not set. Please set it in your .env file.");
+  logger.info(`[Database] DATABASE_URL not set in .env, falling back to default local Docker database: ${DEFAULT_DATABASE_URL}`);
 }
 
 export const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
+  connectionString: databaseUrl,
 });
 
 export interface ItemPriceHistory {

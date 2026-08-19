@@ -3,13 +3,15 @@ import dotenv from "dotenv";
 
 dotenv.config();
 
-// Ensure DATABASE_URL is provided, or rely on shared config if possible, but separate env is safer for decoupled running
+const DEFAULT_DATABASE_URL = "postgresql://user:password@localhost:5432/osrs_trading";
+const databaseUrl = process.env.DATABASE_URL || DEFAULT_DATABASE_URL;
+
 if (!process.env.DATABASE_URL) {
-  console.warn("DATABASE_URL is not set. Please set it in your .env file.");
+  console.info(`[Database] DATABASE_URL not set in .env, falling back to default local Docker database: ${DEFAULT_DATABASE_URL}`);
 }
 
 export const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
+  connectionString: databaseUrl,
 });
 
 export interface DiscordUser {
