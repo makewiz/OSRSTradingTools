@@ -24,11 +24,13 @@ Use this checklist to ensure all environment variables are configured:
 ### Backend Service
 - [ ] `DATABASE_URL` (auto-configured by Railway)
 - [ ] `JWT_SECRET` (generate with: `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`)
-- [ ] `DISCORD_CLIENT_ID`
-- [ ] `DISCORD_CLIENT_SECRET`
-- [ ] `DISCORD_REDIRECT_URI` (your frontend URL + `/auth/discord/callback`)
-- [ ] `BOT_API_KEY` (secure random string, must match bot service)
 - [ ] `PORT` (usually 4000)
+- [ ] `GEMINI_API_KEY` (optional, for Global AI chat, trading agents, and market highlights)
+- [ ] `GEMINI_MODEL` (optional, defaults to `gemini-3.5-flash-lite`)
+- [ ] `DISCORD_CLIENT_ID` (optional, for Discord OAuth)
+- [ ] `DISCORD_CLIENT_SECRET` (optional, for Discord OAuth)
+- [ ] `DISCORD_REDIRECT_URI` (optional: your frontend URL + `/auth/discord/callback`)
+- [ ] `BOT_API_KEY` (secure random string, only needed if running bot service)
 
 ### Discord Bot Service
 - [ ] `DATABASE_URL` (auto-configured by Railway)

@@ -39,12 +39,14 @@ Use this checklist to ensure you complete all steps for deploying to Railway.
 - [ ] Public domain generated
 - [ ] Environment variables configured:
   - [ ] `DATABASE_URL=${{Postgres.DATABASE_URL}}`
-  - [ ] `JWT_SECRET=<generated-secret>` (run `node scripts/generate-jwt-secret.js`)
-  - [ ] `DISCORD_CLIENT_ID=<your-value>`
-  - [ ] `DISCORD_CLIENT_SECRET=<your-value>`
-  - [ ] `DISCORD_REDIRECT_URI=<frontend-url>/auth/callback` (update after frontend deployed)
-  - [ ] `BOT_API_KEY=<secure-random-key>`
+  - [ ] `JWT_SECRET=<generated-secret>` (run `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`)
   - [ ] `PORT=4000`
+  - [ ] `GEMINI_API_KEY=<your-gemini-api-key>` (optional, for AI features)
+  - [ ] `GEMINI_MODEL=gemini-3.5-flash-lite` (optional)
+  - [ ] `DISCORD_CLIENT_ID=<your-value>` (optional, for Discord OAuth)
+  - [ ] `DISCORD_CLIENT_SECRET=<your-value>` (optional, for Discord OAuth)
+  - [ ] `DISCORD_REDIRECT_URI=<frontend-url>/auth/discord/callback` (update after frontend deployed)
+  - [ ] `BOT_API_KEY=<secure-random-key>` (optional, only if deploying bot)
 - [ ] Service deployed successfully
 - [ ] No errors in deployment logs
 - [ ] Backend URL saved: `https://_________________________________.railway.app`

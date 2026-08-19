@@ -5,13 +5,18 @@ Thank you for your interest in contributing! We welcome all contributions, from 
 ## Development Setup
 
 1.  **Fork and Clone**: Fork the repository and clone it locally.
-2.  **Install Dependencies**:
+2.  **Start Database**:
+    ```bash
+    docker compose up -d
+    ```
+3.  **Install Dependencies**:
     ```bash
     npm install
     ```
-3.  **Environment Setup**:
-    - Copy `.env.example` to `.env` in `packages/backend` and `packages/discord-bot` if you plan to work on those.
-    - Configure the environment variables as needed (see `README.md` for details).
+4.  **Environment Setup (Optional)**:
+    - The core web app works out of the box with the default local database.
+    - If you wish to configure Gemini AI, Discord OAuth, or the Discord bot, copy `.env.example` to `.env` in `packages/backend` and `packages/discord-bot`.
+    - See `README.md` for a comprehensive tier-by-tier environment variables guide.
 
 ## Running Locally
 

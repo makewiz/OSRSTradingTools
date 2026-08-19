@@ -71,17 +71,26 @@ In the service's "Variables" tab, add:
 ```
 DATABASE_URL=${{Postgres.DATABASE_URL}}
 JWT_SECRET=your-super-secret-jwt-key-change-this
+PORT=4000
+
+# Optional: Google Gemini AI (Chat Widget, Trading Agents, AI Highlights)
+GEMINI_API_KEY=your-gemini-api-key
+GEMINI_MODEL=gemini-3.5-flash-lite
+
+# Optional: Discord OAuth Login
 DISCORD_CLIENT_ID=your-discord-client-id
 DISCORD_CLIENT_SECRET=your-discord-client-secret
 DISCORD_REDIRECT_URI=https://your-frontend-domain.railway.app/auth/discord/callback
+
+# Optional: Discord Bot Shared Key (if running bot)
 BOT_API_KEY=your-secure-random-api-key
-PORT=4000
 ```
 
 **Important Notes:**
 - `DATABASE_URL` references the PostgreSQL service automatically
 - Generate a strong random `JWT_SECRET` (use: `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`)
-- Generate a strong random `BOT_API_KEY` and keep it safe (you'll need it for the bot service)
+- `GEMINI_API_KEY` is free from https://aistudio.google.com/ and enables all AI features
+- Generate a strong random `BOT_API_KEY` and keep it safe (only needed if running the bot service)
 - Get Discord credentials from https://discord.com/developers/applications
 - Update `DISCORD_REDIRECT_URI` once you have your frontend URL
 
@@ -355,11 +364,12 @@ Railway supports multiple environments:
 ```
 DATABASE_URL=${{Postgres.DATABASE_URL}}
 JWT_SECRET=<random-secret>
-DISCORD_CLIENT_ID=<discord-app-client-id>
-DISCORD_CLIENT_SECRET=<discord-app-client-secret>
-DISCORD_REDIRECT_URI=https://<frontend-domain>/auth/callback
-BOT_API_KEY=<random-api-key>
 PORT=4000
+GEMINI_API_KEY=<optional-gemini-api-key>
+DISCORD_CLIENT_ID=<optional-discord-app-client-id>
+DISCORD_CLIENT_SECRET=<optional-discord-app-client-secret>
+DISCORD_REDIRECT_URI=https://<frontend-domain>/auth/discord/callback
+BOT_API_KEY=<optional-random-api-key>
 ```
 
 ### Discord Bot
