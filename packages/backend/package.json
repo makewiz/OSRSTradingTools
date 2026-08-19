@@ -1,7 +1,7 @@
 {
   "name": "backend",
   "version": "1.0.0",
-  "description": "",
+  "description": "Backend API service and scheduler for OSRS Trading Tools",
   "main": "dist/index.js",
   "scripts": {
     "dev": "nodemon --watch src --exec ts-node src/index.ts",
@@ -9,9 +9,14 @@
     "start": "node dist/index.js",
     "create-admin": "ts-node src/scripts/createAdmin.ts"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "keywords": [
+    "osrs",
+    "grand-exchange",
+    "trading",
+    "market-analysis"
+  ],
+  "author": "Markus",
+  "license": "MIT",
   "type": "commonjs",
   "dependencies": {
     "@google/genai": "^2.15.0",

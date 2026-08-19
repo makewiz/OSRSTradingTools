@@ -1,6 +1,9 @@
 {
   "name": "frontend",
   "version": "1.0.0",
+  "description": "Frontend web application for OSRS Trading Tools",
+  "author": "Markus",
+  "license": "MIT",
   "private": true,
   "scripts": {
     "dev": "vite",
