@@ -4,6 +4,11 @@ A comprehensive, full-stack Old School RuneScape market analysis platform, paper
 
 Built to help OSRS traders browse real-time Grand Exchange prices, detect arbitrage opportunities, calculate tax-aware recipe profits, run autonomous trading agents, and receive price alerts directly in Discord.
 
+> [!CAUTION]
+> ### ⚠️ Project Disclaimer & AI-Generated Code Notice
+> - **AI-Generated Code**: The codebase in this repository was generated with the assistance of AI tools and is provided on an **"AS IS"** basis, without warranty of any kind. **Use at your own risk.**
+> - **Hobby & Development Use Only**: This project is built strictly as a personal hobby, educational, and experimental application. It is **NOT hardened, audited, or tested for production environments, commercial use, or handling sensitive data**.
+
 ---
 
 ## 📑 Table of Contents
@@ -17,10 +22,12 @@ Built to help OSRS traders browse real-time Grand Exchange prices, detect arbitr
   - [3. Discord OAuth Authentication](#3-discord-oauth-authentication)
   - [4. Discord Bot Service](#4-discord-bot-service)
   - [5. App Security & Admin Settings](#5-app-security--admin-settings)
+- [🤖 Google Gemini API Guide & Important Terms](#-google-gemini-api-guide--important-terms)
 - [🛠️ Available Scripts](#️-available-scripts)
 - [👑 Admin Setup](#-admin-setup)
 - [🚀 Deployment (Railway)](#-deployment-railway)
 - [🔒 Security & Best Practices](#-security--best-practices)
+- [📄 Disclaimers & License](#-disclaimers--license)
 
 ---
 
@@ -106,7 +113,7 @@ Required **only** if you want to use the Global Chat AI Widget, Autonomous Tradi
 
 | Variable | Location | Necessity | Default | Description |
 | :--- | :--- | :--- | :--- | :--- |
-| `GEMINI_API_KEY` | `packages/backend/.env` | Optional | *None* | Your Google Gemini API key. Get a free key at [Google AI Studio](https://aistudio.google.com/). |
+| `GEMINI_API_KEY` | `packages/backend/.env` | Optional | *None* | Your Google Gemini API key. See [Gemini API Guide](#-google-gemini-api-guide--important-terms). |
 | `GEMINI_MODEL` | `packages/backend/.env` | Optional | `gemini-3.5-flash-lite` | Gemini model name (e.g., `gemini-3.5-flash-lite`, `gemini-2.5-flash`). |
 
 > [!NOTE]
@@ -164,6 +171,32 @@ For template files, see:
 - [`packages/backend/.env.example`](packages/backend/.env.example)
 - [`packages/discord-bot/.env.example`](packages/discord-bot/.env.example)
 - [`packages/frontend/.env.example`](packages/frontend/.env.example)
+
+---
+
+## 🤖 Google Gemini API Guide & Important Terms
+
+The AI assistant and autonomous trading agents integrate with the Google Gemini API using the official `@google/genai` SDK.
+
+### How to Get a Free Gemini API Key:
+1. Visit [Google AI Studio](https://aistudio.google.com/).
+2. Sign in with your Google account.
+3. Click on **"Get API key"** (or "Create API key in new project").
+4. Copy your API key.
+5. Paste it into `packages/backend/.env`:
+   ```bash
+   GEMINI_API_KEY=your_api_key_here
+   GEMINI_MODEL=gemini-3.5-flash-lite
+   ```
+
+### ⚠️ Important Gemini Terms of Service & Privacy Notes:
+When configuring and using the Google Gemini API, you must review and comply with the [Google APIs Terms of Service](https://developers.google.com/terms) and the [Gemini API Additional Terms of Service](https://ai.google.dev/gemini-api/terms).
+
+> [!WARNING]
+> Please be aware of the following critical conditions:
+> 1. **Data Logging on Free Tier**: When using the free-of-charge Gemini API tier, **Google uses your prompts, responses, and related data to train, improve, and develop Google products and machine-learning technologies**. Human reviewers may also read and annotate submitted content. **Never submit sensitive, confidential, private, or proprietary data.**
+> 2. **Age & Child Safety Restrictions**: The Gemini API is **not permitted for use by children or users under the minimum age specified by Google in their terms of service**.
+> 3. **Prototyping & Development Only**: The free tier is intended strictly for personal development, prototyping, and experimentation, and is **not intended or licensed for production or mission-critical use**.
 
 ---
 
@@ -261,6 +294,10 @@ For comprehensive guides, checklists, and troubleshooting:
 
 ---
 
-## 📄 License
+## 📄 Disclaimers & License
 
+### Disclaimer of Liability
+This software is provided "AS IS", without warranty of any kind, express or implied. In no event shall the authors or copyright holders be liable for any claim, damages, or other liability arising from the use of this software, in-game trading losses, or reliance on data provided by this tool or third-party APIs. Old School RuneScape is a registered trademark of Jagex Limited. This project is not affiliated with or endorsed by Jagex Limited.
+
+### License
 This project is licensed under the [MIT License](LICENSE).
