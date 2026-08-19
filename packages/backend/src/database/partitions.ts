@@ -102,11 +102,22 @@ async function ensurePartitionsExist(
         const partitionName = getPartitionName(tableName, current);
         const rangeEnd = current + interval;
 
-        await client.query(`
-      CREATE TABLE IF NOT EXISTS ${partitionName}
-      PARTITION OF ${tableName}
-      FOR VALUES FROM (${current}) TO (${rangeEnd})
-    `);
+        try {
+            await client.query(`
+              CREATE TABLE IF NOT EXISTS ${partitionName}
+              PARTITION OF ${tableName}
+              FOR VALUES FROM (${current}) TO (${rangeEnd})
+            `);
+        } catch (err: any) {
+            // 42P07 is PostgreSQL 'duplicate_table' error code.
+            // When multiple queries attempt to create the partition at the exact same moment,
+            // Postgres can throw 42P07 despite IF NOT EXISTS. Safely ignore it.
+            if (err?.code === '42P07') {
+                logger.debug(`[Database] Partition ${partitionName} already exists (handled concurrent creation).`);
+            } else {
+                throw err;
+            }
+        }
 
         current += interval;
     }

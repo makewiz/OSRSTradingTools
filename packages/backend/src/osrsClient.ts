@@ -194,10 +194,10 @@ export async function getCombinedItems(): Promise<CombinedItem[]> {
     const fiveMinEntry = fiveMin.data[String(m.id)];
     const volume = volumes[m.name];
 
-    const buyPrice = latestEntry?.low ?? null;
-    const sellPrice = latestEntry?.high ?? null;
+    const buyPrice = latestEntry?.high ?? null;
+    const sellPrice = latestEntry?.low ?? null;
     const margin =
-      buyPrice !== null && sellPrice !== null ? sellPrice - buyPrice : null;
+      buyPrice !== null && sellPrice !== null ? buyPrice - sellPrice : null;
 
     // --- Calculate Day Change (24h) ---
     // Was: calculateDayChange(m.id, buyPrice, sellPrice)
@@ -206,12 +206,12 @@ export async function getCombinedItems(): Promise<CombinedItem[]> {
     const oldPrice24h = prices24h[m.id];
     if (oldPrice24h) {
       let buyChange: number | null = null;
-      if (buyPrice !== null && oldPrice24h.avgLow) {
-        buyChange = ((buyPrice - oldPrice24h.avgLow) / oldPrice24h.avgLow) * 100;
+      if (buyPrice !== null && oldPrice24h.avgHigh) {
+        buyChange = ((buyPrice - oldPrice24h.avgHigh) / oldPrice24h.avgHigh) * 100;
       }
       let sellChange: number | null = null;
-      if (sellPrice !== null && oldPrice24h.avgHigh) {
-        sellChange = ((sellPrice - oldPrice24h.avgHigh) / oldPrice24h.avgHigh) * 100;
+      if (sellPrice !== null && oldPrice24h.avgLow) {
+        sellChange = ((sellPrice - oldPrice24h.avgLow) / oldPrice24h.avgLow) * 100;
       }
       if (buyChange !== null && sellChange !== null) {
         dayChange = (buyChange + sellChange) / 2;
@@ -229,12 +229,12 @@ export async function getCombinedItems(): Promise<CombinedItem[]> {
     const oldPrice1h = prices1h[m.id];
     if (oldPrice1h) {
       let buyChange: number | null = null;
-      if (buyPrice !== null && oldPrice1h.avgLow) {
-        buyChange = ((buyPrice - oldPrice1h.avgLow) / oldPrice1h.avgLow) * 100;
+      if (buyPrice !== null && oldPrice1h.avgHigh) {
+        buyChange = ((buyPrice - oldPrice1h.avgHigh) / oldPrice1h.avgHigh) * 100;
       }
       let sellChange: number | null = null;
-      if (sellPrice !== null && oldPrice1h.avgHigh) {
-        sellChange = ((sellPrice - oldPrice1h.avgHigh) / oldPrice1h.avgHigh) * 100;
+      if (sellPrice !== null && oldPrice1h.avgLow) {
+        sellChange = ((sellPrice - oldPrice1h.avgLow) / oldPrice1h.avgLow) * 100;
       }
       if (buyChange !== null && sellChange !== null) {
         hourChange = (buyChange + sellChange) / 2;
@@ -258,7 +258,7 @@ export async function getCombinedItems(): Promise<CombinedItem[]> {
     let potentialProfit: number | null = null;
 
     if (buyPrice !== null && sellPrice !== null) {
-      tax = calculateTax(sellPrice, m.name);
+      tax = calculateTax(buyPrice, m.name);
       profit = calculateProfit(buyPrice, sellPrice, m.name);
       roi = calculateROI(buyPrice, sellPrice, m.name);
 
@@ -307,10 +307,10 @@ export async function getCombinedItems(): Promise<CombinedItem[]> {
       volume: typeof volume === "number" ? volume : null,
       dayChange,
       oneHourChange: hourChange,
-      lastBuyTime: latestEntry?.lowTime ?? null,
-      lastSellTime: latestEntry?.highTime ?? null,
-      lastBuyVolume: fiveMinEntry?.lowPriceVolume ?? null,
-      lastSellVolume: fiveMinEntry?.highPriceVolume ?? null,
+      lastBuyTime: latestEntry?.highTime ?? null,
+      lastSellTime: latestEntry?.lowTime ?? null,
+      lastBuyVolume: fiveMinEntry?.highPriceVolume ?? null,
+      lastSellVolume: fiveMinEntry?.lowPriceVolume ?? null,
       fiveMinTimestamp: fiveMin.timestamp ?? null,
       avgHighPrice: fiveMinEntry?.avgHighPrice ?? null,
       avgLowPrice: fiveMinEntry?.avgLowPrice ?? null,

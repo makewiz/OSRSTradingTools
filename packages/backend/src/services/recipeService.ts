@@ -38,7 +38,7 @@ export class RecipeService {
         try {
             const res = await fetch(url, {
                 headers: {
-                    "User-Agent": `OSRSTradingTools/1.0 (contact: admin@osrstradingtools.com)`
+                    "User-Agent": `OSRSTradingTools/1.0 (contact: ${process.env.WIKI_CONTACT_INFO || 'unknown'})`
                 }
             });
 

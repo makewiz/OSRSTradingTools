@@ -1,6 +1,9 @@
 {
   "name": "frontend",
   "version": "1.0.0",
+  "description": "Frontend web application for OSRS Trading Tools",
+  "author": "Markus",
+  "license": "MIT",
   "private": true,
   "scripts": {
     "dev": "vite",
@@ -12,7 +15,7 @@
     "react": "^19.2.3",
     "react-dom": "^19.2.3",
     "react-markdown": "^10.1.0",
-    "react-router-dom": "^7.11.0",
+    "react-router-dom": "^7.18.2",
     "recharts": "^3.6.0"
   },
   "devDependencies": {

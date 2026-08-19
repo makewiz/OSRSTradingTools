@@ -4,7 +4,8 @@ import {
     createUser,
     getUserByUsername,
     getUserByDiscordId,
-    linkDiscordUser
+    linkDiscordUser,
+    getUserCount
 } from "../database";
 import {
     hashPassword,
@@ -60,9 +61,13 @@ router.post("/register", authLimiter, async (req, res) => {
             return res.status(409).json({ error: "Username already exists" });
         }
 
+        // If database has 0 users, automatically make the first registered user an admin
+        const userCount = await getUserCount();
+        const isFirstUser = userCount === 0;
+
         // Hash password and create user
         const passwordHash = await hashPassword(password);
-        const user = await createUser(username, passwordHash, email || null);
+        const user = await createUser(username, passwordHash, email || null, isFirstUser);
 
         // Generate token
         const token = generateToken(user);

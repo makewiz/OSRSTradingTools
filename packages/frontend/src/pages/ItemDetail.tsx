@@ -78,6 +78,54 @@ export const ItemDetail: React.FC = () => {
   // Favorites logic
   const [favorites, setFavorites] = useState<number[]>([]);
 
+  // Portfolio modal logic
+  const [showPortfolioModal, setShowPortfolioModal] = useState(false);
+  const [portfolioQuantity, setPortfolioQuantity] = useState(1);
+  const [portfolioBuyPrice, setPortfolioBuyPrice] = useState(0);
+  const [submittingPortfolio, setSubmittingPortfolio] = useState(false);
+
+  const handleOpenPortfolioModal = () => {
+    if (!user || !token) {
+      alert("Please log in to add items to your portfolio.");
+      navigate("/login");
+      return;
+    }
+    setPortfolioQuantity(1);
+    setPortfolioBuyPrice(item?.sellPrice || item?.buyPrice || 0);
+    setShowPortfolioModal(true);
+  };
+
+  const handlePortfolioSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!item) return;
+
+    setSubmittingPortfolio(true);
+    try {
+      const res = await fetchWithAuth(`${API_BASE_URL}/api/portfolio`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          itemId: item.id,
+          itemName: item.name,
+          quantity: portfolioQuantity,
+          buyPrice: portfolioBuyPrice
+        })
+      });
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || "Failed to add item to portfolio");
+      }
+
+      setShowPortfolioModal(false);
+      alert(`Added ${item.name} (${portfolioQuantity}x @ ${portfolioBuyPrice.toLocaleString()} GP) to your Portfolio!`);
+    } catch (err: any) {
+      alert(err.message || "Error adding item to portfolio");
+    } finally {
+      setSubmittingPortfolio(false);
+    }
+  };
+
   useEffect(() => {
     const loadFavorites = async () => {
       if (user && token) {
@@ -304,8 +352,8 @@ export const ItemDetail: React.FC = () => {
     return (
       <div className="item-detail-container">
         <p className="error">{error || "Item not found"}</p>
-        <Link to={location.state?.fromRecipes ? "/recipes" : location.state?.from === "highlights" ? "/highlights" : "/items"} className="back-link">
-          {location.state?.fromRecipes ? "← Back to Recipes" : location.state?.from === "highlights" ? "← Back to highlights" : "← Back to items"}
+        <Link to={location.state?.fromRecipes ? "/recipes" : location.state?.from === "highlights" ? "/highlights" : location.state?.fromArbitrage ? "/arbitrage" : "/items"} className="back-link">
+          {location.state?.fromRecipes ? "← Back to Recipes" : location.state?.from === "highlights" ? "← Back to highlights" : location.state?.fromArbitrage ? "← Back to Arbitrage" : "← Back to items"}
         </Link>
       </div>
     );
@@ -317,8 +365,8 @@ export const ItemDetail: React.FC = () => {
   return (
     <main className="app-main">
       <div className="item-detail-container">
-        <Link to={location.state?.fromRecipes ? "/recipes" : location.state?.from === "highlights" ? "/highlights" : "/items"} className="back-link">
-          {location.state?.fromRecipes ? "← Back to Recipes" : location.state?.from === "highlights" ? "← Back to highlights" : "← Back to items"}
+        <Link to={location.state?.fromRecipes ? "/recipes" : location.state?.from === "highlights" ? "/highlights" : location.state?.fromArbitrage ? "/arbitrage" : "/items"} className="back-link">
+          {location.state?.fromRecipes ? "← Back to Recipes" : location.state?.from === "highlights" ? "← Back to highlights" : location.state?.fromArbitrage ? "← Back to Arbitrage" : "← Back to items"}
         </Link>
 
         <div className="start-row-apart" style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '15px', marginBottom: '10px' }}>
@@ -353,7 +401,7 @@ export const ItemDetail: React.FC = () => {
                     padding: '5px 10px'
                   }}
                   onClick={toggleWatch}
-                  title={isWatched ? "Unwatch" : "Watch (5% threshold)"}
+                  title={isWatched ? "Watching (Configure price targets & thresholds in My Alerts)" : "Watch (Default 5% 1H threshold)"}
                 >
                   {isWatched ? "🔔 Watching" : "🔕 Watch"}
                 </button>
@@ -370,6 +418,23 @@ export const ItemDetail: React.FC = () => {
                   Copy /watch
                 </button>
               )}
+              <button
+                className="watch-button"
+                style={{
+                  background: '#f59e0b',
+                  color: '#0f172a',
+                  border: 'none',
+                  fontWeight: 'bold',
+                  fontSize: '0.9rem',
+                  padding: '6px 14px',
+                  borderRadius: '8px',
+                  cursor: 'pointer'
+                }}
+                onClick={handleOpenPortfolioModal}
+                title="Add item to your Trading Portfolio"
+              >
+                📦 Add to Portfolio
+              </button>
             </div>
 
             <p className="item-examine">{item.examine}</p>
@@ -389,7 +454,7 @@ export const ItemDetail: React.FC = () => {
 
         <div className="item-stats-grid">
           <div className="stat-card">
-            <div className="stat-label">Buy Price</div>
+            <div className="stat-label" title="Instant Buy Price on GE (High price). Set your sell offer here when flipping.">Buy Price ⓘ</div>
             <div className="stat-value">
               {item.buyPrice?.toLocaleString() ?? "-"}
             </div>
@@ -398,7 +463,7 @@ export const ItemDetail: React.FC = () => {
             </div>
           </div>
           <div className="stat-card">
-            <div className="stat-label">Sell Price</div>
+            <div className="stat-label" title="Instant Sell Price on GE (Low price). Set your buy offer here when flipping.">Sell Price ⓘ</div>
             <div className="stat-value">
               {item.sellPrice?.toLocaleString() ?? "-"}
             </div>
@@ -407,7 +472,7 @@ export const ItemDetail: React.FC = () => {
             </div>
           </div>
           <div className="stat-card">
-            <div className="stat-label">Margin</div>
+            <div className="stat-label" title="Instant Buy Price - Instant Sell Price">Margin ⓘ</div>
             <div className="stat-value">
               {item.margin?.toLocaleString() ?? "-"}
             </div>
@@ -453,7 +518,7 @@ export const ItemDetail: React.FC = () => {
             </div>
           </div>
           <div className="stat-card">
-            <div className="stat-label">Margin × Volume</div>
+            <div className="stat-label" title="Margin × 24h Volume">Margin × Volume ⓘ</div>
             <div className="stat-value">
               {item.marginVolume?.toLocaleString() ?? "-"}
             </div>
@@ -461,35 +526,35 @@ export const ItemDetail: React.FC = () => {
 
 
           <div className="stat-card">
-            <div className="stat-label">Buy Limit</div>
+            <div className="stat-label" title="4-hour GE purchase quantity limit">Buy Limit ⓘ</div>
             <div className="stat-value">
               {item.limit?.toLocaleString() ?? "-"}
             </div>
           </div>
 
           <div className="stat-card">
-            <div className="stat-label" title="2% tax on Sell Price (capped at 5m)">Tax (2%) ⓘ</div>
+            <div className="stat-label" title="2% GE tax applied when selling at Instant Buy Price (capped at 5M GP)">Tax (2%) ⓘ</div>
             <div className="stat-value text-muted">
               {item.tax !== null ? `-${item.tax.toLocaleString()}` : "-"}
             </div>
           </div>
 
           <div className="stat-card highlight-card">
-            <div className="stat-label" title="(Sell Price - Tax) - Buy Price">Net Profit ⓘ</div>
+            <div className="stat-label" title="(Instant Buy Price - Tax) - Instant Sell Price">Net Profit ⓘ</div>
             <div className="stat-value" style={{ color: (item.profit || 0) > 0 ? '#4caf50' : '#f44336' }}>
               {item.profit?.toLocaleString() ?? "-"}
             </div>
           </div>
 
           <div className="stat-card highlight-card">
-            <div className="stat-label" title="Net Profit / Buy Price * 100">ROI ⓘ</div>
+            <div className="stat-label" title="Net Profit / Instant Sell Price * 100">ROI ⓘ</div>
             <div className="stat-value" style={{ color: (item.roi || 0) > 5 ? '#4caf50' : (item.roi || 0) > 0 ? '#ff9800' : '#f44336' }}>
               {item.roi?.toFixed(2)}%
             </div>
           </div>
 
           <div className="stat-card">
-            <div className="stat-label" title="Net Profit * Buy Limit">Potential Profit ⓘ</div>
+            <div className="stat-label" title="Net Profit × Buy Limit">Potential Profit ⓘ</div>
             <div className="stat-value text-gold">
               {item.potentialProfit?.toLocaleString() ?? "-"}
             </div>
@@ -588,6 +653,91 @@ export const ItemDetail: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Portfolio Modal */}
+      {showPortfolioModal && item && (
+        <div className="modal-overlay" onClick={() => setShowPortfolioModal(false)}>
+          <div className="modal-card" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>📦 Add to Portfolio</h3>
+              <button
+                className="modal-close-btn"
+                onClick={() => setShowPortfolioModal(false)}
+              >
+                &times;
+              </button>
+            </div>
+
+            <form onSubmit={handlePortfolioSubmit} style={{ display: "flex", flexDirection: "column", gap: "15px" }}>
+              <div
+                style={{
+                  padding: "10px 12px",
+                  background: "#1e1e1e",
+                  borderRadius: "6px",
+                  border: "1px solid var(--border-color)",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "10px"
+                }}
+              >
+                <img src={item.iconUrl} alt={item.name} className="suggestion-icon" />
+                <div>
+                  <div style={{ fontWeight: 700, color: "#fff" }}>{item.name}</div>
+                  <div style={{ fontSize: "0.8rem", color: "#aaa" }}>
+                    Instant Buy (Sell Offer): <span style={{ color: "var(--primary-color)", fontWeight: 600 }}>{item.buyPrice ? item.buyPrice.toLocaleString() + " GP" : "N/A"}</span> | Instant Sell (Buy Offer): <span style={{ color: "#34d399", fontWeight: 600 }}>{item.sellPrice ? item.sellPrice.toLocaleString() + " GP" : "N/A"}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+                <div>
+                  <label style={{ display: "block", fontSize: "0.85rem", color: "#aaa", marginBottom: "5px" }}>
+                    Count Bought
+                  </label>
+                  <input
+                    type="number"
+                    min={1}
+                    className="filter-input"
+                    value={portfolioQuantity}
+                    onChange={(e) => setPortfolioQuantity(Math.max(1, parseInt(e.target.value) || 0))}
+                    required
+                  />
+                </div>
+                <div>
+                  <label style={{ display: "block", fontSize: "0.85rem", color: "#aaa", marginBottom: "5px" }}>
+                    Buy Price (GP)
+                  </label>
+                  <input
+                    type="number"
+                    min={1}
+                    className="filter-input"
+                    value={portfolioBuyPrice}
+                    onChange={(e) => setPortfolioBuyPrice(Math.max(1, parseInt(e.target.value) || 0))}
+                    required
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px", marginTop: "10px" }}>
+                <button
+                  type="button"
+                  className="secondary-btn"
+                  onClick={() => setShowPortfolioModal(false)}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="primary-btn"
+                  disabled={submittingPortfolio}
+                >
+                  {submittingPortfolio ? "Adding..." : "Add to Portfolio"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </main>
   );
 };

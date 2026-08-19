@@ -178,7 +178,7 @@ export async function getProfitableRecipes(minProfit: number = 0, limit: number 
     const items = await getLatestItems();
 
     // Create Map for Price Lookup
-    // CombinedItem has buyPrice (Low), sellPrice (High) and volume (daily)
+    // CombinedItem has buyPrice (High - Instant Buy) and sellPrice (Low - Instant Sell)
     const priceMap = new Map<number, { buy: number, sell: number, volume: number, limit: number }>();
     for (const item of items) {
         priceMap.set(item.id, {
@@ -222,10 +222,10 @@ export async function getProfitableRecipes(minProfit: number = 0, limit: number 
             const priceData = priceMap.get(input.item_id);
             // If no price data, skip.
 
-            // Standard: Cost = Buy Price (Low), Revenue = Sell Price (High)
-            // Patient trader logic.
-            const costPrice = priceData?.buy ?? 0; // Buy at low (bid)
-            const revenuePrice = priceData?.sell ?? 0; // Sell at high (ask)
+            // Cost = Instant Buy Price (High price for instant ingredient acquisition)
+            // Revenue = Instant Sell Price (Low price for instant product sale)
+            const costPrice = priceData?.buy ?? 0;
+            const revenuePrice = priceData?.sell ?? 0;
 
             // If price is missing or zero, we can't calculate profit accurately
             if ((!priceData || costPrice <= 0) && input.item_id !== 995 && input.item_id !== 0) {

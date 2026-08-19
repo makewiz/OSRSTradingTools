@@ -8,6 +8,7 @@ import { NewsService } from "../news";
 import { logger } from "@osrstradingtools/shared";
 import dotenv from "dotenv";
 import { getLatestItems } from "../scheduler";
+import { getGeminiClient, DEFAULT_GEMINI_MODEL } from "../gemini";
 
 dotenv.config();
 
@@ -34,8 +35,8 @@ const CACHE_TTL = 60 * 60 * 1000; // 1 hour
 const analysisCache: RiskAnalysisCache = {};
 
 router.get("/risk/:id", async (req, res) => {
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) {
+    const client = getGeminiClient();
+    if (!client) {
         return res.status(503).json({ error: "AI service unavailable (missing API key)" });
     }
 
@@ -156,30 +157,16 @@ router.get("/risk/:id", async (req, res) => {
       }
     `;
 
-        // 3. Call Google Gemini
-        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${apiKey}`, {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json"
-            },
-            body: JSON.stringify({
-                contents: [{
-                    parts: [{ text: prompt }]
-                }]
-            })
-        });
-
-        const aiData = await response.json();
-
-        // Debug logging
-        if (!response.ok || !aiData.candidates) {
-            logger.error("Gemini API Error:", JSON.stringify(aiData, null, 2));
-        }
-
+        // 3. Call Google Gemini Interactions API
         let result: RiskAnalysisResponse;
 
         try {
-            const content = aiData.candidates?.[0]?.content?.parts?.[0]?.text;
+            const interaction = await client.interactions.create({
+                model: DEFAULT_GEMINI_MODEL,
+                input: prompt
+            });
+
+            const content = interaction.output_text;
             if (!content) throw new Error("No content in AI response");
 
             // Clean up markdown code blocks if present (Gemini often wraps JSON in ```json ... ```)

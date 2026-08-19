@@ -1,8 +1,10 @@
 
 import React, { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation, Navigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { API_BASE_URL } from "../config";
+
+import { TradingAgentsSection } from "../components/TradingAgentsSection";
 
 interface Watch {
     id: number;
@@ -11,11 +13,19 @@ interface Watch {
     itemName?: string;
     day_change_threshold: number | null;
     one_hour_change_threshold: number | null;
+    target_price_above: number | null;
+    target_price_below: number | null;
+    is_1h_triggered?: boolean | number | null;
+    is_24h_triggered?: boolean | number | null;
+    is_above_triggered?: boolean | number | null;
+    is_below_triggered?: boolean | number | null;
     cooldown_seconds: number | null;
     enabled: boolean;
     created_at: number;
     last_notified_at: number | null;
     last_notified_1h_at: number | null;
+    last_notified_above_at?: number | null;
+    last_notified_below_at?: number | null;
 }
 
 interface AdvancedWatch {
@@ -56,8 +66,10 @@ export const Watches: React.FC = () => {
 
     // Edit state for Simple Watches
     const [editingWatchId, setEditingWatchId] = useState<number | null>(null);
-    const [editThreshold, setEditThreshold] = useState<string>("");
-    const [editPeriod, setEditPeriod] = useState<'1h' | '24h'>('1h');
+    const [edit1hThreshold, setEdit1hThreshold] = useState<string>("");
+    const [edit24hThreshold, setEdit24hThreshold] = useState<string>("");
+    const [editTargetAbove, setEditTargetAbove] = useState<string>("");
+    const [editTargetBelow, setEditTargetBelow] = useState<string>("");
     const [editCooldown, setEditCooldown] = useState<string>("");
 
     // Create/Edit State for Advanced Watches
@@ -73,6 +85,19 @@ export const Watches: React.FC = () => {
         is_members: null
     };
     const [advForm, setAdvForm] = useState<Partial<AdvancedWatch>>(initialAdvForm);
+
+    const location = useLocation();
+    const queryParams = new URLSearchParams(location.search);
+    const initialTab = (queryParams.get("tab") as any) || "agents";
+
+    if (initialTab === "portfolio") {
+        return <Navigate to="/portfolio" replace />;
+    }
+
+    // Active Tab state
+    const [activeTab, setActiveTab] = useState<'agents' | 'smart' | 'alerts'>(
+        initialTab === 'portfolio' ? 'agents' : initialTab
+    );
 
     useEffect(() => {
         if (token) fetchDat();
@@ -115,23 +140,21 @@ export const Watches: React.FC = () => {
 
     const startEditing = (watch: Watch) => {
         setEditingWatchId(watch.item_id);
-        if (watch.one_hour_change_threshold !== null) {
-            setEditPeriod('1h');
-            setEditThreshold(watch.one_hour_change_threshold.toString());
-        } else {
-            setEditPeriod('24h');
-            setEditThreshold(watch.day_change_threshold?.toString() || "");
-        }
-        // Convert seconds (DB) to minutes (Display)
+        setEdit1hThreshold(watch.one_hour_change_threshold !== null && watch.one_hour_change_threshold !== undefined ? watch.one_hour_change_threshold.toString() : "");
+        setEdit24hThreshold(watch.day_change_threshold !== null && watch.day_change_threshold !== undefined ? watch.day_change_threshold.toString() : "");
+        setEditTargetAbove(watch.target_price_above !== null && watch.target_price_above !== undefined ? watch.target_price_above.toString() : "");
+        setEditTargetBelow(watch.target_price_below !== null && watch.target_price_below !== undefined ? watch.target_price_below.toString() : "");
         const mins = Math.floor((watch.cooldown_seconds || 3600) / 60);
         setEditCooldown(mins.toString());
     };
 
     const saveEdit = async (itemId: number) => {
-        const threshold = parseFloat(editThreshold);
+        const threshold1h = edit1hThreshold.trim() !== "" ? parseFloat(edit1hThreshold) : null;
+        const threshold24h = edit24hThreshold.trim() !== "" ? parseFloat(edit24hThreshold) : null;
+        const targetAbove = editTargetAbove.trim() !== "" ? parseInt(editTargetAbove, 10) : null;
+        const targetBelow = editTargetBelow.trim() !== "" ? parseInt(editTargetBelow, 10) : null;
         const cooldownMins = parseInt(editCooldown, 10);
 
-        if (isNaN(threshold) || threshold < 0) return alert("Invalid threshold");
         if (isNaN(cooldownMins) || cooldownMins < 0) return alert("Invalid cooldown");
 
         const cooldownSeconds = cooldownMins * 60;
@@ -142,8 +165,14 @@ export const Watches: React.FC = () => {
                     return {
                         ...w,
                         cooldown_seconds: cooldownSeconds,
-                        one_hour_change_threshold: editPeriod === '1h' ? threshold : null,
-                        day_change_threshold: editPeriod === '24h' ? threshold : null
+                        one_hour_change_threshold: threshold1h,
+                        day_change_threshold: threshold24h,
+                        target_price_above: targetAbove,
+                        target_price_below: targetBelow,
+                        is_1h_triggered: false,
+                        is_24h_triggered: false,
+                        is_above_triggered: false,
+                        is_below_triggered: false
                     };
                 }
                 return w;
@@ -153,7 +182,13 @@ export const Watches: React.FC = () => {
             await fetchWithAuth(`${API_BASE_URL}/api/discord/watch/${itemId}`, {
                 method: "PUT",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ threshold, period: editPeriod, cooldown: cooldownSeconds })
+                body: JSON.stringify({
+                    oneHourChangeThreshold: threshold1h,
+                    dayChangeThreshold: threshold24h,
+                    targetPriceAbove: targetAbove,
+                    targetPriceBelow: targetBelow,
+                    cooldown: cooldownSeconds
+                })
             });
         } catch (err) {
             setError("Failed to update watch");
@@ -167,15 +202,14 @@ export const Watches: React.FC = () => {
         setWatches(prev => prev.map(w => w.item_id === watch.item_id ? { ...w, enabled: newEnabled } : w));
 
         try {
-            const activeThreshold = watch.one_hour_change_threshold !== null ? watch.one_hour_change_threshold : watch.day_change_threshold;
-            const period = watch.one_hour_change_threshold !== null ? '1h' : '24h';
-
             const res = await fetchWithAuth(`${API_BASE_URL}/api/discord/watch/${watch.item_id}`, {
                 method: "PUT",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
-                    threshold: activeThreshold,
-                    period,
+                    oneHourChangeThreshold: watch.one_hour_change_threshold,
+                    dayChangeThreshold: watch.day_change_threshold,
+                    targetPriceAbove: watch.target_price_above,
+                    targetPriceBelow: watch.target_price_below,
                     cooldown: watch.cooldown_seconds,
                     enabled: newEnabled
                 })
@@ -316,153 +350,263 @@ export const Watches: React.FC = () => {
                 </div>
             )}
 
+            {/* Tabs Header */}
+            <div style={{ display: 'flex', gap: '10px', marginBottom: '25px', borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '12px' }}>
+                <button
+                    onClick={() => setActiveTab('agents')}
+                    className="page-button"
+                    style={{
+                        background: activeTab === 'agents' ? '#6366f1' : 'rgba(255,255,255,0.05)',
+                        color: activeTab === 'agents' ? '#fff' : '#aaa',
+                        border: activeTab === 'agents' ? '1px solid #818cf8' : '1px solid border-slate-700',
+                        fontWeight: 'bold',
+                        padding: '10px 18px',
+                        borderRadius: '8px',
+                        cursor: 'pointer'
+                    }}
+                >
+                    🤖 AI Trading Agents
+                </button>
+                <Link
+                    to="/portfolio"
+                    className="page-button"
+                    style={{
+                        background: 'rgba(255,255,255,0.05)',
+                        color: '#fbbf24',
+                        border: '1px solid #f59e0b',
+                        fontWeight: 'bold',
+                        padding: '10px 18px',
+                        borderRadius: '8px',
+                        cursor: 'pointer',
+                        textDecoration: 'none',
+                        display: 'inline-block'
+                    }}
+                >
+                    📦 Trading Portfolio ↗
+                </Link>
+                <button
+                    onClick={() => setActiveTab('smart')}
+                    className="page-button"
+                    style={{
+                        background: activeTab === 'smart' ? '#4caf50' : 'rgba(255,255,255,0.05)',
+                        color: activeTab === 'smart' ? '#fff' : '#aaa',
+                        border: activeTab === 'smart' ? '1px solid #66bb6a' : '1px solid border-slate-700',
+                        fontWeight: 'bold',
+                        padding: '10px 18px',
+                        borderRadius: '8px',
+                        cursor: 'pointer'
+                    }}
+                >
+                    🔎 Smart Market Watches ({advancedWatches.length})
+                </button>
+                <button
+                    onClick={() => setActiveTab('alerts')}
+                    className="page-button"
+                    style={{
+                        background: activeTab === 'alerts' ? '#2196f3' : 'rgba(255,255,255,0.05)',
+                        color: activeTab === 'alerts' ? '#fff' : '#aaa',
+                        border: activeTab === 'alerts' ? '1px solid #64b5f6' : '1px solid border-slate-700',
+                        fontWeight: 'bold',
+                        padding: '10px 18px',
+                        borderRadius: '8px',
+                        cursor: 'pointer'
+                    }}
+                >
+                    🚨 Item Alerts ({watches.length})
+                </button>
+            </div>
+
             {loading && <p>Loading...</p>}
 
             {!loading && (
                 <>
-                    {/* Advanced Watches List First (Priority) */}
-                    <div className="section" style={{ background: 'rgba(0,0,0,0.2)', padding: '20px', borderRadius: '8px', marginBottom: '30px' }}>
-                        <h2>Smart Watches</h2>
-                        {advancedWatches.length === 0 ? (
-                            <p style={{ color: '#aaa', fontStyle: 'italic' }}>No advanced watches configured. Create one to track complex market movements.</p>
-                        ) : (
-                            <div className="table-wrapper">
-                                <table className="items-table" style={{ width: '100%' }}>
-                                    <thead>
-                                        <tr>
-                                            <th>Watch Rules</th>
-                                            <th>Settings</th>
-                                            <th>Status</th>
-                                            <th style={{ textAlign: 'right' }}>Action</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {advancedWatches.map(w => (
-                                            <tr key={w.id}>
-                                                <td>
-                                                    <div style={{ fontWeight: 'bold', fontSize: '1.1em', marginBottom: '5px' }}>{w.name || "Unnamed Watch"}</div>
-                                                    <div style={{ fontSize: '0.9em', color: '#ccc', display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-                                                        {w.min_buy_price && <span className="tag">Min Buy: {w.min_buy_price}</span>}
-                                                        {w.max_buy_price && <span className="tag">Max Buy: {w.max_buy_price}</span>}
-                                                        {w.min_volume && <span className="tag">Vol &gt; {w.min_volume}</span>}
-                                                        {w.min_change_1h && <span className="tag">1H: {w.min_change_1h}%</span>}
-                                                        {w.min_change_24h && <span className="tag">24H: {w.min_change_24h}%</span>}
-                                                        {w.min_profit && <span className="tag">Profit &gt; {w.min_profit}</span>}
-                                                        {w.min_roi && <span className="tag">ROI &gt; {w.min_roi}%</span>}
-                                                        {w.min_margin && <span className="tag">Margin &gt; {w.min_margin}</span>}
-                                                        {w.min_potential_profit && <span className="tag">Pot. Profit &gt; {w.min_potential_profit}</span>}
-                                                        {(w.is_members !== null) && <span className="tag">Mem: {w.is_members ? 'Yes' : 'No'}</span>}
-                                                    </div>
-                                                </td>
-                                                <td style={{ minWidth: '150px' }}>
-                                                    <div>⏱ {w.cooldown_minutes}m Cooldown</div>
-                                                    <div style={{ fontSize: '0.9em', color: '#aaa' }}>
-                                                        Top {w.max_count} by {w.order_by} ({w.direction})
-                                                    </div>
-                                                </td>
-                                                <td>
-                                                    <label className="switch">
-                                                        <input
-                                                            type="checkbox"
-                                                            checked={w.enabled}
-                                                            onChange={() => toggleAdvancedWatch(w)}
-                                                        />
-                                                        <span className="slider round"></span>
-                                                    </label>
-                                                </td>
-                                                <td style={{ textAlign: 'right', minWidth: '100px' }}>
-                                                    <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
-                                                        <button className="page-button icon-btn" onClick={() => openEditAdvanced(w)}>✎</button>
-                                                        <button className="page-button icon-btn" style={{ color: '#f44336' }} onClick={() => handleRemoveAdvancedWatch(w.id)}>🗑</button>
-                                                    </div>
-                                                </td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            </div>
-                        )}
-                    </div>
+                    {/* Tab 1: AI Trading Agents */}
+                    {activeTab === 'agents' && (
+                        <TradingAgentsSection />
+                    )}
 
-                    {/* Simple Watches List */}
-                    <div className="section" style={{ background: 'rgba(0,0,0,0.2)', padding: '20px', borderRadius: '8px' }}>
-                        <h2>Individual Item Alerts</h2>
-                        {watches.length === 0 ? (
-                            <p style={{ color: '#aaa' }}>You have no active item alerts. Visit an item page to track single items.</p>
-                        ) : (
-                            <div className="table-wrapper">
-                                <table className="items-table" style={{ width: '100%' }}>
-                                    <thead>
-                                        <tr>
-                                            <th>Item</th>
-                                            <th>Type</th>
-                                            <th>Threshold</th>
-                                            <th>Cooldown (m)</th>
-                                            <th>Status</th>
-                                            <th style={{ textAlign: 'right' }}>Action</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {watches.map(w => {
-                                            const isEditing = editingWatchId === w.item_id;
-                                            const activePeriod = w.one_hour_change_threshold !== null ? '1H' : '24H';
-                                            const activeThreshold = w.one_hour_change_threshold !== null ? w.one_hour_change_threshold : w.day_change_threshold;
-                                            return (
+                    {/* Tab 2: Smart Watches */}
+                    {activeTab === 'smart' && (
+                        <div className="section" style={{ background: 'rgba(0,0,0,0.2)', padding: '20px', borderRadius: '8px', marginBottom: '30px' }}>
+                            <h2>Smart Market Watches</h2>
+                            {advancedWatches.length === 0 ? (
+                                <p style={{ color: '#aaa', fontStyle: 'italic' }}>No advanced watches configured. Create one to track complex market movements.</p>
+                            ) : (
+                                <div className="table-wrapper">
+                                    <table className="items-table" style={{ width: '100%' }}>
+                                        <thead>
+                                            <tr>
+                                                <th>Watch Rules</th>
+                                                <th>Settings</th>
+                                                <th>Status</th>
+                                                <th style={{ textAlign: 'right' }}>Action</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {advancedWatches.map(w => (
                                                 <tr key={w.id}>
                                                     <td>
-                                                        <Link to={`/item/${w.item_id}`} className="item-name-link">
-                                                            {w.itemName || `Item ${w.item_id}`}
-                                                        </Link>
+                                                        <strong style={{ color: '#fff', fontSize: '1.05em', display: 'block', marginBottom: '4px' }}>
+                                                            {w.name || "Custom Watch"}
+                                                        </strong>
+                                                        <div style={{ fontSize: '0.85em', color: '#bbb', display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                                                            {w.min_buy_price && <span className="tag">Buy &ge; {w.min_buy_price.toLocaleString()}</span>}
+                                                            {w.max_buy_price && <span className="tag">Buy &le; {w.max_buy_price.toLocaleString()}</span>}
+                                                            {w.min_sell_price && <span className="tag">Sell &ge; {w.min_sell_price.toLocaleString()}</span>}
+                                                            {w.max_sell_price && <span className="tag">Sell &le; {w.max_sell_price.toLocaleString()}</span>}
+                                                            {w.min_margin && <span className="tag">Margin &ge; {w.min_margin.toLocaleString()}</span>}
+                                                            {w.min_profit && <span className="tag">Profit &ge; {w.min_profit.toLocaleString()}</span>}
+                                                            {w.min_roi && <span className="tag">ROI &ge; {w.min_roi}%</span>}
+                                                            {w.min_volume && <span className="tag">Vol &ge; {w.min_volume.toLocaleString()}</span>}
+                                                            {w.min_change_1h && <span className="tag">1H &ge; {w.min_change_1h}%</span>}
+                                                            {w.min_change_24h && <span className="tag">24H &ge; {w.min_change_24h}%</span>}
+                                                            {w.is_members !== null && <span className="tag">{w.is_members ? 'Members' : 'F2P'}</span>}
+                                                        </div>
                                                     </td>
                                                     <td>
-                                                        {isEditing ? (
-                                                            <select value={editPeriod} onChange={(e) => setEditPeriod(e.target.value as any)} className="dark-input">
-                                                                <option value="1h">1H Change</option>
-                                                                <option value="24h">24H Change</option>
-                                                            </select>
-                                                        ) : <span className="tag" style={{ background: activePeriod === '1H' ? '#4caf50' : '#2196f3' }}>{activePeriod} Change</span>}
-                                                    </td>
-                                                    <td>
-                                                        {isEditing ? (
-                                                            <input type="number" value={editThreshold} onChange={e => setEditThreshold(e.target.value)} className="dark-input" style={{ width: '60px' }} step="0.1" />
-                                                        ) : `${activeThreshold?.toFixed(1)}%`}
-                                                    </td>
-                                                    <td>
-                                                        {isEditing ? (
-                                                            <input type="number" value={editCooldown} onChange={e => setEditCooldown(e.target.value)} className="dark-input" style={{ width: '80px' }} />
-                                                        ) : `${Math.floor((w.cooldown_seconds || 3600) / 60)}m`}
+                                                        <div style={{ fontSize: '0.85em', color: '#ccc' }}>
+                                                            <div>Sort: <strong>{w.order_by} ({w.direction})</strong></div>
+                                                            <div>Limit: <strong>Top {w.max_count}</strong></div>
+                                                            <div>Cooldown: <strong>{w.cooldown_minutes}m</strong></div>
+                                                        </div>
                                                     </td>
                                                     <td>
                                                         <label className="switch">
                                                             <input
                                                                 type="checkbox"
                                                                 checked={w.enabled}
-                                                                onChange={() => toggleStandardWatch(w)}
+                                                                onChange={() => toggleAdvancedWatch(w)}
                                                             />
                                                             <span className="slider round"></span>
                                                         </label>
                                                     </td>
                                                     <td style={{ textAlign: 'right' }}>
-                                                        {isEditing ? (
-                                                            <div style={{ display: 'flex', gap: '5px', justifyContent: 'flex-end' }}>
-                                                                <button className="page-button" style={{ background: '#4caf50', padding: '4px 8px' }} onClick={() => saveEdit(w.item_id)}>✓</button>
-                                                                <button className="page-button" style={{ background: '#777', padding: '4px 8px' }} onClick={() => setEditingWatchId(null)}>✕</button>
-                                                            </div>
-                                                        ) : (
-                                                            <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
-                                                                <button className="page-button icon-btn" onClick={() => startEditing(w)}>✎</button>
-                                                                <button className="page-button icon-btn" style={{ color: '#f44336' }} onClick={() => handleRemoveWatch(w.item_id)}>🗑</button>
-                                                            </div>
-                                                        )}
+                                                        <div style={{ display: 'flex', gap: '5px', justifyContent: 'flex-end' }}>
+                                                            <button className="page-button icon-btn" onClick={() => openEditAdvanced(w)}>✎</button>
+                                                            <button className="page-button icon-btn" style={{ color: '#f44336' }} onClick={() => handleRemoveAdvancedWatch(w.id)}>🗑</button>
+                                                        </div>
                                                     </td>
                                                 </tr>
-                                            );
-                                        })}
-                                    </tbody>
-                                </table>
-                            </div>
-                        )}
-                    </div>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {/* Tab 3: Item Alerts */}
+                    {activeTab === 'alerts' && (
+                        <div className="section" style={{ background: 'rgba(0,0,0,0.2)', padding: '20px', borderRadius: '8px' }}>
+                            <h2>Individual Item Alerts</h2>
+                            {watches.length === 0 ? (
+                                <p style={{ color: '#aaa' }}>You have no active item alerts. Visit an item page to track single items.</p>
+                            ) : (
+                                <div className="table-wrapper">
+                                    <table className="items-table" style={{ width: '100%' }}>
+                                        <thead>
+                                            <tr>
+                                                <th>Item</th>
+                                                <th>Alert Triggers & Price Limits</th>
+                                                <th>Active State</th>
+                                                <th>Cooldown (m)</th>
+                                                <th>Status</th>
+                                                <th style={{ textAlign: 'right' }}>Action</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {watches.map(w => {
+                                                const isEditing = editingWatchId === w.item_id;
+                                                const is1hActive = Boolean(w.is_1h_triggered);
+                                                const is24hActive = Boolean(w.is_24h_triggered);
+                                                const isAboveActive = Boolean(w.is_above_triggered);
+                                                const isBelowActive = Boolean(w.is_below_triggered);
+                                                const hasActiveTrigger = is1hActive || is24hActive || isAboveActive || isBelowActive;
+
+                                                return (
+                                                    <tr key={w.id}>
+                                                        <td>
+                                                            <Link to={`/item/${w.item_id}`} className="item-name-link">
+                                                                {w.itemName || `Item ${w.item_id}`}
+                                                            </Link>
+                                                        </td>
+                                                        <td>
+                                                            {isEditing ? (
+                                                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                                                                    <input type="number" placeholder="1H %" value={edit1hThreshold} onChange={e => setEdit1hThreshold(e.target.value)} className="dark-input" style={{ width: '70px' }} step="0.1" title="1-Hour Change % Threshold" />
+                                                                    <input type="number" placeholder="24H %" value={edit24hThreshold} onChange={e => setEdit24hThreshold(e.target.value)} className="dark-input" style={{ width: '70px' }} step="0.1" title="24-Hour Change % Threshold" />
+                                                                    <input type="number" placeholder="Target Above GP" value={editTargetAbove} onChange={e => setEditTargetAbove(e.target.value)} className="dark-input" style={{ width: '110px' }} title="Target High Price (Above GP)" />
+                                                                    <input type="number" placeholder="Target Below GP" value={editTargetBelow} onChange={e => setEditTargetBelow(e.target.value)} className="dark-input" style={{ width: '110px' }} title="Target Low Price (Below GP)" />
+                                                                </div>
+                                                            ) : (
+                                                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                                                                    {w.one_hour_change_threshold !== null && w.one_hour_change_threshold !== undefined && (
+                                                                        <span className="tag" style={{ background: '#4caf50' }}>1H &ge; {w.one_hour_change_threshold}%</span>
+                                                                    )}
+                                                                    {w.day_change_threshold !== null && w.day_change_threshold !== undefined && (
+                                                                        <span className="tag" style={{ background: '#2196f3' }}>24H &ge; {w.day_change_threshold}%</span>
+                                                                    )}
+                                                                    {w.target_price_above !== null && w.target_price_above !== undefined && (
+                                                                        <span className="tag" style={{ background: '#f59e0b', color: '#000', fontWeight: 'bold' }}>Above &ge; {w.target_price_above.toLocaleString()} gp</span>
+                                                                    )}
+                                                                    {w.target_price_below !== null && w.target_price_below !== undefined && (
+                                                                        <span className="tag" style={{ background: '#ec4899', fontWeight: 'bold' }}>Below &le; {w.target_price_below.toLocaleString()} gp</span>
+                                                                    )}
+                                                                    {w.one_hour_change_threshold === null && w.day_change_threshold === null && w.target_price_above === null && w.target_price_below === null && (
+                                                                        <span style={{ color: '#aaa', fontStyle: 'italic', fontSize: '0.85em' }}>No active triggers</span>
+                                                                    )}
+                                                                </div>
+                                                            )}
+                                                        </td>
+                                                        <td>
+                                                            {hasActiveTrigger ? (
+                                                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
+                                                                    {is1hActive && <span className="tag" style={{ background: '#ef4444', color: '#fff', fontSize: '0.75em' }}>⚡ 1H Active</span>}
+                                                                    {is24hActive && <span className="tag" style={{ background: '#ef4444', color: '#fff', fontSize: '0.75em' }}>⚡ 24H Active</span>}
+                                                                    {isAboveActive && <span className="tag" style={{ background: '#ef4444', color: '#fff', fontSize: '0.75em' }}>⚡ High Limit Crossed</span>}
+                                                                    {isBelowActive && <span className="tag" style={{ background: '#ef4444', color: '#fff', fontSize: '0.75em' }}>⚡ Low Limit Crossed</span>}
+                                                                </div>
+                                                            ) : (
+                                                                <span style={{ color: '#4caf50', fontSize: '0.85em', fontWeight: 'bold' }}>🟢 Monitoring</span>
+                                                            )}
+                                                        </td>
+                                                        <td>
+                                                            {isEditing ? (
+                                                                <input type="number" value={editCooldown} onChange={e => setEditCooldown(e.target.value)} className="dark-input" style={{ width: '70px' }} title="Cooldown (minutes)" />
+                                                            ) : `${Math.floor((w.cooldown_seconds || 3600) / 60)}m`}
+                                                        </td>
+                                                        <td>
+                                                            <label className="switch">
+                                                                <input
+                                                                    type="checkbox"
+                                                                    checked={w.enabled}
+                                                                    onChange={() => toggleStandardWatch(w)}
+                                                                />
+                                                                <span className="slider round"></span>
+                                                            </label>
+                                                        </td>
+                                                        <td style={{ textAlign: 'right' }}>
+                                                            {isEditing ? (
+                                                                <div style={{ display: 'flex', gap: '5px', justifyContent: 'flex-end' }}>
+                                                                    <button className="page-button icon-btn" onClick={() => saveEdit(w.item_id)} style={{ color: '#4caf50' }}>✓</button>
+                                                                    <button className="page-button icon-btn" onClick={() => setEditingWatchId(null)}>✕</button>
+                                                                </div>
+                                                            ) : (
+                                                                <div style={{ display: 'flex', gap: '5px', justifyContent: 'flex-end' }}>
+                                                                    <button className="page-button icon-btn" onClick={() => startEditing(w)}>✎</button>
+                                                                    <button className="page-button icon-btn" style={{ color: '#f44336' }} onClick={() => handleRemoveWatch(w.item_id)}>🗑</button>
+                                                                </div>
+                                                            )}
+                                                        </td>
+                                                    </tr>
+                                                );
+                                            })}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            )}
+                        </div>
+                    )}
                 </>
             )}
 
@@ -501,11 +645,11 @@ export const Watches: React.FC = () => {
                                     <h3 style={{ fontSize: '1em', color: '#4caf50', marginBottom: '10px', borderBottom: '1px solid #333', paddingBottom: '5px' }}>Price & Volume</h3>
                                     <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '10px' }}>
                                         <div className="form-group">
-                                            <label>Min Buy Price</label>
+                                            <label title="Minimum Instant Buy Price (High price)">Min Buy Price (Instant Buy / High)</label>
                                             <input type="number" className="dark-input" value={advForm.min_buy_price || ""} onChange={e => updateAdvForm('min_buy_price', e.target.value)} />
                                         </div>
                                         <div className="form-group">
-                                            <label>Max Buy Price</label>
+                                            <label title="Maximum Instant Buy Price (High price)">Max Buy Price (Instant Buy / High)</label>
                                             <input type="number" className="dark-input" value={advForm.max_buy_price || ""} onChange={e => updateAdvForm('max_buy_price', e.target.value)} />
                                         </div>
                                         <div className="form-group">
@@ -537,7 +681,7 @@ export const Watches: React.FC = () => {
                                         </div>
                                         <div className="form-group">
                                             <label>Members Only</label>
-                                            <select className="dark-input" value={advForm.is_members === null ? "" : advForm.is_members.toString()} onChange={e => updateAdvForm('is_members', e.target.value === 'true' ? true : e.target.value === 'false' ? false : null)}>
+                                            <select className="dark-input" value={advForm.is_members == null ? "" : String(advForm.is_members)} onChange={e => updateAdvForm('is_members', e.target.value === 'true' ? true : e.target.value === 'false' ? false : null)}>
                                                 <option value="">Any</option>
                                                 <option value="true">Yes</option>
                                                 <option value="false">No</option>

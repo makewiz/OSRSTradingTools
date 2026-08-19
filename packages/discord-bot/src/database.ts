@@ -3,13 +3,15 @@ import dotenv from "dotenv";
 
 dotenv.config();
 
-// Ensure DATABASE_URL is provided, or rely on shared config if possible, but separate env is safer for decoupled running
+const DEFAULT_DATABASE_URL = "postgresql://user:password@localhost:5432/osrs_trading";
+const databaseUrl = process.env.DATABASE_URL || DEFAULT_DATABASE_URL;
+
 if (!process.env.DATABASE_URL) {
-  console.warn("DATABASE_URL is not set. Please set it in your .env file.");
+  console.info(`[Database] DATABASE_URL not set in .env, falling back to default local Docker database: ${DEFAULT_DATABASE_URL}`);
 }
 
 export const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
+  connectionString: databaseUrl,
 });
 
 export interface DiscordUser {
@@ -25,10 +27,18 @@ export interface NotificationSetting {
   item_id: number;
   day_change_threshold: number | null;
   one_hour_change_threshold: number | null;
+  target_price_above: number | null;
+  target_price_below: number | null;
+  is_1h_triggered: boolean | number;
+  is_24h_triggered: boolean | number;
+  is_above_triggered: boolean | number;
+  is_below_triggered: boolean | number;
   enabled: boolean;
   created_at: number;
   last_notified_at: number | null;
   last_notified_1h_at: number | null;
+  last_notified_above_at: number | null;
+  last_notified_below_at: number | null;
   cooldown_seconds: number | null;
 }
 
@@ -103,33 +113,47 @@ export async function isUserAdmin(discordId: string): Promise<boolean> {
 export async function addWatch(
   discordId: string,
   itemId: number,
-  threshold: number = 5.0,
-  period: '24h' | '1h' = '1h',
-  cooldownSeconds: number = 3600
+  threshold?: number | null,
+  period: '24h' | '1h' | 'none' = '1h',
+  cooldownSeconds: number = 3600,
+  targetPriceAbove?: number | null,
+  targetPriceBelow?: number | null,
+  oneHourChangeThreshold?: number | null,
+  dayChangeThreshold?: number | null
 ): Promise<void> {
   await ensureDiscordUser(discordId);
 
-  if (period === '24h') {
-    const query = `
-        INSERT INTO notification_settings (discord_id, item_id, day_change_threshold, cooldown_seconds, enabled)
-        VALUES ($1, $2, $3, $4, 1)
-        ON CONFLICT(discord_id, item_id) DO UPDATE SET
-          day_change_threshold = EXCLUDED.day_change_threshold,
-          cooldown_seconds = EXCLUDED.cooldown_seconds,
-          enabled = 1
-      `;
-    await pool.query(query, [discordId, itemId, threshold, cooldownSeconds]);
-  } else {
-    const query = `
-        INSERT INTO notification_settings (discord_id, item_id, one_hour_change_threshold, cooldown_seconds, enabled)
-        VALUES ($1, $2, $3, $4, 1)
-        ON CONFLICT(discord_id, item_id) DO UPDATE SET
-          one_hour_change_threshold = EXCLUDED.one_hour_change_threshold,
-          cooldown_seconds = EXCLUDED.cooldown_seconds,
-          enabled = 1
-      `;
-    await pool.query(query, [discordId, itemId, threshold, cooldownSeconds]);
+  let final1h: number | null = oneHourChangeThreshold !== undefined ? oneHourChangeThreshold : null;
+  let final24h: number | null = dayChangeThreshold !== undefined ? dayChangeThreshold : null;
+
+  if (threshold !== undefined && threshold !== null) {
+    if (period === '1h' && oneHourChangeThreshold === undefined) final1h = threshold;
+    if (period === '24h' && dayChangeThreshold === undefined) final24h = threshold;
   }
+
+  const finalAbove = targetPriceAbove !== undefined ? targetPriceAbove : null;
+  const finalBelow = targetPriceBelow !== undefined ? targetPriceBelow : null;
+
+  const query = `
+    INSERT INTO notification_settings (
+      discord_id, item_id, day_change_threshold, one_hour_change_threshold,
+      target_price_above, target_price_below, cooldown_seconds, enabled,
+      is_1h_triggered, is_24h_triggered, is_above_triggered, is_below_triggered
+    )
+    VALUES ($1, $2, $3, $4, $5, $6, $7, 1, 0, 0, 0, 0)
+    ON CONFLICT(discord_id, item_id) DO UPDATE SET
+      day_change_threshold = EXCLUDED.day_change_threshold,
+      one_hour_change_threshold = EXCLUDED.one_hour_change_threshold,
+      target_price_above = EXCLUDED.target_price_above,
+      target_price_below = EXCLUDED.target_price_below,
+      cooldown_seconds = EXCLUDED.cooldown_seconds,
+      enabled = 1,
+      is_1h_triggered = 0,
+      is_24h_triggered = 0,
+      is_above_triggered = 0,
+      is_below_triggered = 0
+  `;
+  await pool.query(query, [discordId, itemId, final24h, final1h, finalAbove, finalBelow, cooldownSeconds]);
 }
 
 
@@ -184,12 +208,58 @@ export async function getAllActiveWatches(): Promise<(NotificationSetting & { no
 /**
  * Update last_notified_at
  */
-export async function updateLastNotified(id: number, period: '24h' | '1h'): Promise<void> {
-  const column = period === '24h' ? 'last_notified_at' : 'last_notified_1h_at';
+export async function updateLastNotified(id: number, period: '24h' | '1h' | 'above' | 'below'): Promise<void> {
+  let column = 'last_notified_1h_at';
+  if (period === '24h') column = 'last_notified_at';
+  if (period === 'above') column = 'last_notified_above_at';
+  if (period === 'below') column = 'last_notified_below_at';
+
   const query = `
     UPDATE notification_settings SET ${column} = $1 WHERE id = $2
   `;
   await pool.query(query, [Math.floor(Date.now() / 1000), id]);
+}
+
+/**
+ * Update active triggered state and notification timestamp for a watch trigger type
+ */
+export async function updateWatchState(
+  id: number,
+  type: '1h' | '24h' | 'above' | 'below',
+  triggered: boolean
+): Promise<void> {
+  let triggeredCol = '';
+  let notifiedCol = '';
+
+  switch (type) {
+    case '1h':
+      triggeredCol = 'is_1h_triggered';
+      notifiedCol = 'last_notified_1h_at';
+      break;
+    case '24h':
+      triggeredCol = 'is_24h_triggered';
+      notifiedCol = 'last_notified_at';
+      break;
+    case 'above':
+      triggeredCol = 'is_above_triggered';
+      notifiedCol = 'last_notified_above_at';
+      break;
+    case 'below':
+      triggeredCol = 'is_below_triggered';
+      notifiedCol = 'last_notified_below_at';
+      break;
+  }
+
+  const triggeredVal = triggered ? 1 : 0;
+  const nowSec = Math.floor(Date.now() / 1000);
+
+  if (triggered) {
+    const query = `UPDATE notification_settings SET ${triggeredCol} = $1, ${notifiedCol} = $2 WHERE id = $3`;
+    await pool.query(query, [triggeredVal, nowSec, id]);
+  } else {
+    const query = `UPDATE notification_settings SET ${triggeredCol} = $1 WHERE id = $2`;
+    await pool.query(query, [triggeredVal, id]);
+  }
 }
 
 /**
@@ -249,6 +319,18 @@ export async function setSystemSetting(key: string, value: string): Promise<void
     ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value
   `;
   await pool.query(query, [key, value]);
+}
+
+export async function getUnprocessedAgentDiscordNotifications(): Promise<any[]> {
+  const query = `SELECT * FROM agent_discord_notifications WHERE processed = FALSE ORDER BY created_at ASC`;
+  const result = await pool.query(query);
+  return result.rows.map(row => ({ ...row, created_at: parseInt(row.created_at) }));
+}
+
+export async function markAgentDiscordNotificationsProcessed(ids: number[]): Promise<void> {
+  if (ids.length === 0) return;
+  const query = `UPDATE agent_discord_notifications SET processed = TRUE WHERE id = ANY($1)`;
+  await pool.query(query, [ids]);
 }
 
 export async function closeDatabase() {

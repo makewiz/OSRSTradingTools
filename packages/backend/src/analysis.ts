@@ -4,6 +4,7 @@ import { getLatestItems } from "./scheduler";
 import { NewsService, NewsItem } from "./news";
 import { getBatchPriceHistory } from "./database";
 import dotenv from "dotenv";
+import { getGeminiClient, DEFAULT_GEMINI_MODEL } from "./gemini";
 
 dotenv.config();
 
@@ -166,8 +167,6 @@ export class AnalysisService {
         news: NewsItem[],
         itemContext?: Record<string, string>
     ): Promise<string> {
-        const apiKey = process.env.GEMINI_API_KEY;
-
         // Construct full data context for the AI
         const marketContext = {
             highMargin: highMargin.map(i => ({ ...i, reason: undefined })), // Send raw data, AI can deduce "reason"
@@ -217,23 +216,15 @@ ${JSON.stringify(marketContext, null, 2)}
 5. Focus on the best trading opportunities found in the "highMargin" and "highVolume" sections.
 `;
 
-        if (apiKey) {
+        const client = getGeminiClient();
+        if (client) {
             try {
-                const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${apiKey}`, {
-                    method: "POST",
-                    headers: {
-                        "Content-Type": "application/json"
-                    },
-                    body: JSON.stringify({
-                        contents: [{
-                            parts: [{ text: promptContext }]
-                        }]
-                    })
+                const interaction = await client.interactions.create({
+                    model: DEFAULT_GEMINI_MODEL,
+                    input: promptContext
                 });
-
-                const data = await response.json();
-                if (data.candidates && data.candidates[0]?.content?.parts?.[0]?.text) {
-                    return data.candidates[0].content.parts[0].text;
+                if (interaction.output_text) {
+                    return interaction.output_text;
                 }
             } catch (error) {
                 console.error("Error generating AI summary:", error);
@@ -472,32 +463,54 @@ ${JSON.stringify(marketContext, null, 2)}
 }
 
 export const MERCHANTING_GUIDE = `
-**OSRS Merchanting Guide (Wiki Summary):**
+# OSRS Merchanting Knowledge Base (For AI Agents)
 
-**1. Types of Merchanting**
-- **Flipping**: Short-term buying low and selling high. Exploits the "bid-ask spread" created by impatient players.
-- **Investing (Speculation)**: Long-term prediction of price trends based on game updates (e.g., new boss release = demand for specific gear). Safer when changes are predictable.
-- **Bulk Flipping**: High volume, low margin (1-3gp profit). Requires large capital (20m+) but scales well. (e.g., Runes, Arrows, Food).
+## 1. Core Mechanics & The Grand Exchange (GE)
+The Grand Exchange (GE) is the central market of OSRS. Players place buy and sell offers, and the GE automatically matches them. 
 
-**2. Grand Exchange Mechanics**
-- **Instant Trades**: If you buy above market price, it instantly fills at the lowest available sell offer.
-- **Limits**: Most items have a buy limit every 4 hours (e.g., 11k darts, 70 barrows equipment).
-- **Guide Price vs. Real Price**: "Guide Price" is a lagging average. Real "Street Price" or "Active Price" is determined by live buyers/sellers.
+*   **The GE Tax (CRITICAL RULE):** A 2% tax is applied to all items sold on the GE. The tax is deducted from the *seller's* final revenue. 
+    *   *Cap:* The tax is capped at a maximum of 5,000,000 gp per item.
+    *   *Exemption:* Any item sold for less than 50 gp is exempt from the tax.
+    *   *Formula for Profit:* \`Profit = (Sell Price * 0.98) - Buy Price\`. If the 2% tax is greater than 5m, subtract exactly 5m instead.
+*   **Buy Limits:** Every item has a strict cap on how many can be bought by a single player within a rolling 4-hour window. This stops individuals from monopolizing an item.
+*   **Order Matching:** If multiple sell offers exist, the GE gives the buyer the lowest available price. If multiple buy offers exist, the highest bidder gets priority.
 
-**3. Determining Prices (The Buy/Sell Test)**
-- **To find Margins**: Buy 1 item high (Instant Buy Price), Sell 1 item low (Instant Sell Price).
-- **The Spread**: The difference between these two numbers is your potential profit margin per item.
-- *Warning*: Do not test expensive low-volume items (3rd Age, expensive armor) as the spread might be huge, causing a loss.
+## 2. Key Terminology
+*   **Margin:** The price difference between the highest buy offer and the lowest sell offer. *Gross Margin* is before tax; *Net Margin* is after the 2% tax.
+*   **ROI (Return on Investment):** The percentage of profit made relative to the gold invested. High volume flips usually have a low ROI (1-3%), while risky/slow flips have a high ROI (5-10%+).
+*   **Volume:** The number of times an item is traded per day. High volume items trade millions of times (runes, food); low volume items trade dozens of times (3rd age armor, specific boss drops).
+*   **Margin Check (Price Checking):** The act of buying an item significantly above market value (to find the instant sell price) and then selling it significantly below market value (to find the instant buy price). This reveals the current gross margin.
 
-**4. Strategy & Psychology**
-- **Volume vs Price**: High volume items (scales, runes) move fast. Low volume items (armor) move slow but have higher margins.
-- **Diversification**: Spread wealth across 4-6 items to mitigate risk of a crash.
-- **Patience**: If an item crashes, you can often wait for it to rebound. Panic selling locks in losses.
-- **Updates**: Read game news. If a new "Dragon" quest comes out, Dragon items might rise.
+## 3. Primary Merchanting Strategies
 
-**Common High-Volume Categories**:
-- Ammunition (Darts, Arrows)
-- Runes (Chaos, Death, Blood)
-- Consumables (Food, Potions)
-- Resources (Ores, Bars, Logs, Hides)
+### A. High-Volume Flipping (Active)
+*   **Target Items:** Consumables like Runes, Food, Potions, Logs, Ores, Bars, and Zulrah Scales.
+*   **Concept:** Buying in massive quantities for a small profit per item (e.g., 2 gp profit on 10,000 items). 
+*   **Risk Level:** Very Low. Prices are highly stable.
+*   **Strategy:** Margin check the item, calculate the after-tax margin, and leave offers in slightly above the lowest sell offer to secure the buy. Best for beginners or players with smaller cash stacks.
+
+### B. Low-Volume / High-Wealth Flipping (Passive)
+*   **Target Items:** High-end PvM gear (Bandos, Armadyl, Torva, Scythe of Vitur, Twisted Bow), 3rd Age items.
+*   **Concept:** Buying expensive items when they temporarily dip in price and selling them for large margins (e.g., millions of gp profit per flip).
+*   **Risk Level:** High. An item can crash while holding it, costing millions.
+*   **Strategy:** Do NOT margin check these items (you will lose too much on the check). Rely on third-party pricing APIs (like GE Tracker or OSRS Wiki Prices) to view live margins. Requires patience; offers may take hours to fulfill.
+
+### C. Recipe / Combine Flipping
+*   **Target Items:** Unfinished potions, crystal keys (teeth + loop), godsword blades + hilts, armor sets (buying individual pieces and boxing them at the GE).
+*   **Concept:** Buying raw materials or separate pieces, combining them, and selling the finished product for a profit.
+*   **Strategy:** Requires calculating the combined cost of ingredients vs. the sell price of the final product, remembering to account for the 2% tax on the final sale.
+
+### D. Long-Term Investing (Patch Day Merching)
+*   **Concept:** Buying items based on Jagex's developer blogs, news updates, or seasonal trends, anticipating a price rise.
+*   **Examples:** Buying Saradomin Brews before a new boss releases; buying underpowered gear when Jagex announces a buff.
+*   **Risk Level:** Extremely High. Relies heavily on speculation.
+
+## 4. Golden Rules for the AI to Enforce
+When advising a player, the AI must strictly adhere to and remind users of these principles:
+
+1.  **Always Account for Tax:** Never suggest a flip without verifying that the margin survives the 2% tax. 
+2.  **Don't Invest the Whole Bank:** Advise players to diversify. Never put 100% of their cash stack into a single low-volume item. 
+3.  **Beware of "Bubbles":** If an item is hitting an all-time historical high with no game updates to support the rise, advise the player to avoid it—it is likely being price-manipulated or is in a bubble.
+4.  **Avoid Dead Items:** If an item has extremely low daily volume (e.g., obscure hunter potions, weird quest items), tell the player to avoid it. They will get stuck holding the inventory.
+5.  **Patience is Key:** Warn players against panic-selling. If a buy order takes 20 minutes to fill, they shouldn't instantly drop their sell price if it doesn't sell in 5 minutes.
 `;

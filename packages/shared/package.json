@@ -8,9 +8,13 @@
         "build": "tsc",
         "dev": "tsc -w"
     },
-    "keywords": [],
-    "author": "",
-    "license": "ISC",
+    "keywords": [
+        "osrs",
+        "trading",
+        "shared"
+    ],
+    "author": "Markus",
+    "license": "MIT",
     "devDependencies": {
         "typescript": "^5.9.3"
     }
